@@ -23,13 +23,13 @@ instance (n : LeanNat) : OfNat Nat n where
   ofNat := ofNat n
 
 @[simp]
-theorem zero_eq_lit : Nat.zero = 0 := rfl
+theorem Nat.zero_eq_lit : Nat.zero = 0 := rfl
 
 
-theorem succ_neq_zero {n : Nat} : n.succ ≠ 0 :=
+theorem Nat.succ_neq_zero {n : Nat} : n.succ ≠ 0 :=
   Nat.noConfusion
 
-theorem succ_inj {a b : Nat} : a.succ = b.succ ↔ a = b :=
+theorem Nat.succ_inj {a b : Nat} : a.succ = b.succ ↔ a = b :=
   (Nat.succ.injEq a b).to_iff
 
 

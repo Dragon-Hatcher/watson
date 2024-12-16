@@ -39,4 +39,7 @@ theorem axiom_2_5 {motive : Nat → Prop}
   intro n
   exact Nat.rec zero succ n
 
+
+/-! # Section 2.2 -/
+
 end Watson

@@ -1,4 +1,4 @@
-import Mathlib
+import Mathlib.Tactic
 
 namespace Watson
 
@@ -243,6 +243,14 @@ theorem Nat.lt_trichotomy (a b : Nat) : a < b ∨ a = b ∨ a > b := by
       have ha : a'.succ > a' := lt_succ a'
       exact lt_trans h ha
 
+theorem Nat.lt_ne (a b : Nat) : a < b → a ≠ b := by
+  intro ⟨diff, ⟨h_diff, diff_pos⟩⟩
+  rw [h_diff]
+  nth_rw 1 [← add_zero a]
+  intro h
+  have diff_zero := (add_cancels h).symm
+  contradiction
+
 
 theorem Nat.strong_induction' (motive : Nat → Prop) (m₀ : Nat)
   (h : ∀ m ≥ m₀, (∀ m', m₀ ≤ m' ∧ m' < m → motive m') → motive m)
@@ -271,6 +279,95 @@ theorem Nat.strong_induction (motive : Nat → Prop)
     simp; assumption
   have ha := strong_induction' motive 0 h'
   simp at ha; assumption
+
+
+def Nat.mul : (a b : Nat) → Nat
+  | _, zero    => 0
+  | a, succ b' => Nat.mul a b' + a
+
+instance : Mul Nat where
+  mul := Nat.mul
+
+@[simp]
+theorem Nat.mul_zero (n : Nat) : n * 0 = 0 := rfl
+
+@[simp]
+theorem Nat.mul_succ (n m : Nat) : n * m.succ = (n * m) + n := rfl
+
+@[simp]
+theorem Nat.zero_mul (n : Nat) : 0 * n = 0 := by
+  induction n with
+  | zero       => rfl
+  | succ n' ih => rw [mul_succ, add_zero, ih]
+
+@[simp]
+theorem Nat.succ_mul (n m : Nat) : n.succ * m = (n * m) + m := by
+  induction m with
+  | zero       => simp
+  | succ m' ih =>
+      rw [mul_succ, mul_succ, ih]
+      rw [add_succ, add_succ]
+      rw [add_assoc, add_assoc, add_comm m'] -- ring?
+
+@[simp]
+theorem Nat.mul_comm (n m : Nat) : n * m = m * n := by
+  induction m with
+  | zero       => simp
+  | succ m' ih => rw [mul_succ, succ_mul, ih]
+
+theorem Nat.mul_zero_zero (n m : Nat) : n * m = 0 ↔ n = 0 ∨ m = 0 := by
+  constructor
+  · intro h
+    induction m with
+    | zero       => simp
+    | succ m' ih =>
+        left
+        by_contra hn_ne_0
+        have ⟨n', hn'_ne_0⟩ := exists_pred n hn_ne_0
+        rw [← hn'_ne_0, mul_succ, add_succ] at h
+        absurd h
+        exact succ_ne_zero
+  intro h
+  cases h with
+  | inl hn => rw [hn]; simp
+  | inr hm => rw [hm]; simp
+
+theorem Nat.mul_add (a b c : Nat) : a * (b + c) = a * b + a * c := by
+  induction c with
+  | zero       => simp
+  | succ c' ih =>
+      rw [add_succ, mul_succ, mul_succ, ih]
+      rw [← add_assoc] -- ring?
+
+theorem Nat.add_mul (a b c : Nat) : (b + c) * a = b * a + c * a := by
+  rw [mul_comm, mul_comm _ a, mul_comm _ a]
+  exact Nat.mul_add a b c
+
+theorem Nat.mul_assoc (a b c : Nat) : (a * b) * c = a * (b * c) := by
+  induction c with
+  | zero       => simp
+  | succ c' ih => rw [mul_succ, mul_succ, ih, mul_add]
+
+theorem Nat.lt_mul_lt (a b c : Nat) (hab : a < b) (c_pos : c.is_pos)
+  : a * c < b * c := by
+  have ⟨diff, ⟨h_diff, diff_pos⟩⟩ := hab
+  rw [h_diff, add_mul]
+  have diff_c_pos : (diff * c).is_pos := by
+    have q := (mul_zero_zero diff c).mp.mt
+    have hn : ¬(diff = 0 ∨ c = 0) := not_or.mpr ⟨diff_pos, c_pos⟩
+    exact q hn
+  use diff * c
+
+theorem Nat.mul_cancels (a b c : Nat) (h : a * c = b * c) (c_pos : c.is_pos)
+  : a = b := by
+  rcases (Nat.lt_trichotomy a b) with hab | hab | hab
+  · have h_ac_bc : a * c < b * c := lt_mul_lt a b c hab c_pos
+    have hn := lt_ne _ _ h_ac_bc
+    contradiction
+  · assumption
+  · have h_bc_ac : b * c < a * c := lt_mul_lt b a c hab c_pos
+    have hn := (lt_ne _ _ h_bc_ac).symm
+    contradiction
 
 
 end Watson

@@ -3,7 +3,7 @@ import Mathlib
 
 namespace Watson
 
-/-! # Section 2.1 -/
+/-! # Section 2.1: The Peano axioms -/
 
 theorem axiom_2_1 : ∃ n : Nat, n = 0 := by
   use Nat.zero
@@ -40,7 +40,7 @@ theorem axiom_2_5 {motive : Nat → Prop}
   exact Nat.rec zero succ n
 
 
-/-! # Section 2.2 -/
+/-! # Section 2.2: Addition -/
 
 variable (a b c n m : Nat)
 
@@ -87,5 +87,27 @@ theorem ex_2_2_6 (motive : Nat → Prop) (n : Nat)
       | inl m_lt_n'_succ =>
           have m_le_n' : m ≤ n' := Nat.lt_succ_iff_le.mp m_lt_n'_succ
           exact ih hn' m m_le_n'
+
+
+/-! # Section 2.3: Multiplication -/
+
+theorem lemma_2_3_2 : a * b = b * a := Nat.mul_comm a b
+
+theorem lemma_2_3_3 : a * b = 0 ↔ a = 0 ∨ b = 0 := Nat.mul_zero_zero a b
+
+theorem prop_2_3_4_a : a * (b + c) = a * b + a * c := Nat.mul_add a b c
+theorem prop_2_3_4_b : (b + c) * a = b * a + c * a := Nat.add_mul a b c
+
+theorem prop_2_3_5 : (a * b) * c = a * (b * c) := Nat.mul_assoc a b c
+
+theorem prop_2_3_6 : a < b → c.is_pos → a * c < b * c := Nat.lt_mul_lt a b c
+
+theorem corollary_2_3_7 : a * c = b * c → c ≠ 0 → a = b := Nat.mul_cancels a b c
+
+theorem prop_2_3_9 (n q : Nat) (q_pos: q.is_pos) : ∃ m r, n = m * q + r ∧ r < q :=
+  Nat.euclidean_algo n q q_pos
+
+theorem ex_2_3_4 : (a + b) ^ (2 : Nat) =
+  a ^ (2 : Nat) + 2 * a * b + b ^ (2 : Nat) := sorry
 
 end Watson

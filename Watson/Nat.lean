@@ -149,6 +149,15 @@ theorem Nat.le_zero_eq_zero (n : Nat) : n ≤ 0 → n = 0 := by
   intro ⟨diff, h_diff⟩
   exact (sum_zero_not_pos h_diff.symm).left
 
+theorem Nat.pos_iff_gt_zero {n : Nat} : n.is_pos ↔ 0 < n := by
+  constructor
+  · intro pos
+    exact ⟨n, ⟨by simp, pos⟩⟩
+  intro ⟨diff, ⟨h_diff, diff_pos⟩⟩
+  simp at h_diff
+  rw [h_diff]
+  assumption
+
 theorem Nat.lt_is_le {a b : Nat} : a < b → a ≤ b := by
   intro ⟨n, ⟨h, _⟩⟩
   exact ⟨n, h⟩
@@ -369,5 +378,32 @@ theorem Nat.mul_cancels (a b c : Nat) (h : a * c = b * c) (c_pos : c.is_pos)
     have hn := (lt_ne _ _ h_bc_ac).symm
     contradiction
 
+
+theorem Nat.euclidean_algo (n q : Nat) (q_pos : q.is_pos)
+  : ∃ m r : Nat, n = m * q + r ∧ r < q := by
+  induction n with
+  | zero       =>
+      use 0, 0
+      simp
+      exact pos_iff_gt_zero.mp q_pos
+  | succ n' ih =>
+      have ⟨m', r', ⟨hn', r'_lt_q⟩⟩ := ih
+      have r'_succ_le_q := lt_iff_succ_le.mp r'_lt_q
+      have hn' := succ_inj.mpr hn'
+      rw [← add_succ] at hn'
+      cases le_lt_or_eq r'_succ_le_q with
+      | inl r'_succ_lt_q => use m', r'.succ
+      | inr r'_succ_eq_q =>
+          use m'.succ, 0
+          rw [r'_succ_eq_q, ← succ_mul] at hn'
+          exact ⟨hn', pos_iff_gt_zero.mp q_pos⟩
+
+
+def Nat.exp : (a k : Nat) → Nat
+  | _, zero    => 1
+  | a, succ k' => (Nat.exp a k') * a
+
+instance : Pow Nat Nat where
+  pow := Nat.exp
 
 end Watson

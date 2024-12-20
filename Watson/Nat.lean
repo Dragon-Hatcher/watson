@@ -64,13 +64,11 @@ theorem Nat.succ_add (n m : Nat) : n.succ + m = (n + m).succ := by
   | zero => simp
   | succ n' ih => rw [add_succ, ih]; rfl
 
-@[simp]
 theorem Nat.add_comm (n m : Nat) : n + m = m + n := by
   induction n with
-  | zero => rw [zero_eq_lit, zero_add, add_zero]
+  | zero => simp
   | succ n' ih => rw [add_succ, succ_add, ih]
 
-@[simp]
 theorem Nat.add_assoc (a b c : Nat) : (a + b) + c = a + (b + c) := by
   induction c with
   | zero => rw [zero_eq_lit, add_zero, add_zero]

@@ -5,6 +5,7 @@
         "distrib",
         "elab",
         "funext",
+        "Mathlib",
         "rcases",
         "sdiff",
         "ssub",

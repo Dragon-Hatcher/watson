@@ -3,7 +3,9 @@ import Mathlib
 
 namespace Watson
 
-/-! # Section 2.1: The Peano axioms -/
+/-! # Chapter 2: Starting at the beginning: the natural numbers -/
+
+/-! ## Section 2.1: The Peano axioms -/
 
 theorem axiom_2_1 : ∃ n : Nat, n = 0 := by
   use Nat.zero
@@ -40,7 +42,7 @@ theorem axiom_2_5 {motive : Nat → Prop}
   exact Nat.rec zero succ n
 
 
-/-! # Section 2.2: Addition -/
+/-! ## Section 2.2: Addition -/
 
 variable (a b c n m : Nat)
 
@@ -89,7 +91,7 @@ theorem ex_2_2_6 (motive : Nat → Prop) (n : Nat)
           exact ih hn' m m_le_n'
 
 
-/-! # Section 2.3: Multiplication -/
+/-! ## Section 2.3: Multiplication -/
 
 theorem lemma_2_3_2 : a * b = b * a := Nat.mul_comm a b
 

@@ -71,7 +71,7 @@ theorem Nat.add_comm (n m : Nat) : n + m = m + n := by
 
 theorem Nat.add_assoc (a b c : Nat) : (a + b) + c = a + (b + c) := by
   induction c with
-  | zero => rw [zero_eq_lit, add_zero, add_zero]
+  | zero => simp
   | succ n' ih => rw [add_succ, add_succ, add_succ, ih]
 
 @[simp]

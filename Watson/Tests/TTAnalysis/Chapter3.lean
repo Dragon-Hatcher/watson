@@ -192,4 +192,13 @@ theorem ex_3_1_11 :
   intro ⟨hx₃, hmx⟩
   exact h₃.mpr ⟨x, ⟨hx₃, rfl, hmx⟩⟩
 
+
+/-! ## Section 3.1: Russell's paradox -/
+
+-- Interestingly, and instructively, it is not possible to state the axiom of
+-- universal specification or thus to encounter Russell's paradox in Lean due
+-- to the existence of Lean's hierarchy of types. This is presumably what Tao
+-- means when he mentions a hierarchy of objects. Therefore we cannot state the
+-- results in this chapter.
+
 end Watson

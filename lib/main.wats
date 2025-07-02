@@ -1,5 +1,6 @@
 syntax
     | variable '∈' variable
+    | variable '=' variable
     | sentence '→' sentence
     | '∃' binding ',' sentence
     | '⊥'
@@ -33,6 +34,26 @@ notation exists_uniq
     | '∃' '!' binding ',' sentence => (∃ $2, $4) ∧ (∃* $2, $4)
 end
 
+axiom subst [x] [y] [schema 'p(_)] : (x = y) ('p(x))
+    |- 'p(y)
+end
+
+axiom ident [x] :
+    |- x = x
+end
+
+theorem eq_comm [x] [y] : (x = y)
+    |- y = x
+proof
+    have x = x by ident
+    have y = x by subst [x] [y]
+end
+
+theorem eq_trans [x] [y] [z] : (x = y) (y = z)
+    |- x = z
+proof
+    todo
+qed
 
 axiom mp [schema 'p 'q] : ('p → 'q) ('p)
     |- 'q
@@ -62,10 +83,10 @@ axiom zfc_pairing :
 end
 
 definition loose_pair [x] [y] : x ∈ u ∧ y ∈ u where
-    have ∀x', ∀y', ∃z, ((x ∈ z) ∧ (y ∈ z)) by zfc_pairing
-    have ∀y', ∃z, ((x ∈ z) ∧ (y ∈ z))      by forall_elim
-    have ∃z, ((x ∈ z) ∧ (y ∈ z))           by forall_elim
-    have ((x ∈ u) ∧ (y ∈ u))               by exists_elim [u]
+    have ∀x', ∀y', ∃z, ((x' ∈ z) ∧ (y' ∈ z)) by zfc_pairing
+    have ∀y', ∃z, ((x ∈ z) ∧ (y' ∈ z))       by forall_elim
+    have ∃z, ((x ∈ z) ∧ (y ∈ z))             by forall_elim
+    have ((x ∈ u) ∧ (y ∈ u))                 by exists_elim [u]
 yielding
     u
 end
@@ -90,8 +111,6 @@ definition ∅ : ∀y, ¬(y ∈ ∅) where
 yielding
     ∅
 end
-
-define succ
 
 definition intersection [x] [y] : ∀z, (z ∈ i) ↔ (z ∈ x ∧ z ∈ y) where
     todo
@@ -134,8 +153,8 @@ qed
 theorem and_comm : {schema 'p 'q} ('p ∧ 'q)
     |- 'q ∧ 'p
 proof
-    have 'p by and_elim_left
-    have 'q by and_elim_right
+    have 'p      by and_elim_left
+    have 'q      by and_elim_right
     have 'q ∧ 'p by and_intro
 qed
 

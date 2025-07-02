@@ -1,0 +1,141 @@
+syntax
+    | variable '∈' variable
+    | sentence '→' sentence
+    | '∃' binding ',' sentence
+    | '⊥'
+end
+
+notation not
+    | '¬' sentence => $1 → ⊥
+end
+
+notation iff
+    | sentence '↔' sentence => ($0 → $2) ∧ ($2 → $1)
+end
+
+notation or
+    | sentence '∨' sentence => ¬$0 → $2
+end
+
+notation and
+    | sentence '∧' sentence => ¬(¬$0 ∨ ¬$2)
+end
+
+notation forall
+    | '∀' binding ',' sentence => ¬ ∃ $1, ¬$3
+end
+
+notation exists_at_most_one
+    | '∃' '*' binding ',' sentence => ∃y, ∀ $2, $4 → $2 = y
+end
+
+notation exists_uniq
+    | '∃' '!' binding ',' sentence => (∃ $2, $4) ∧ (∃* $2, $4)
+end
+
+
+axiom mp [schema 'p 'q] : ('p → 'q) ('p)
+    |- 'q
+end
+
+axiom imp_intro [schema 'p 'q] : (assume 'p |- 'q)
+    |- 'p → 'q
+end
+
+axiom ex_falso [schema 'p] : (⊥)
+    |- 'p
+end
+
+axiom exists_intro [x] [schema 'p(_)] : ('p(x))
+    |- ∃y, 'p(y)
+end
+
+axiom exists_elim [fresh y] [schema 'p(_)] : (∃x, 'p(x))
+    |- 'p(y)
+yielding
+    y
+end
+
+
+axiom zfc_pairing : 
+    |- ∀x, ∀y, ∃z, ((x ∈ z) ∧ (y ∈ z))
+end
+
+definition loose_pair [x] [y] : x ∈ u ∧ y ∈ u where
+    have ∀x', ∀y', ∃z, ((x ∈ z) ∧ (y ∈ z)) by zfc_pairing
+    have ∀y', ∃z, ((x ∈ z) ∧ (y ∈ z))      by forall_elim
+    have ∃z, ((x ∈ z) ∧ (y ∈ z))           by forall_elim
+    have ((x ∈ u) ∧ (y ∈ u))               by exists_elim [u]
+yielding
+    u
+end
+
+axiom zfc_union [schema 'p] :
+    |- ∀F, ∃A, ∀Y, ∀x ((x ∈ Y ∧ Y ∈ F) → x ∈ A)
+end
+
+definition set_union [x] [y] : ∀z, (z ∈ u) ↔ (z ∈ x ∨ z ∈ y) where
+    todo
+yielding
+    u
+end
+
+axiom zfc_empty_set : 
+    |- ∃x, ∀y, ¬(y ∈ x)
+end
+
+definition ∅ : ∀y, ¬(y ∈ ∅) where
+    have ∃x, ∀y, ¬(y ∈ x) by zfc_empty_set
+    have ∀y, ¬(y ∈ ∅)     by exists_elim with ∅
+yielding
+    ∅
+end
+
+define succ
+
+definition intersection [x] [y] : ∀z, (z ∈ i) ↔ (z ∈ x ∧ z ∈ y) where
+    todo
+yielding
+    i
+end
+
+theorem forall_intro : {fresh x} (schema 'p(_)) ('p(x))
+    |- ∀y, 'p(y)
+proof
+    todo
+qed
+
+theorem forall_elim : {y} {schema 'p(_)} (∀x, 'p(x))
+    |- 'p(y)
+proof
+    todo
+qed
+
+
+theorem and_elim_left : {schema 'p 'q} ('p ∧ 'q) 
+    |- 'p
+proof
+    todo
+qed
+
+theorem and_elim_right : {schema 'p 'q} ('p ∧ 'q)
+    |- 'q
+proof
+    todo
+qed
+
+theorem and_intro : {schema 'p 'q} ('p) ('q)
+    |- 'p ∧ 'q
+proof
+    todo
+qed
+
+
+theorem and_comm : {schema 'p 'q} ('p ∧ 'q)
+    |- 'q ∧ 'p
+proof
+    have 'p by and_elim_left
+    have 'q by and_elim_right
+    have 'q ∧ 'p by and_intro
+qed
+

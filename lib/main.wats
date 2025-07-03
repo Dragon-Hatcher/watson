@@ -95,7 +95,7 @@ axiom zfc_union [schema 'p] :
     |- ∀F, ∃A, ∀Y, ∀x ((x ∈ Y ∧ Y ∈ F) → x ∈ A)
 end
 
-definition set_union [x] [y] : ∀z, (z ∈ u) ↔ (z ∈ x ∨ z ∈ y) where
+definition set_union [x] [y] => ∀z, (z ∈ u) ↔ (z ∈ x ∨ z ∈ y) where
     todo
 yielding
     u
@@ -105,52 +105,69 @@ axiom zfc_empty_set :
     |- ∃x, ∀y, ¬(y ∈ x)
 end
 
-definition ∅ : ∀y, ¬(y ∈ ∅) where
+definition ∅ => ∀y, ¬(y ∈ ∅) where
     have ∃x, ∀y, ¬(y ∈ x) by zfc_empty_set
     have ∀y, ¬(y ∈ ∅)     by exists_elim with ∅
 yielding
     ∅
 end
 
-definition intersection [x] [y] : ∀z, (z ∈ i) ↔ (z ∈ x ∧ z ∈ y) where
+definition intersection [x] [y] => ∀z, (z ∈ i) ↔ (z ∈ x ∧ z ∈ y) where
     todo
 yielding
     i
 end
 
-theorem forall_intro : {fresh x} (schema 'p(_)) ('p(x))
+theorem forall_intro [schema 'p(_)] [fresh x] : ('p(x))
     |- ∀y, 'p(y)
 proof
     todo
 qed
 
-theorem forall_elim : {y} {schema 'p(_)} (∀x, 'p(x))
+theorem forall_elim [schema 'p(_)] [y] : (∀x, 'p(x))
     |- 'p(y)
 proof
     todo
 qed
 
 
-theorem and_elim_left : {schema 'p 'q} ('p ∧ 'q) 
+theorem or_intro_left [schema 'p 'q] : 'p
+    |- ('p ∨ 'q)
+proof
+    have assume ¬'p |- 'q by
+        have ⊥  by mp
+        have 'q by ex_falso
+    end
+    have ¬'p → 'q by imp_intro
+qed
+
+theorem or_intro_right [schema 'p 'q] : 'q
+    |- ('p ∨ 'q)
+proof
+    have assume ¬'p |- 'q by end
+    have ¬'p → 'q by imp_intro
+qed
+
+theorem and_elim_left [schema 'p 'q] : ('p ∧ 'q) 
     |- 'p
 proof
     todo
 qed
 
-theorem and_elim_right : {schema 'p 'q} ('p ∧ 'q)
+theorem and_elim_right [schema 'p 'q] : ('p ∧ 'q)
     |- 'q
 proof
     todo
 qed
 
-theorem and_intro : {schema 'p 'q} ('p) ('q)
+theorem and_intro [schema 'p 'q] : ('p) ('q)
     |- 'p ∧ 'q
 proof
     todo
 qed
 
 
-theorem and_comm : {schema 'p 'q} ('p ∧ 'q)
+theorem and_comm [schema 'p 'q] : ('p ∧ 'q)
     |- 'q ∧ 'p
 proof
     have 'p      by and_elim_left

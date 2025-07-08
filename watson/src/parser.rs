@@ -1,11 +1,30 @@
-use crate::util::line_ranges;
+use ariadne::{Config, Label, Report, ReportKind};
+use ustr::Ustr;
 
-pub fn parse(file: &str) {
-    let statements = split_statements(file);
-    dbg!(statements);
+use crate::{
+    span::{SourceCache, Span},
+    util::line_ranges,
+};
+
+pub fn parse(sources: &SourceCache, filename: Ustr) {
+    let statements = split_statements(sources, filename);
+
+    let statement = statements[1];
+
+    Report::build(ReportKind::Error, statement.span)
+        .with_config(Config::new().with_index_type(ariadne::IndexType::Byte).with_char_set(ariadne::CharSet::Ascii))
+        .with_message("This is a syntax declaration.")
+        .with_label(
+            Label::new(statement.span)
+                .with_message("This is the code for it.")
+                .with_color(ariadne::Color::BrightBlue),
+        )
+        .finish()
+        .print(sources)
+        .unwrap();
 }
 
-fn split_statements<'a>(file: &'a str) -> Vec<Statement<'a>> {
+fn split_statements(sources: &SourceCache, filename: Ustr) -> Vec<Statement> {
     type Delims = (&'static str, &'static str, StatementTy);
 
     const STATEMENT_DELIMITERS: [Delims; 5] = [
@@ -16,9 +35,17 @@ fn split_statements<'a>(file: &'a str) -> Vec<Statement<'a>> {
         ("axiom", "end", StatementTy::Axiom),
     ];
 
+    let file = sources.get_text(filename);
+
     let mut statements = Vec::new();
     let mut current_delims = None;
     let mut current_start = None;
+
+    let make_statement = |ty: StatementTy, start: usize, end: usize| Statement {
+        ty,
+        text: Ustr::from(&file[start..end].trim()),
+        span: Span::new(filename, start, end),
+    };
 
     for (start_idx, end_idx) in line_ranges(file) {
         let line = &file[start_idx..end_idx];
@@ -34,12 +61,9 @@ fn split_statements<'a>(file: &'a str) -> Vec<Statement<'a>> {
 
                 // First, if we have ongoing prose, save it.
                 if let Some(current_start) = current_start {
-                    let prose_slice = &file[current_start..start_idx].trim();
-                    if !prose_slice.is_empty() {
-                        statements.push(Statement {
-                            ty: StatementTy::Prose,
-                            text: prose_slice,
-                        });
+                    let statement = make_statement(StatementTy::Prose, current_start, start_idx);
+                    if !statement.text.is_empty() {
+                        statements.push(statement);
                     }
                 }
 
@@ -61,11 +85,8 @@ fn split_statements<'a>(file: &'a str) -> Vec<Statement<'a>> {
             // We need to check for the end of a statement.
             if line.trim().ends_with(end) {
                 // Make the statement and push it.
-                let statement_slice = &file[start..end_idx].trim();
-                statements.push(Statement {
-                    ty: statement_ty,
-                    text: statement_slice,
-                });
+                let statement = make_statement(statement_ty, start, end_idx);
+                statements.push(statement);
 
                 // Reset back to prose mode.
                 current_delims = None;
@@ -78,9 +99,10 @@ fn split_statements<'a>(file: &'a str) -> Vec<Statement<'a>> {
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Statement<'a> {
+struct Statement {
     ty: StatementTy,
-    text: &'a str,
+    span: Span,
+    text: Ustr,
 }
 
 #[derive(Debug, Clone, Copy)]

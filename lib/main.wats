@@ -1,37 +1,45 @@
 syntax
-    | variable '∈' variable
-    | variable '=' variable
-    | sentence '→' sentence
-    | '∃' binding ',' sentence
-    | '⊥'
+    100 | value '∈' value
+    100 | value '=' value
+    300 | sentence '→' sentence
+    200 | '∃' binding ',' sentence
+    100 | '⊥'
+end
+
+notation paren
+    100 | '(' p:sentence ')' => $p 
 end
 
 notation not
-    | '¬' sentence => $1 → ⊥
-end
-
-notation iff
-    | sentence '↔' sentence => ($0 → $2) ∧ ($2 → $1)
+    600 | '¬' p:sentence => $p → ⊥
 end
 
 notation or
-    | sentence '∨' sentence => ¬$0 → $2
+    400 | p:sentence '∨' q:sentence => ¬$p → $q
 end
 
 notation and
-    | sentence '∧' sentence => ¬(¬$0 ∨ ¬$2)
+    500 | p:sentence '∧' q:sentence => ¬(¬$p ∨ ¬$q)
+end
+
+notation iff
+    300 | p:sentence '↔' q:sentence => ($p → $q) ∧ ($q → $p)
 end
 
 notation forall
-    | '∀' binding ',' sentence => ¬ ∃ $1, ¬$3
+    200 | '∀' v:binding ',' p:sentence => ¬ ∃ $v, $p
 end
 
 notation exists_at_most_one
-    | '∃' '*' binding ',' sentence => ∃y, ∀ $2, $4 → $2 = y
+    200 | '∃' '*' v:binding ',' p:sentence => ∃y, ∀ $v, $p → $v = y
 end
 
 notation exists_uniq
-    | '∃' '!' binding ',' sentence => (∃ $2, $4) ∧ (∃* $2, $4)
+    200 | '∃' '!' v:binding ',' p:sentence => (∃ $v, $p) ∧ (∃* $v, $p)
+end
+
+definition paren_value
+    200 | '(' x:value ')' => $x
 end
 
 axiom subst [x] [y] [schema 'p(_)] : (x = y) ('p(x))
@@ -46,13 +54,14 @@ theorem eq_comm [x] [y] : (x = y)
     |- y = x
 proof
     have x = x by ident
-    have y = x by subst [x] [y]
+    have y = x by subst [x] [y] [_ = x]
 end
 
 theorem eq_trans [x] [y] [z] : (x = y) (y = z)
     |- x = z
 proof
-    todo
+    have y = x by eq_comm
+    have x = z by subst [y] [x] [_ = z]
 qed
 
 axiom mp [schema 'p 'q] : ('p → 'q) ('p)
@@ -73,49 +82,86 @@ end
 
 axiom exists_elim [fresh y] [schema 'p(_)] : (∃x, 'p(x))
     |- 'p(y)
-yielding
-    y
 end
-
 
 axiom zfc_pairing : 
     |- ∀x, ∀y, ∃z, ((x ∈ z) ∧ (y ∈ z))
 end
 
-definition loose_pair [x] [y] : x ∈ u ∧ y ∈ u where
-    have ∀x', ∀y', ∃z, ((x' ∈ z) ∧ (y' ∈ z)) by zfc_pairing
-    have ∀y', ∃z, ((x ∈ z) ∧ (y' ∈ z))       by forall_elim
-    have ∃z, ((x ∈ z) ∧ (y ∈ z))             by forall_elim
-    have ((x ∈ u) ∧ (y ∈ u))                 by exists_elim [u]
-yielding
-    u
+axiom zfc_specification [s] [schema 'p(_)] :
+    |- ∃r, ∀x, x ∈ r ↔ (x ∈ s ∧ 'p(x))
+end
+
+definition 
+    000 | '{' x:value ',' y:value '}'
+where 
+    |- ∀z, z ∈ _ ↔ (z = x ∨ z = y)
+proof
+    have ∀x', ∀y', ∃z, ((x' ∈ z) ∧ (y' ∈ z))               by zfc_pairing
+    have ∀y', ∃z, ((x ∈ z) ∧ (y' ∈ z))                     by forall_elim
+    have ∃z, ((x ∈ z) ∧ (y ∈ z))                           by forall_elim
+    have ((x ∈ u) ∧ (y ∈ u))                               by exists_elim [u]
+
+    have ∃r, ∀z, z ∈ r ↔ (z ∈ u ∧ (z = x ∨ z = y))         by zfc_specification
+    have ∀z, z ∈ v ↔ (z ∈ u ∧ (z = x ∨ z = y))             by exists_elim [v]
+
+    have x ∈ u                                             by and_elim_left
+    have assume z = x |- z ∈ u                             by subst
+    have z = x → z ∈ u                                     by imp_intro
+    have y ∈ u                                             by and_elim_right
+    have assume z = y |- z ∈ u                             by subst
+    have z = y → z ∈ u                                     by imp_intro
+    have assume (z = x ∨ z = y) |- z ∈ u                   by or_elim
+    have (z = x ∨ z = y) → z ∈ u                           by imp_intro
+    have assume (z = x ∨ z = y) |- z ∈ u ∧ (z = x ∨ z = y) by and_intro
+    have (z = x ∨ z = y) → z ∈ u ∧ (z = x ∨ z = y)         by imp_intro
+    have assume z ∈ u ∧ (z = x ∨ z = y) |- (z = x ∨ z = y) by and_elim_right
+    have z ∈ u ∧ (z = x ∨ z = y) → (z = x ∨ z = y)         by imp_intro
+    have z ∈ u ∧ (z = x ∨ z = y) ↔ (z = x ∨ z = y)         by and_intro
+    
+    have z' ∈ v ↔ (z' ∈ u ∧ (z' = x ∨ z' = y))             by forall_elim 
+    have z' ∈ v ↔ (z = x ∨ z = y)                          by iff_trans
+    have ∀z', z' ∈ v ↔ (z = x ∨ z = y)                     by forall_intro
 end
 
 axiom zfc_union [schema 'p] :
     |- ∀F, ∃A, ∀Y, ∀x ((x ∈ Y ∧ Y ∈ F) → x ∈ A)
 end
 
-definition set_union [x] [y] => ∀z, (z ∈ u) ↔ (z ∈ x ∨ z ∈ y) where
+definition 
+    000 | set_union x:value y:value 
+where
+    |- ∀z, (z ∈ _) ↔ (z ∈ x ∨ z ∈ y)
+proof
     todo
-yielding
-    u
 end
 
 axiom zfc_empty_set : 
     |- ∃x, ∀y, ¬(y ∈ x)
 end
 
-definition ∅ => ∀y, ¬(y ∈ ∅) where
+definition empty_set
+    000 | ∅
+where 
+    |- ∀x, ¬(x ∈ _)
+proof
     have ∃x, ∀y, ¬(y ∈ x) by zfc_empty_set
-    have ∀y, ¬(y ∈ ∅)     by exists_elim with ∅
-yielding
-    ∅
+    have ∀y, ¬(y ∈ e)     by exists_elim
 end
 
-definition intersection [x] [y] => ∀z, (z ∈ i) ↔ (z ∈ x ∧ z ∈ y) where
+theorem not_in_empty [x] :
+    |- ¬(x ∈ ∅)
+proof
+    have ∀y, ¬(y ∈ ∅) by definition
+    have ¬(x ∈ ∅)     by forall_elim
+qed 
+
+definition intersection 
+    000 | x:value ∩ y:value 
+where 
+    |- ∀z, (z ∈ _) ↔ (z ∈ x ∧ z ∈ y)
+proof
     todo
-yielding
-    i
 end
 
 theorem forall_intro [schema 'p(_)] [fresh x] : ('p(x))
@@ -130,6 +176,12 @@ proof
     todo
 qed
 
+theorem em [schema 'p] :
+    |- 'p ∨ ¬'p
+proof
+    have ¬'p |- ¬'p by end
+    have ¬'p → ¬'p  by end
+qed
 
 theorem or_intro_left [schema 'p 'q] : 'p
     |- ('p ∨ 'q)
@@ -141,16 +193,65 @@ proof
     have ¬'p → 'q by imp_intro
 qed
 
-theorem or_intro_right [schema 'p 'q] : 'q
+theorem or_intro_right [schema 'p 'q] : ('q)
     |- ('p ∨ 'q)
 proof
     have assume ¬'p |- 'q by end
     have ¬'p → 'q by imp_intro
 qed
 
+theorem double_neg [schema 'p 'q] : (¬¬'p)
+    |- 'p
+proof
+    have p ∨ ¬'p by em
+
+end
+
+theorem contrapos_f [schema 'p 'q] : ('p → 'q)
+    |- ¬'q → ¬'p
+proof
+    have assume ¬'q |- ¬'p by
+        have assume 'p |- ⊥ by
+            have 'q by mp
+            have  ⊥ by mp
+        end
+        have ¬'p by imp_intro
+    end
+    have ¬'q → ¬'p by imp_intro
+end
+
+theorem contrapos_r [schema 'p 'q] : (¬'q → ¬'p) 
+    |- 'p → 'q
+proof
+    have assume 'p |- 'q by
+        have assume ¬'q |- ⊥ by
+            have ¬'p by mp
+            have   ⊥ by mp
+        end
+        have ¬¬'q by imp_intro
+        have 'q   by double_neg
+    end
+    have 'p → 'q by imp_intro
+end
+
+theorem or_elim [schema 'p 'q 'r] : ('p → 'r) ('q → 'r) ('p ∨ 'q)
+    |- 'r
+proof
+    have assume 'p |- 'r by 
+        have 'r by mp 
+    end
+    have assume ¬'p |- 'r by 
+        have 'q by mp 
+        have 'r by mp
+    end
+
+    todo
+qed
+
 theorem and_elim_left [schema 'p 'q] : ('p ∧ 'q) 
     |- 'p
 proof
+
     todo
 qed
 
@@ -163,7 +264,10 @@ qed
 theorem and_intro [schema 'p 'q] : ('p) ('q)
     |- 'p ∧ 'q
 proof
-    todo
+    have assume ¬'p ∨ ¬'q |- ⊥ by
+
+    end
+    have ¬(¬'p ∨ ¬'q) by imp_intro
 qed
 
 

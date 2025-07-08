@@ -1,3 +1,5 @@
+First we define the syntax of first order logic:
+
 syntax
     100 | value '∈' value
     100 | value '=' value
@@ -205,7 +207,7 @@ theorem double_neg [schema 'p 'q] : (¬¬'p)
 proof
     have p ∨ ¬'p by em
 
-end
+qed
 
 theorem contrapos_f [schema 'p 'q] : ('p → 'q)
     |- ¬'q → ¬'p
@@ -218,7 +220,7 @@ proof
         have ¬'p by imp_intro
     end
     have ¬'q → ¬'p by imp_intro
-end
+qed
 
 theorem contrapos_r [schema 'p 'q] : (¬'q → ¬'p) 
     |- 'p → 'q
@@ -232,7 +234,7 @@ proof
         have 'q   by double_neg
     end
     have 'p → 'q by imp_intro
-end
+qed
 
 theorem or_elim [schema 'p 'q 'r] : ('p → 'r) ('q → 'r) ('p ∨ 'q)
     |- 'r

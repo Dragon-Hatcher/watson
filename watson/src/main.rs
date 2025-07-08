@@ -1,20 +1,37 @@
-use std::{io};
-use ustr::Ustr;
+use crate::{
+    diagnostics::{ReportTracker, WResult},
+    parser::parse,
+    span::{Filename, SourceCache},
+};
 
-use crate::{parser::parse, span::SourceCache};
-
+mod diagnostics;
 mod parser;
 mod span;
 mod util;
 
-fn main() -> Result<(), io::Error> {
-    let args: Vec<String> = std::env::args().collect();
-    let file = &args[1];
-
+fn main() {
     let mut sources = SourceCache::new();
-    sources.add_file(Ustr::from(file));
+    let mut tracker = ReportTracker::new();
 
-    parse(&sources, Ustr::from(file));
+    for filename in std::env::args().skip(1) {
+        let filename = Filename::new(&filename);
+        sources.add_file(filename);
+    }
+
+    match compile(&sources, &mut tracker) {
+        Ok(_) => {
+            println!("Compiled successfully!");
+        },
+        Err(_) => {
+            for report in tracker.reports() {
+                report.render(&sources);
+            }
+        },
+    }
+}
+
+fn compile(sources: &SourceCache, tracker: &mut ReportTracker) -> WResult<()> {
+    parse(sources, tracker)?;
 
     Ok(())
 }

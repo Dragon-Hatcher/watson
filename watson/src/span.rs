@@ -1,39 +1,48 @@
 use std::{collections::HashMap, fmt::Debug};
-
 use ustr::Ustr;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Filename(Ustr);
+
+impl Filename {
+    pub fn new(str: &str) -> Self {
+        Self(Ustr::from(str))
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        self.0.as_str()
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct Span {
-    filename: Ustr,
+    filename: Filename,
     start: usize,
     end: usize,
 }
 
 impl Span {
-    pub fn new(filename: Ustr, start: usize, end: usize) -> Self {
+    pub fn new(filename: Filename, start: usize, end: usize) -> Self {
         Self { filename, start, end }
     }
 }
 
-impl ariadne::Span for Span {
-    type SourceId = Ustr;
-
-    fn source(&self) -> &Self::SourceId {
-        &self.filename
+impl Span {
+    pub fn file(&self) -> Filename {
+        self.filename
     }
 
-    fn start(&self) -> usize {
+    pub fn start(&self) -> usize {
         self.start
     }
 
-    fn end(&self) -> usize {
+    pub fn end(&self) -> usize {
         self.end
     }
 }
 
-
 pub struct SourceCache {
-    files: HashMap<Ustr, ariadne::Source<String>>
+    files: HashMap<Filename, String>
 }
 
 impl SourceCache {
@@ -41,25 +50,16 @@ impl SourceCache {
         Self { files: HashMap::new() }
     }
 
-    pub fn add_file(&mut self, path: Ustr) {
-        let file_text = std::fs::read_to_string(path).unwrap();
-        self.files.insert(path, ariadne::Source::from(file_text));
+    pub fn add_file(&mut self, filename: Filename) {
+        let file_text = std::fs::read_to_string(filename.as_str()).unwrap();
+        self.files.insert(filename, file_text);
     }
 
-    pub fn get_text(&self, path: Ustr) -> &str {
-        self.files[&path].text()
-    }
-}
-
-impl ariadne::Cache<Ustr> for &SourceCache {
-    type Storage = String;
-
-    fn fetch(&mut self, id: &Ustr) -> Result<&ariadne::Source<Self::Storage>, impl Debug> {
-        let source = &self.files[id];
-        Ok(source) as Result<_, ()>
+    pub fn get_text(&self, filename: Filename) -> &str {
+        &self.files[&filename]
     }
 
-    fn display<'a>(&self, id: &'a Ustr) -> Option<impl std::fmt::Display + 'a> {
-        Some(id.as_str())
+    pub fn files(&self) -> impl Iterator<Item=(&Filename, &String)> {
+        self.files.iter()
     }
 }

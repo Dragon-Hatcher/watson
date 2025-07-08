@@ -7,11 +7,11 @@ impl<'a> Iterator for LineRangesIter<'a> {
     type Item = (usize, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let rest = &self.str[self.pos..];
-
-        if rest.is_empty() {
+        if self.pos >= self.str.len() {
             return None;
         }
+
+        let rest = &self.str[self.pos..];
 
         let end = match rest.find('\n') {
             Some(end) => self.pos + end,
@@ -25,5 +25,5 @@ impl<'a> Iterator for LineRangesIter<'a> {
 }
 
 pub fn line_ranges(str: &str) -> LineRangesIter {
-    return LineRangesIter { str, pos: 0 };
+    LineRangesIter { str, pos: 0 }
 }

@@ -57,7 +57,7 @@ theorem eq_comm [x] [y] : (x = y)
 proof
     have x = x by ident
     have y = x by subst [x] [y] [_ = x]
-end
+qed
 
 theorem eq_trans [x] [y] [z] : (x = y) (y = z)
     |- x = z
@@ -281,3 +281,12 @@ proof
     have 'q ∧ 'p by and_intro
 qed
 
+theorem unclosed
+
+axiom closed [p]
+    |- p = p
+end
+
+theorem unclosed
+
+The end

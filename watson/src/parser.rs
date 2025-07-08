@@ -1,30 +1,23 @@
-use ariadne::{Config, Label, Report, ReportKind};
-use ustr::Ustr;
-
 use crate::{
-    span::{SourceCache, Span},
+    diagnostics::{specifics, ReportTracker, WResult},
+    span::{Filename, SourceCache, Span},
     util::line_ranges,
 };
+use ustr::Ustr;
 
-pub fn parse(sources: &SourceCache, filename: Ustr) {
-    let statements = split_statements(sources, filename);
+pub fn parse(sources: &SourceCache, tracker: &mut ReportTracker) -> WResult<Vec<Statement>> {
+    let mut all_statements = Vec::new();
 
-    let statement = statements[1];
+    for (&filename, text) in sources.files() {
+        let statements = split_statements(filename, text, tracker);
+        all_statements.extend(statements);
+    }
 
-    Report::build(ReportKind::Error, statement.span)
-        .with_config(Config::new().with_index_type(ariadne::IndexType::Byte).with_char_set(ariadne::CharSet::Ascii))
-        .with_message("This is a syntax declaration.")
-        .with_label(
-            Label::new(statement.span)
-                .with_message("This is the code for it.")
-                .with_color(ariadne::Color::BrightBlue),
-        )
-        .finish()
-        .print(sources)
-        .unwrap();
+    tracker.checkpoint()?;
+    Ok(all_statements)
 }
 
-fn split_statements(sources: &SourceCache, filename: Ustr) -> Vec<Statement> {
+fn split_statements(filename: Filename, text: &str, tracker: &mut ReportTracker) -> Vec<Statement> {
     type Delims = (&'static str, &'static str, StatementTy);
 
     const STATEMENT_DELIMITERS: [Delims; 5] = [
@@ -35,48 +28,51 @@ fn split_statements(sources: &SourceCache, filename: Ustr) -> Vec<Statement> {
         ("axiom", "end", StatementTy::Axiom),
     ];
 
-    let file = sources.get_text(filename);
-
     let mut statements = Vec::new();
     let mut current_delims = None;
     let mut current_start = None;
 
+    let make_span = |start: usize, end: usize| Span::new(filename, start, end);
     let make_statement = |ty: StatementTy, start: usize, end: usize| Statement {
         ty,
-        text: Ustr::from(&file[start..end].trim()),
-        span: Span::new(filename, start, end),
+        text: Ustr::from(text[start..end].trim()),
+        span: make_span(start, end),
     };
 
-    for (start_idx, end_idx) in line_ranges(file) {
-        let line = &file[start_idx..end_idx];
+    for (start_idx, end_idx) in line_ranges(text) {
+        let line = &text[start_idx..end_idx];
 
-        if current_delims.is_none() {
-            // We are currently in prose. Check if we are opening a statement or
-            // if the prose continues.
-
-            for delim in STATEMENT_DELIMITERS {
-                if !line.starts_with(delim.0) {
-                    continue;
-                }
-
-                // First, if we have ongoing prose, save it.
-                if let Some(current_start) = current_start {
-                    let statement = make_statement(StatementTy::Prose, current_start, start_idx);
-                    if !statement.text.is_empty() {
-                        statements.push(statement);
-                    }
-                }
-
-                // Now save the start of this statement
-                current_delims = Some(delim);
-                current_start = Some(start_idx);
-                break;
+        // Check if this line opens a new statement.
+        for delim in STATEMENT_DELIMITERS {
+            if !line.starts_with(delim.0) {
+                continue;
             }
 
-            if current_delims.is_none() && current_start.is_none() {
-                // This is the beginning of prose and we need to reset the range start index.
-                current_start = Some(start_idx);
+            if let Some((_, _, ty)) = current_delims
+                && let Some(start) = current_start
+            {
+                // We were already in a statement so it must not have been
+                // properly closed. Close that statement and throw an error.
+                tracker.add_message(specifics::unclosed_statement(make_span(start, start_idx), ty, delim.2));
             }
+
+            // First, if we have ongoing prose, save it.
+            if let Some(current_start) = current_start {
+                let statement = make_statement(StatementTy::Prose, current_start, start_idx);
+                if !statement.text.is_empty() {
+                    statements.push(statement);
+                }
+            }
+
+            // Now save the start of this statement
+            current_delims = Some(delim);
+            current_start = Some(start_idx);
+            break;
+        }
+
+        if current_delims.is_none() && current_start.is_none() {
+            // This is the beginning of prose and we need to reset the range start index.
+            current_start = Some(start_idx);
         }
 
         if let Some((_, end, statement_ty)) = current_delims
@@ -95,18 +91,31 @@ fn split_statements(sources: &SourceCache, filename: Ustr) -> Vec<Statement> {
         }
     }
 
+    if let Some(start) = current_start
+        && current_delims.is_none()
+    {
+        // The file ends with prose.
+        statements.push(make_statement(StatementTy::Prose, start, text.len()));
+    }
+
+    if let Some(start) = current_start
+        && let Some((_, _, ty)) = current_delims
+    {
+        tracker.add_message(specifics::unclosed_statement_at_eof(make_span(start, text.len()), ty));
+    }
+
     statements
 }
 
 #[derive(Debug, Clone, Copy)]
-struct Statement {
+pub struct Statement {
     ty: StatementTy,
     span: Span,
     text: Ustr,
 }
 
 #[derive(Debug, Clone, Copy)]
-enum StatementTy {
+pub enum StatementTy {
     Prose,
     Syntax,
     Notation,

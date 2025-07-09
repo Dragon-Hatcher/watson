@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, ops::Range, path::{Path, PathBuf}};
 use ustr::Ustr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -39,19 +39,30 @@ impl Span {
     pub fn end(&self) -> usize {
         self.end
     }
+
+    pub fn range(&self) -> Range<usize> {
+        self.start()..self.end()
+    }
 }
 
 pub struct SourceCache {
-    files: HashMap<Filename, String>
+    root: PathBuf,
+    files: HashMap<Filename, String>,
 }
 
 impl SourceCache {
-    pub fn new() -> Self {
-        Self { files: HashMap::new() }
+    pub fn new(root: PathBuf) -> Self {
+        Self { root, files: HashMap::new() }
     }
 
-    pub fn add_file(&mut self, filename: Filename) {
-        let file_text = std::fs::read_to_string(filename.as_str()).unwrap();
+    fn get_name(&self, path: &Path) -> Filename {
+        let relative = path.strip_prefix(&self.root).unwrap_or(path);
+        Filename::new(&relative.to_string_lossy())
+    }
+
+    pub fn add_path(&mut self, path: &Path) {
+        let file_text = std::fs::read_to_string(path).unwrap();
+        let filename = self.get_name(path);
         self.files.insert(filename, file_text);
     }
 

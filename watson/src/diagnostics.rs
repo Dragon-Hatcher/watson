@@ -1,6 +1,9 @@
 use crate::span::{SourceCache, Span};
 use ustr::Ustr;
 
+mod render;
+pub mod specifics;
+
 pub type WResult<T> = Result<T, ()>;
 
 #[derive(Debug)]
@@ -18,7 +21,7 @@ impl ReportTracker {
     }
 
     pub fn add_message(&mut self, report: Report) {
-        self.has_error = self.has_error || report.level() == ReportLevel::Error;
+        self.has_error = self.has_error || report.level == ReportLevel::Error;
         self.reports.push(report);
     }
 
@@ -40,92 +43,54 @@ pub enum ReportLevel {
     Error,
 }
 
-impl ReportLevel {
-    fn render(&self) -> &'static str {
-        match self {
-            ReportLevel::Error => "error",
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Report {
     level: ReportLevel,
+    msg: Ustr,
+    annotations: Vec<Annotation>,
+}
+
+impl Report {
+    pub fn new(level: ReportLevel, msg: Ustr) -> Self {
+        Self {
+            level,
+            msg,
+            annotations: Vec::new(),
+        }
+    }
+
+    pub fn with_note(mut self, span: Span, msg: Ustr) -> Self {
+        self.annotations
+            .push(Annotation::new(AnnotationTy::Note, span, msg));
+        self
+    }
+
+    pub fn with_info(mut self, span: Span, msg: Ustr) -> Self {
+        self.annotations
+            .push(Annotation::new(AnnotationTy::Info, span, msg));
+        self
+    }
+
+    pub fn render(&self, sources: &SourceCache) {
+        render::render(self, sources)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum AnnotationTy {
+    Info,
+    Note,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Annotation {
+    ty: AnnotationTy,
     span: Span,
     msg: Ustr,
 }
 
-impl Report {
-    pub fn new(level: ReportLevel, span: Span, msg: Ustr) -> Self {
-        Self { level, span, msg }
-    }
-
-    pub fn level(&self) -> ReportLevel {
-        self.level
-    }
-
-    pub fn span(&self) -> Span {
-        self.span
-    }
-
-    pub fn msg(&self) -> Ustr {
-        self.msg
-    }
-
-    pub fn render(&self, sources: &SourceCache) {
-        println!(
-            "[{}:{}] {}: {}",
-            self.span.file().as_str(),
-            self.span.start(),
-            self.level.render(),
-            self.msg
-        )
-    }
-}
-
-pub mod specifics {
-    use ustr::Ustr;
-
-    macro_rules! uformat {
-        ($($t:tt)*) => {
-            ustr::Ustr::from(&format!($($t)*))
-        };
-    }
-
-    use super::ReportLevel as RL;
-    use crate::{diagnostics::Report, parser::StatementTy, span::Span};
-
-    fn render_statement_ty(ty: StatementTy) -> &'static str {
-        match ty {
-            StatementTy::Prose => "prose",
-            StatementTy::Syntax => "syntax",
-            StatementTy::Notation => "notation",
-            StatementTy::Definition => "definition",
-            StatementTy::Axiom => "axiom",
-            StatementTy::Theorem => "theorem",
-        }
-    }
-
-    pub fn unclosed_statement(span: Span, ty: StatementTy, next_ty: StatementTy) -> Report {
-        Report::new(
-            RL::Error,
-            span,
-            uformat!(
-                "{} declaration was unclosed at following {} declaration",
-                render_statement_ty(ty),
-                render_statement_ty(next_ty)
-            ),
-        )
-    }
-
-    pub fn unclosed_statement_at_eof(span: Span, ty: StatementTy) -> Report {
-        Report::new(
-            RL::Error,
-            span,
-            uformat!(
-                "{} declaration was unclosed at EOF",
-                render_statement_ty(ty)
-            ),
-        )
+impl Annotation {
+    pub fn new(ty: AnnotationTy, span: Span, msg: Ustr) -> Self {
+        Self { ty, span, msg }
     }
 }

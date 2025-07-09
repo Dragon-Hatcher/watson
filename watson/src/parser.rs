@@ -1,5 +1,5 @@
 use crate::{
-    diagnostics::{specifics, ReportTracker, WResult},
+    diagnostics::{ReportTracker, WResult, specifics},
     span::{Filename, SourceCache, Span},
     util::line_ranges,
 };
@@ -29,7 +29,7 @@ fn split_statements(filename: Filename, text: &str, tracker: &mut ReportTracker)
     ];
 
     let mut statements = Vec::new();
-    let mut current_delims = None;
+    let mut current_delims: Option<(&'static str, &'static str, StatementTy)> = None;
     let mut current_start = None;
 
     let make_span = |start: usize, end: usize| Span::new(filename, start, end);
@@ -48,12 +48,17 @@ fn split_statements(filename: Filename, text: &str, tracker: &mut ReportTracker)
                 continue;
             }
 
-            if let Some((_, _, ty)) = current_delims
+            if let Some((start_text, _, ty)) = current_delims
                 && let Some(start) = current_start
             {
                 // We were already in a statement so it must not have been
                 // properly closed. Close that statement and throw an error.
-                tracker.add_message(specifics::unclosed_statement(make_span(start, start_idx), ty, delim.2));
+                tracker.add_message(specifics::unclosed_statement(
+                    make_span(start, start + start_text.len()),
+                    ty,
+                    make_span(start_idx, start_idx + delim.0.len()),
+                    delim.2,
+                ));
             }
 
             // First, if we have ongoing prose, save it.
@@ -99,9 +104,12 @@ fn split_statements(filename: Filename, text: &str, tracker: &mut ReportTracker)
     }
 
     if let Some(start) = current_start
-        && let Some((_, _, ty)) = current_delims
+        && let Some((start_text, _, ty)) = current_delims
     {
-        tracker.add_message(specifics::unclosed_statement_at_eof(make_span(start, text.len()), ty));
+        tracker.add_message(specifics::unclosed_statement_at_eof(
+            make_span(start, start + start_text.len()),
+            ty,
+        ));
     }
 
     statements

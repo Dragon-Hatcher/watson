@@ -1,14 +1,14 @@
-use std::{ffi::OsStr, path::Path};
-use walkdir::WalkDir;
 use crate::{
     diagnostics::{ReportTracker, WResult},
-    parser::parse,
     span::SourceCache,
 };
+use std::{ffi::OsStr, path::Path};
+use walkdir::WalkDir;
 
 mod diagnostics;
-mod parser;
+mod parse;
 mod span;
+mod statements;
 mod util;
 
 fn main() {
@@ -39,7 +39,8 @@ fn main() {
 }
 
 fn compile(sources: &SourceCache, tracker: &mut ReportTracker) -> WResult<()> {
-    parse(sources, tracker)?;
+    let statements = statements::get_all_statements(sources, tracker)?;
+    let parsed = parse::parse(statements, tracker)?;
 
     Ok(())
 }

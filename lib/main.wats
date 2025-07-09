@@ -5,7 +5,7 @@ syntax
     100 | value '=' value
     300 | sentence '→' sentence
     200 | '∃' binding ',' sentence
-    100 | '⊥'
+    100 | '⊥' 
 end
 
 notation paren
@@ -281,12 +281,8 @@ proof
     have 'q ∧ 'p by and_intro
 qed
 
-theorem unclosed
-
 axiom closed [p]
     |- p = p
 end
-
-theorem unclosed
 
 The end

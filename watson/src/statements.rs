@@ -3,21 +3,80 @@ use crate::{
     span::{Filename, SourceCache, Span},
     util::line_ranges,
 };
+use std::collections::HashMap;
 use ustr::Ustr;
 
-pub fn parse(sources: &SourceCache, tracker: &mut ReportTracker) -> WResult<Vec<Statement>> {
-    let mut all_statements = Vec::new();
+pub struct StatementsSet {
+    by_ty: HashMap<StatementTy, Vec<Statement>>,
+}
+
+impl StatementsSet {
+    fn new() -> Self {
+        Self {
+            by_ty: HashMap::new(),
+        }
+    }
+
+    fn add_statement(&mut self, statement: Statement) {
+        self.by_ty.entry(statement.ty).or_default().push(statement);
+    }
+
+    pub fn statements_with_ty(&self, ty: StatementTy) -> &[Statement] {
+        self.by_ty.get(&ty).map(|s| s.as_slice()).unwrap_or(&[])
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Statement {
+    ty: StatementTy,
+    span: Span,
+    text: Ustr,
+}
+
+impl Statement {
+    pub fn ty(&self) -> StatementTy {
+        self.ty
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    pub fn text(&self) -> Ustr {
+        self.text
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StatementTy {
+    Prose,
+    Syntax,
+    Notation,
+    Definition,
+    Axiom,
+    Theorem,
+}
+
+pub fn get_all_statements(
+    sources: &SourceCache,
+    tracker: &mut ReportTracker,
+) -> WResult<StatementsSet> {
+    let mut ss = StatementsSet::new();
 
     for (&filename, text) in sources.files() {
-        let statements = split_statements(filename, text, tracker);
-        all_statements.extend(statements);
+        extract_statements(&mut ss, filename, text, tracker);
     }
 
     tracker.checkpoint()?;
-    Ok(all_statements)
+    Ok(ss)
 }
 
-fn split_statements(filename: Filename, text: &str, tracker: &mut ReportTracker) -> Vec<Statement> {
+fn extract_statements(
+    ss: &mut StatementsSet,
+    filename: Filename,
+    text: &str,
+    tracker: &mut ReportTracker,
+) {
     type Delims = (&'static str, &'static str, StatementTy);
 
     const STATEMENT_DELIMITERS: [Delims; 5] = [
@@ -28,7 +87,6 @@ fn split_statements(filename: Filename, text: &str, tracker: &mut ReportTracker)
         ("axiom", "end", StatementTy::Axiom),
     ];
 
-    let mut statements = Vec::new();
     let mut current_delims: Option<(&'static str, &'static str, StatementTy)> = None;
     let mut current_start = None;
 
@@ -65,7 +123,7 @@ fn split_statements(filename: Filename, text: &str, tracker: &mut ReportTracker)
             if let Some(current_start) = current_start {
                 let statement = make_statement(StatementTy::Prose, current_start, start_idx);
                 if !statement.text.is_empty() {
-                    statements.push(statement);
+                    ss.add_statement(statement);
                 }
             }
 
@@ -87,7 +145,7 @@ fn split_statements(filename: Filename, text: &str, tracker: &mut ReportTracker)
             if line.trim().ends_with(end) {
                 // Make the statement and push it.
                 let statement = make_statement(statement_ty, start, end_idx);
-                statements.push(statement);
+                ss.add_statement(statement);
 
                 // Reset back to prose mode.
                 current_delims = None;
@@ -100,7 +158,7 @@ fn split_statements(filename: Filename, text: &str, tracker: &mut ReportTracker)
         && current_delims.is_none()
     {
         // The file ends with prose.
-        statements.push(make_statement(StatementTy::Prose, start, text.len()));
+        ss.add_statement(make_statement(StatementTy::Prose, start, text.len()));
     }
 
     if let Some(start) = current_start
@@ -111,23 +169,4 @@ fn split_statements(filename: Filename, text: &str, tracker: &mut ReportTracker)
             ty,
         ));
     }
-
-    statements
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Statement {
-    ty: StatementTy,
-    span: Span,
-    text: Ustr,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum StatementTy {
-    Prose,
-    Syntax,
-    Notation,
-    Definition,
-    Axiom,
-    Theorem,
 }

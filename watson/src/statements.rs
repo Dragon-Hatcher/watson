@@ -3,7 +3,10 @@ use crate::{
     span::{Filename, SourceCache, Span},
     util::line_ranges,
 };
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 use ustr::Ustr;
 
 pub struct StatementsSet {
@@ -26,8 +29,20 @@ impl StatementsSet {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StatementId(usize);
+
+impl StatementId {
+    fn new() -> Self {
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let id = NEXT.fetch_add(1, Ordering::SeqCst);
+        Self(id)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Statement {
+    id: StatementId,
     ty: StatementTy,
     span: Span,
     text: Ustr,
@@ -92,6 +107,7 @@ fn extract_statements(
 
     let make_span = |start: usize, end: usize| Span::new(filename, start, end);
     let make_statement = |ty: StatementTy, start: usize, end: usize| Statement {
+        id: StatementId::new(),
         ty,
         text: Ustr::from(text[start..end].trim()),
         span: make_span(start, end),

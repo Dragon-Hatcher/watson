@@ -29,15 +29,15 @@ notation iff
 end
 
 notation forall
-    200 | '∀' v:binding ',' p:sentence => ¬ ∃ $v, $p
+    200 | '∀' v:binding ',' p:sentence => ¬∃ $v, $p
 end
 
 notation exists_at_most_one
-    200 | '∃' '*' v:binding ',' p:sentence => ∃y, ∀ $v, $p → $v = y
+    200 | '∃*' v:binding ',' p:sentence => ∃y, ∀ $v, $p → $v = y
 end
 
 notation exists_uniq
-    200 | '∃' '!' v:binding ',' p:sentence => (∃ $v, $p) ∧ (∃* $v, $p)
+    200 | '∃!' v:binding ',' p:sentence => (∃ $v, $p) ∧ (∃* $v, $p)
 end
 
 definition paren_value
@@ -131,7 +131,7 @@ axiom zfc_union [schema 'p] :
 end
 
 definition 
-    000 | set_union x:value y:value 
+    000 | 'set_union' x:value y:value 
 where
     |- ∀z, (z ∈ _) ↔ (z ∈ x ∨ z ∈ y)
 proof
@@ -143,7 +143,7 @@ axiom zfc_empty_set :
 end
 
 definition empty_set
-    000 | ∅
+    000 | '∅'
 where 
     |- ∀x, ¬(x ∈ _)
 proof
@@ -159,7 +159,7 @@ proof
 qed 
 
 definition intersection 
-    000 | x:value ∩ y:value 
+    000 | x:value '∩' y:value 
 where 
     |- ∀z, (z ∈ _) ↔ (z ∈ x ∧ z ∈ y)
 proof

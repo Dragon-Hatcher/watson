@@ -1,0 +1,23 @@
+notation foo
+end
+
+notation foo
+    200
+end
+
+notation foo
+    200 |
+end
+
+notation foo
+    200 | 'yes
+end
+
+notation foo
+    200 | sentenc
+end
+
+notation foo
+    200 | sentence '=' value
+    200 | sentence '=' value
+end

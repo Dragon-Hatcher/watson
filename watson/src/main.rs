@@ -1,9 +1,12 @@
+#![allow(unused)]
+
 use crate::{
     diagnostics::{ReportTracker, WResult},
     span::SourceCache,
 };
 use std::{ffi::OsStr, path::Path};
 use walkdir::WalkDir;
+
 
 mod diagnostics;
 mod parse;

@@ -1,11 +1,19 @@
-use crate::{diagnostics::{ReportTracker, WResult}, parse::syntax::get_syntax, statements::StatementsSet};
+use std::time::Instant;
 
-mod syntax;
+use ustr::Ustr;
+
+use crate::{
+    diagnostics::{ReportTracker, WResult},
+    parse::{parsing_rules::extract_parsing_rules},
+    statements::StatementsSet,
+};
+
+mod parsing_rules;
 
 pub fn parse(ss: StatementsSet, tracker: &mut ReportTracker) -> WResult<()> {
-    let syntax = get_syntax(&ss, tracker)?;
-    dbg!(syntax);
-    
-    tracker.checkpoint()?;
+    let rules = extract_parsing_rules(&ss, tracker)?;
+    dbg!(rules);
+
     Ok(())
 }
+

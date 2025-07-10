@@ -70,7 +70,7 @@ pub fn multiple_syntax_statements(mut spans: impl Iterator<Item = Span>) -> Repo
     r
 }
 
-pub fn parse_error(err: ParseError<&str, ContextError>, span: Span) -> Report {
+pub fn parse_error<S>(err: ParseError<S, ContextError>, span: Span) -> Report {
     let span = Span::new(
         span.file(),
         span.start() + err.offset(),

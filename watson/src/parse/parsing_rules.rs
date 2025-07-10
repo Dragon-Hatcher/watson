@@ -5,7 +5,8 @@
 
 use crate::{
     diagnostics::{ReportTracker, WResult, specifics},
-    statements::{Statement, StatementId, StatementTy, StatementsSet},
+    parse::utils::{ctx_char, ctx_desc, ctx_str},
+    statements::{StatementTy, StatementsSet},
 };
 use tap::Pipe;
 use ustr::Ustr;
@@ -37,9 +38,9 @@ pub fn extract_parsing_rules(
     let mut sentence_patterns = Vec::new();
     let mut value_patterns = Vec::new();
 
-    let syntax_patterns = extract_from_syntax(ss, &mut sentence_patterns, tracker);
-    let notation_patterns = extract_from_notation(ss, &mut sentence_patterns, tracker);
-    let definition_patterns = extract_from_definition(ss, &mut value_patterns, tracker);
+    extract_from_syntax(ss, &mut sentence_patterns, tracker);
+    extract_from_notation(ss, &mut sentence_patterns, tracker);
+    extract_from_definition(ss, &mut value_patterns, tracker);
 
     tracker.checkpoint()?;
 
@@ -90,10 +91,10 @@ fn extract_from_definition(
 
 use winnow::{
     ascii::{digit1, line_ending, multispace0},
-    combinator::{self, alt, delimited, fail, opt, repeat, terminated},
-    error::{StrContext, StrContextValue},
+    combinator::{alt, delimited, fail, opt, repeat, terminated},
+    error::StrContext,
     prelude::*,
-    token::{any, literal, none_of, one_of, take_until, take_while},
+    token::{one_of, take_until, take_while},
 };
 
 fn parse_syntax<'a>(str: &mut &str) -> winnow::ModalResult<Vec<Pattern>> {
@@ -163,7 +164,15 @@ fn parse_pattern_part(str: &mut &str) -> winnow::ModalResult<PatternPart> {
     .parse_next(str)
 }
 
-fn parse_name(str: &mut &str) -> winnow::ModalResult<Ustr> {
+fn parse_lit(str: &mut &str) -> winnow::ModalResult<PatternPart> {
+    take_until(1.., '\'')
+        .take()
+        .map(|s| PatternPart::Lit(Ustr::from(s)))
+        .pipe(|p| delimited('\'', p, '\''))
+        .parse_next(str)
+}
+
+pub fn parse_name(str: &mut &str) -> winnow::ModalResult<Ustr> {
     (
         one_of(|c: char| c.is_alpha() || c == '_'),
         take_while(0.., |c: char| c.is_alphanum() || c == '_'),
@@ -174,25 +183,15 @@ fn parse_name(str: &mut &str) -> winnow::ModalResult<Ustr> {
         .parse_next(str)
 }
 
-fn parse_lit(str: &mut &str) -> winnow::ModalResult<PatternPart> {
-    repeat(1.., none_of('\''))
-        .fold(String::new, |mut s, c| {
-            s.push(c);
-            s
-        })
-        .map(|s| PatternPart::Lit(Ustr::from(&s)))
-        .pipe(|p| delimited('\'', p, '\''))
-        .parse_next(str)
-}
 
-fn newline<'s>(str: &mut &'s str) -> winnow::ModalResult<()> {
-    winnow::token::take_while(0.., (' ', '\t', '\r')).parse_next(str)?;
+pub fn newline<'s>(str: &mut &str) -> winnow::ModalResult<()> {
+    take_while(0.., (' ', '\t', '\r')).parse_next(str)?;
     line_ending.parse_next(str)?;
     multispace0.parse_next(str)?;
     Ok(())
 }
 
-fn ws<'a, F, O, E: winnow::error::ParserError<&'a str>>(inner: F) -> impl Parser<&'a str, O, E>
+pub fn ws<'a, F, O, E: winnow::error::ParserError<&'a str>>(inner: F) -> impl Parser<&'a str, O, E>
 where
     F: Parser<&'a str, O, E>,
 {
@@ -200,21 +199,11 @@ where
     delimited(take_while(0.., ws), inner, take_while(0.., ws))
 }
 
-fn ws_nl<'a, F, O, E: winnow::error::ParserError<&'a str>>(inner: F) -> impl Parser<&'a str, O, E>
+pub fn ws_nl<'a, F, O, E: winnow::error::ParserError<&'a str>>(
+    inner: F,
+) -> impl Parser<&'a str, O, E>
 where
     F: Parser<&'a str, O, E>,
 {
     delimited(multispace0, inner, multispace0)
-}
-
-fn ctx_desc(str: &'static str) -> StrContext {
-    StrContext::Expected(StrContextValue::Description(str))
-}
-
-fn ctx_char(char: char) -> StrContext {
-    StrContext::Expected(StrContextValue::CharLiteral(char))
-}
-
-fn ctx_str(str: &'static str) -> StrContext {
-    StrContext::Expected(StrContextValue::StringLiteral(str))
 }

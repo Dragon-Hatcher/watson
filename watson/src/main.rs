@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use crate::{
     diagnostics::{ReportTracker, WResult},
     span::SourceCache,

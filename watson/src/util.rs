@@ -15,7 +15,7 @@ impl<'a> Iterator for LineRangesIter<'a> {
 
         let end = match rest.find('\n') {
             Some(end) => self.pos + end,
-            None => self.pos + rest.len()
+            None => self.pos + rest.len(),
         };
 
         let range = (self.pos, end);

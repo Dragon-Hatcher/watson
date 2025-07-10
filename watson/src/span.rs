@@ -1,4 +1,9 @@
-use std::{collections::HashMap, fmt::Debug, ops::Range, path::{Path, PathBuf}};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    ops::Range,
+    path::{Path, PathBuf},
+};
 use ustr::Ustr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -23,7 +28,11 @@ pub struct Span {
 
 impl Span {
     pub fn new(filename: Filename, start: usize, end: usize) -> Self {
-        Self { filename, start, end }
+        Self {
+            filename,
+            start,
+            end,
+        }
     }
 }
 
@@ -52,7 +61,10 @@ pub struct SourceCache {
 
 impl SourceCache {
     pub fn new(root: PathBuf) -> Self {
-        Self { root, files: HashMap::new() }
+        Self {
+            root,
+            files: HashMap::new(),
+        }
     }
 
     fn get_name(&self, path: &Path) -> Filename {
@@ -70,7 +82,7 @@ impl SourceCache {
         &self.files[&filename]
     }
 
-    pub fn files(&self) -> impl Iterator<Item=(&Filename, &String)> {
+    pub fn files(&self) -> impl Iterator<Item = (&Filename, &String)> {
         self.files.iter()
     }
 }

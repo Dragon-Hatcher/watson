@@ -4,7 +4,7 @@ use ustr::Ustr;
 
 use crate::{
     diagnostics::{ReportTracker, WResult},
-    parse::{parsing_rules::extract_parsing_rules},
+    parse::parsing_rules::extract_parsing_rules,
     statements::StatementsSet,
 };
 
@@ -16,4 +16,3 @@ pub fn parse(ss: StatementsSet, tracker: &mut ReportTracker) -> WResult<()> {
 
     Ok(())
 }
-

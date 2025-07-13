@@ -9,8 +9,8 @@ pub fn parse_hypotheses(str: &mut Stream) -> ParseResult<Vec<Sentence>> {
     loop {
         match parse_hypothesis(str) {
             Ok(s) => hypotheses.push(s),
-            Err(ParseError::Backtrack) => break,
-            Err(ParseError::Commit) => return Err(ParseError::Commit),
+            Err(ParseError::Backtrack(_)) => break,
+            Err(ParseError::Commit(e)) => return Err(ParseError::Commit(e)),
         }
     }
 

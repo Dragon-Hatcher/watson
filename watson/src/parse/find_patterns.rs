@@ -53,7 +53,8 @@ fn find_pattern_in_stmt(s: &Statement, arena: &mut PatternArena, tracker: &mut R
         StatementTy::Axiom | StatementTy::Theorem | StatementTy::Prose => return,
     };
 
-    if let Err(_) = res {
+    if let Err(e) = res {
+        dbg!(e);
         tracker.add_message(todo!());
     }
 }
@@ -63,6 +64,8 @@ fn find_pattern_in_syntax(
     stmt_id: StatementId,
     arena: &mut PatternArena,
 ) -> ParseResult<()> {
+    dbg!(&str);
+
     str.commit(|str| {
         str.expect_str("syntax")?;
 
@@ -71,8 +74,8 @@ fn find_pattern_in_syntax(
         loop {
             match parse_pattern(str) {
                 Ok(p) => patterns.push(p),
-                Err(ParseError::Backtrack) => break,
-                Err(ParseError::Commit) => return Err(ParseError::Commit),
+                Err(ParseError::Backtrack(_)) => break,
+                Err(ParseError::Commit(e)) => return Err(ParseError::Commit(e)),
             }
         }
 

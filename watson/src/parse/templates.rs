@@ -16,8 +16,8 @@ pub fn parse_templates(str: &mut Stream) -> ParseResult<Vec<Template>> {
     loop {
         match parse_template(str, &mut templates) {
             Ok(_) => {}
-            Err(ParseError::Backtrack) => break,
-            Err(ParseError::Commit) => return Err(ParseError::Commit),
+            Err(ParseError::Backtrack(_)) => break,
+            Err(ParseError::Commit(e)) => return Err(ParseError::Commit(e)),
         }
     }
 
@@ -51,8 +51,8 @@ fn parse_schemas(str: &mut Stream, templates: &mut Vec<Template>) -> ParseResult
     loop {
         match parse_schema(str) {
             Ok(s) => templates.push(s),
-            Err(ParseError::Backtrack) => break,
-            Err(ParseError::Commit) => return Err(ParseError::Commit),
+            Err(ParseError::Backtrack(_)) => break,
+            Err(ParseError::Commit(e)) => return Err(ParseError::Commit(e)),
         }
     }
 

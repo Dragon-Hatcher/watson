@@ -22,8 +22,8 @@ pub fn parse_syntax(str: &mut Stream, doc: &mut Document, stmt_id: StatementId) 
         loop {
             match parse_pattern(str) {
                 Ok(p) => patterns.push(p),
-                Err(ParseError::Backtrack) => break,
-                Err(ParseError::Commit) => return Err(ParseError::Commit),
+                Err(ParseError::Backtrack(_)) => break,
+                Err(ParseError::Commit(e)) => return Err(ParseError::Commit(e)),
             }
         }
 

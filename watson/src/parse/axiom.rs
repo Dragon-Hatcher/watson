@@ -21,9 +21,9 @@ pub struct Axiom {
 }
 
 pub fn parse_axiom(str: &mut Stream, doc: &mut Document, stmt_id: StatementId) -> ParseResult<()> {
-    str.expect_str("axiom")?;
-
     str.commit(|str| {
+        str.expect_str("axiom")?;
+
         let name = parse_name(str)?;
         let templates = parse_templates(str)?;
         str.expect_char(':')?;

@@ -35,11 +35,12 @@ pub fn parse_definition(
     doc: &mut Document,
     stmt_id: StatementId,
 ) -> ParseResult<()> {
-    str.expect_str("definition")?;
-
     str.commit(|str| {
+        str.expect_str("definition")?;
+
         let name = parse_name(str)?;
-        let pattern = parse_pattern(str, &mut doc.patterns)?;
+        let _pattern = parse_pattern(str)?;
+        let pattern = doc.patterns.patterns_for(stmt_id)[0];
 
         if str.expect_str("=>").is_ok() {
             let replacement = parse_value(str)?;

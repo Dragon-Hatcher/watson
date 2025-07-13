@@ -1,14 +1,10 @@
-use ustr::Ustr;
-
 use crate::{
-    parse::{
-        find_patterns::PatternArena,
-        stream::{ParseResult, Stream},
-    },
+    parse::stream::{ParseResult, Stream},
     statements::StatementId,
 };
+use ustr::Ustr;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PatternId(usize);
 
 #[derive(Debug)]
@@ -16,10 +12,10 @@ pub struct Precedence(u32);
 
 #[derive(Debug)]
 pub struct Pattern {
-    id: PatternId,
-    statement: StatementId,
-    precedence: Precedence,
-    parts: Vec<(Option<Ustr>, PatternPart)>,
+    pub id: PatternId,
+    pub statement: StatementId,
+    pub precedence: Precedence,
+    pub parts: Vec<(Option<Ustr>, PatternPart)>,
 }
 
 #[derive(Debug)]
@@ -36,6 +32,6 @@ pub enum PatternTy {
     Value,
 }
 
-pub fn parse_pattern(str: &mut Stream, arena: &mut PatternArena) -> ParseResult<PatternId> {
+pub fn parse_pattern(str: &mut Stream) -> ParseResult<Pattern> {
     todo!()
 }

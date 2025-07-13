@@ -26,7 +26,7 @@ mod templates;
 mod term;
 mod theorem;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Document {
     patterns: PatternArena,
 
@@ -42,16 +42,8 @@ pub struct Document {
 }
 
 pub fn parse(ss: StatementsSet, tracker: &mut ReportTracker) -> WResult<Document> {
-    let patterns = find_patterns(&ss, tracker)?;
-    let mut doc = Document {
-        patterns,
-        syntax: Vec::new(),
-        sentence_notations: Vec::new(),
-        definitions: Vec::new(),
-        definition_notations: Vec::new(),
-        axioms: Vec::new(),
-        theorems: Vec::new(),
-    };
+    let mut doc = Document::default();
+    doc.patterns = find_patterns(&ss, tracker)?;
 
     for s in ss.statements() {
         parse_statement(s, &mut doc, tracker);
@@ -73,6 +65,8 @@ fn parse_statement(s: &Statement, doc: &mut Document, tracker: &mut ReportTracke
         StatementTy::Theorem => theorem::parse_theorem(&mut str, doc, s.id()),
         StatementTy::Prose => return,
     };
+
+    let res = res.or_else(|_| str.expect_eof());
 
     if let Err(_) = res {
         tracker.add_message(todo!());

@@ -23,11 +23,11 @@ pub fn parse_notation(
     doc: &mut Document,
     stmt_id: StatementId,
 ) -> ParseResult<()> {
-    str.expect_str("notation")?;
-
     str.commit(|str| {
+        str.expect_str("notation")?;
+
         let name = parse_name(str)?;
-        let pattern = parse_pattern(str, &mut doc.patterns)?;
+        let _pattern = parse_pattern(str)?;
         str.expect_str("=>")?;
         let replacement = parse_sentence(str)?;
         str.expect_str("end")?;
@@ -35,7 +35,7 @@ pub fn parse_notation(
         let notation = SentenceNotation {
             stmt_id,
             name,
-            pattern,
+            pattern: doc.patterns.patterns_for(stmt_id)[0],
             replacement,
         };
         doc.sentence_notations.push(notation);

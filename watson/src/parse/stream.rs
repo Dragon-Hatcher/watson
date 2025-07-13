@@ -86,4 +86,12 @@ impl<'a> Stream<'a> {
             Ok(())
         })
     }
+
+    pub fn expect_eof(&self) -> ParseResult<()> {
+        if self.pos >= self.text.len() {
+            Ok(())
+        } else {
+            Err(ParseError::Backtrack)
+        }
+    }
 }

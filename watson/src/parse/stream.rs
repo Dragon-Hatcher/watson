@@ -73,7 +73,7 @@ impl<'a> Stream<'a> {
             self.pop();
             Ok(char)
         } else {
-            Err(ParseError::new(self.pos))
+            Err(ParseError::new_backtrack(self.pos))
         }
     }
 
@@ -97,8 +97,12 @@ impl<'a> Stream<'a> {
         if self.pos >= self.text.len() {
             Ok(())
         } else {
-            Err(ParseError::new(self.pos)).ctx_expect_desc("end of input")
+            Err(ParseError::new_backtrack(self.pos)).ctx_expect_desc("end of input")
         }
+    }
+
+    pub fn fail<T>(&self) -> ParseResult<T> {
+        Err(ParseError::new_backtrack(self.pos))
     }
 }
 
@@ -117,6 +121,16 @@ pub struct ParseErrorCtx {
 }
 
 impl ParseErrorCtx {
+    pub fn place(&self) -> usize {
+        self.place
+    }
+
+    pub fn trace(&self) -> &[ParseErrorCtxTy] {
+        &self.trace
+    }
+}
+
+impl ParseErrorCtx {
     fn new(place: usize) -> Self {
         Self {
             place,
@@ -132,14 +146,14 @@ pub enum ParseError {
 }
 
 impl ParseError {
-    fn new(place: usize) -> Self {
+    pub fn new_backtrack(place: usize) -> Self {
         Self::Backtrack(ParseErrorCtx::new(place))
     }
 }
 
 pub type ParseResult<T> = Result<T, ParseError>;
 
-trait ParseErrorCtxHolder {
+pub trait ParseErrorCtxHolder {
     fn ctx_expect_char(self, char: char) -> Self;
     fn ctx_expect_str(self, str: &'static str) -> Self;
     fn ctx_expect_desc(self, desc: &'static str) -> Self;

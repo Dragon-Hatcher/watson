@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    diagnostics::{ReportTracker, WResult},
+    diagnostics::{ReportTracker, WResult, specifics},
     parse::{
         common::parse_name,
         pattern::{Pattern, PatternId, parse_pattern},
@@ -54,8 +54,7 @@ fn find_pattern_in_stmt(s: &Statement, arena: &mut PatternArena, tracker: &mut R
     };
 
     if let Err(e) = res {
-        dbg!(e);
-        tracker.add_message(todo!());
+        tracker.add_message(specifics::parse_error(e, s.span()));
     }
 }
 
@@ -64,8 +63,6 @@ fn find_pattern_in_syntax(
     stmt_id: StatementId,
     arena: &mut PatternArena,
 ) -> ParseResult<()> {
-    dbg!(&str);
-
     str.commit(|str| {
         str.expect_str("syntax")?;
 

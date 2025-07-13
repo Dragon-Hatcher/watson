@@ -1,5 +1,10 @@
 use super::ReportLevel as RL;
-use crate::{diagnostics::Report, span::Span, statements::StatementTy};
+use crate::{
+    diagnostics::Report,
+    parse::stream::{ParseError, ParseErrorCtxTy},
+    span::Span,
+    statements::StatementTy,
+};
 use ustr::Ustr;
 
 macro_rules! uformat {
@@ -57,13 +62,37 @@ pub fn unclosed_statement_at_eof(span: Span, ty: StatementTy) -> Report {
     )
 }
 
-pub fn multiple_syntax_statements(mut spans: impl Iterator<Item = Span>) -> Report {
-    let mut r = Report::new(RL::Error, uformat!("multiple syntax declarations"));
+pub fn parse_error(err: ParseError, span: Span) -> Report {
+    let err = match err {
+        ParseError::Backtrack(err) => err,
+        ParseError::Commit(err) => err,
+    };
 
-    r = r.with_info(spans.next().unwrap(), uformat!("syntax declared here"));
-    for span in spans {
-        r = r.with_info(span, uformat!("and here"))
+    let span = Span::new(
+        span.file(),
+        span.start() + err.place(),
+        span.start() + err.place() + 1,
+    );
+
+    let mut msg = String::new();
+    for part in err.trace() {
+        if !msg.is_empty() {
+            msg.push_str(" ");
+        }
+
+        match part {
+            ParseErrorCtxTy::ExpectChar(c) => msg.push_str(&format!("expected `{c}`")),
+            ParseErrorCtxTy::ExpectStr(str) => msg.push_str(&format!("expected `{str}`")),
+            ParseErrorCtxTy::ExpectDescription(desc) => msg.push_str(&format!("expected {desc}")),
+            ParseErrorCtxTy::Label(label) => msg.push_str(&format!("while parsing {label}")),
+        }
     }
 
-    r
+    if msg.is_empty() {
+        msg.push_str("error here");
+    }
+
+    let msg = Ustr::from(&msg);
+
+    Report::new(RL::Error, uformat!("parse error")).with_info(span, msg)
 }

@@ -1,5 +1,5 @@
 use crate::{
-    diagnostics::{ReportTracker, WResult},
+    diagnostics::{ReportTracker, WResult, specifics},
     parse::{
         axiom::Axiom,
         definition::{Definition, DefinitionNotation},
@@ -20,7 +20,7 @@ mod hypotheses;
 mod notation;
 mod pattern;
 mod proof;
-mod stream;
+pub mod stream;
 mod syntax;
 mod templates;
 mod term;
@@ -68,7 +68,7 @@ fn parse_statement(s: &Statement, doc: &mut Document, tracker: &mut ReportTracke
 
     let res = res.or_else(|_| str.expect_eof());
 
-    if let Err(_) = res {
-        tracker.add_message(todo!());
+    if let Err(e) = res {
+        tracker.add_message(specifics::parse_error(e, s.span()));
     }
 }

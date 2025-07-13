@@ -164,6 +164,10 @@ impl<'a> Stream<'a> {
 
         end
     }
+
+    pub fn remaining_text(&self) -> &str {
+        &self.text[self.pos..]
+    }
 }
 
 #[derive(Debug)]

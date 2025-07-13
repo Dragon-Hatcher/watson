@@ -2,10 +2,10 @@ use super::pattern::PatternPart;
 use crate::parse::{
     Document,
     common::parse_name,
-    earley::{EarleyRule, EarleySymbol, earley_parse},
+    earley::{EarleyGrammar, EarleySymbol, EarleyTerm, earley_parse},
     find_patterns::PatternArena,
     pattern::{Pattern, PatternId, PatternTy},
-    stream::{ParseResult, Stream},
+    stream::{Checkpoint, ParseResult, Stream},
 };
 use std::{fmt::Debug, hash::Hash};
 use ustr::Ustr;
@@ -29,115 +29,110 @@ pub enum Term {
     Binding(Ustr),
 }
 
-#[derive(Clone, Copy)]
-struct TermEarleyRule<'a> {
-    patterns: &'a PatternArena,
-    pat: &'a Pattern,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum MyEarleyNonTerm {
+    Sentence,
+    Value,
 }
 
-impl<'a> Debug for TermEarleyRule<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let x: Vec<_> = self.pat.parts.iter().map(|x| x.1).collect();
-        x.fmt(f)
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum MyEarleyTerm {
+    Lit(Ustr),
+    Binding,
+    VarName,
+    PatSubst,
+    DefSubst,
 }
 
-impl<'a> PartialEq for TermEarleyRule<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.pat as *const _ == other.pat as *const _
-    }
-}
-impl<'a> Eq for TermEarleyRule<'a> {}
-impl<'a> Hash for TermEarleyRule<'a> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        (self.pat as *const Pattern).hash(state);
-    }
-}
-
-#[derive(Clone, Copy)]
-struct TermEarleySymbol<'a> {
-    patterns: &'a PatternArena,
-    ty: PatternPart,
-}
-
-impl<'a> Debug for TermEarleySymbol<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.ty.fmt(f)
-    }
-}
-
-impl<'a> PartialEq for TermEarleySymbol<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.ty == other.ty
-    }
-}
-impl<'a> Eq for TermEarleySymbol<'a> {}
-impl<'a> Hash for TermEarleySymbol<'a> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.ty.hash(state);
-    }
-}
-
-impl<'a> EarleyRule<TermEarleySymbol<'a>> for TermEarleyRule<'a> {
-    fn predict(&self, pos: usize) -> Option<TermEarleySymbol<'a>> {
-        self.pat.parts.get(pos).map(|&(_, ty)| TermEarleySymbol {
-            patterns: self.patterns,
-            ty,
+impl EarleyTerm for MyEarleyTerm {
+    fn scan(&self, str: &mut Stream) -> Option<Checkpoint> {
+        str.measure(|str| {
+            match self {
+                MyEarleyTerm::Lit(ustr) => {
+                    str.expect_str(ustr.as_str())?;
+                }
+                MyEarleyTerm::Binding | MyEarleyTerm::VarName => {
+                    parse_name(str)?;
+                }
+                MyEarleyTerm::PatSubst => {
+                    str.include_ws(|str| {
+                        str.expect_char('$')?;
+                        parse_name(str)
+                    })?;
+                }
+                MyEarleyTerm::DefSubst => {
+                    str.expect_char('_')?;
+                }
+            };
+            Ok(())
         })
     }
-
-    fn debug(&self) -> Vec<String> {
-        self.pat
-            .parts
-            .iter()
-            .map(|p| format!("{:?}", p.1))
-            .collect()
-    }
 }
 
-impl<'a> EarleySymbol<TermEarleyRule<'a>> for TermEarleySymbol<'a> {
-    fn scan(&self, str: &mut Stream) -> Option<super::stream::Checkpoint> {
-        match self.ty {
-            PatternPart::Binding => str.measure(|str| parse_name(str)),
-            PatternPart::Lit(lit) => str.measure(|str| str.expect_str(lit.as_str())),
-            _ => None,
-        }
-    }
-
-    fn rules_for(&self) -> impl Iterator<Item = TermEarleyRule<'a>> {
-        let mapper = |pat: &PatternId| TermEarleyRule {
-            patterns: self.patterns,
-            pat: self.patterns.get(pat),
-        };
-
-        match self.ty {
-            PatternPart::Sentence => self
-                .patterns
-                .patterns_with_ty(PatternTy::Sentence)
-                .iter()
-                .map(mapper),
-            PatternPart::Value => self
-                .patterns
-                .patterns_with_ty(PatternTy::Value)
-                .iter()
-                .map(mapper),
-            _ => [].iter().map(mapper),
-        }
-    }
+fn pattern_to_earley(pat: &Pattern) -> Vec<EarleySymbol<MyEarleyTerm, MyEarleyNonTerm>> {
+    pat.parts
+        .iter()
+        .map(|p| match p.1 {
+            PatternPart::Sentence => EarleySymbol::NonTerminal(MyEarleyNonTerm::Sentence),
+            PatternPart::Value => EarleySymbol::NonTerminal(MyEarleyNonTerm::Value),
+            PatternPart::Binding => EarleySymbol::Terminal(MyEarleyTerm::Binding),
+            PatternPart::Lit(ustr) => EarleySymbol::Terminal(MyEarleyTerm::Lit(ustr)),
+        })
+        .collect()
 }
 
 pub fn parse_sentence(str: &mut Stream, end: &str, doc: &Document) -> ParseResult<Sentence> {
-    earley_parse(
-        str,
-        TermEarleySymbol {
-            patterns: &doc.patterns,
-            ty: PatternPart::Sentence,
-        },
+    let mut grammar = EarleyGrammar::new();
+
+    for pat in doc.patterns.patterns_with_ty(PatternTy::Sentence) {
+        let pat = doc.patterns.get(pat);
+        grammar.add_rule(MyEarleyNonTerm::Sentence, pattern_to_earley(pat));
+    }
+    grammar.add_rule(
+        MyEarleyNonTerm::Sentence,
+        vec![EarleySymbol::Terminal(MyEarleyTerm::PatSubst)],
     );
+
+    for pat in doc.patterns.patterns_with_ty(PatternTy::Value) {
+        let pat = doc.patterns.get(pat);
+        grammar.add_rule(MyEarleyNonTerm::Value, pattern_to_earley(pat));
+    }
+    grammar.add_rule(
+        MyEarleyNonTerm::Value,
+        vec![EarleySymbol::Terminal(MyEarleyTerm::PatSubst)],
+    );
+    grammar.add_rule(
+        MyEarleyNonTerm::Value,
+        vec![EarleySymbol::Terminal(MyEarleyTerm::DefSubst)],
+    );
+    grammar.add_rule(
+        MyEarleyNonTerm::Value,
+        vec![EarleySymbol::Terminal(MyEarleyTerm::VarName)],
+    );
+
+    earley_parse(str, grammar, MyEarleyNonTerm::Sentence);
 
     todo!()
 }
 
 pub fn parse_value(str: &mut Stream, end: &str) -> ParseResult<Value> {
     todo!()
+}
+
+fn parse_default_values(str: &mut Stream) -> Option<Checkpoint> {
+    str.measure(|str| parse_name(str)).or(str.measure(|str| {
+        str.include_ws(|str| {
+            str.expect_char('$')?;
+            parse_name(str)
+        })
+    }))
+}
+
+fn parse_default_sentences(str: &mut Stream) -> Option<Checkpoint> {
+    str.measure(|str| {
+        str.include_ws(|str| {
+            str.expect_char('$')?;
+            parse_name(str)
+        })
+    })
 }

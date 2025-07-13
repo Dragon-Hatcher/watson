@@ -8,7 +8,7 @@ pub struct Stream<'a> {
     ignore_ws: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Checkpoint(usize);
 
 impl<'a> Stream<'a> {
@@ -151,6 +151,18 @@ impl<'a> Stream<'a> {
 
     pub fn fail<T>(&self) -> ParseResult<T> {
         Err(ParseError::new_backtrack(self.pos))
+    }
+
+    pub fn measure<F, T>(&mut self, mut f: F) -> Option<Checkpoint>
+    where
+        F: FnMut(&mut Self) -> ParseResult<T>,
+    {
+        let start = self.checkpoint();
+        let parsed = f(self).ok();
+        let end = parsed.map(|_| self.checkpoint());
+        self.rewind(start);
+
+        end
     }
 }
 

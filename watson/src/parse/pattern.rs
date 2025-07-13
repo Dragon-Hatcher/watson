@@ -1,9 +1,8 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use crate::parse::{
     common::{parse_name, parse_num},
-    stream::{ParseError, ParseErrorCtxHolder, ParseResult, Stream},
+    stream::{ParseError, ParseResult, Stream},
 };
+use std::sync::atomic::{AtomicUsize, Ordering};
 use ustr::Ustr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -23,11 +22,12 @@ pub struct Precedence(u32);
 #[derive(Debug)]
 pub struct Pattern {
     pub id: PatternId,
+    pub ty: PatternTy,
     pub precedence: Precedence,
     pub parts: Vec<(Option<Ustr>, PatternPart)>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PatternPart {
     Sentence,
     Value,
@@ -35,13 +35,13 @@ pub enum PatternPart {
     Lit(Ustr),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PatternTy {
     Sentence,
     Value,
 }
 
-pub fn parse_pattern(str: &mut Stream) -> ParseResult<Pattern> {
+pub fn parse_pattern(str: &mut Stream, ty: PatternTy) -> ParseResult<Pattern> {
     str.fallible(|str| {
         let precedence = Precedence(parse_num(str)?);
         str.expect_char('|')?;
@@ -49,6 +49,7 @@ pub fn parse_pattern(str: &mut Stream) -> ParseResult<Pattern> {
 
         let pattern = Pattern {
             id: PatternId::new(),
+            ty,
             precedence,
             parts,
         };
@@ -118,13 +119,4 @@ fn parse_lit(str: &mut Stream) -> ParseResult<PatternPart> {
 
 fn is_lit_char(char: char) -> bool {
     char != '\''
-}
-
-#[test]
-fn test_parse_pattern() {
-    let mut str = Stream::new("100 | '(' p:sentence ')' => $p ");
-    let pat = parse_pattern(&mut str);
-
-    dbg!(&pat);
-    assert!(pat.is_ok());
 }

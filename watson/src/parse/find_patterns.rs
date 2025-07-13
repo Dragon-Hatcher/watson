@@ -4,7 +4,7 @@ use crate::{
     diagnostics::{ReportTracker, WResult, specifics},
     parse::{
         common::parse_name,
-        pattern::{Pattern, PatternId, parse_pattern},
+        pattern::{Pattern, PatternId, PatternTy, parse_pattern},
         stream::{ParseError, ParseResult, Stream},
     },
     statements::{Statement, StatementId, StatementTy, StatementsSet},
@@ -13,13 +13,19 @@ use crate::{
 #[derive(Debug, Default)]
 pub struct PatternArena {
     in_stmt: HashMap<StatementId, Vec<PatternId>>,
+    with_ty: HashMap<PatternTy, Vec<PatternId>>,
     all: HashMap<PatternId, Pattern>,
 }
 
 impl PatternArena {
     fn add(&mut self, pat: Pattern, in_stmt: StatementId) {
         self.in_stmt.entry(in_stmt).or_default().push(pat.id);
+        self.with_ty.entry(pat.ty).or_default().push(pat.id);
         self.all.insert(pat.id, pat);
+    }
+
+    pub fn get(&self, id: &PatternId) -> &Pattern {
+        &self.all[id]
     }
 
     pub fn patterns_for(&self, stmt_id: StatementId) -> &[PatternId] {
@@ -27,6 +33,10 @@ impl PatternArena {
             .get(&stmt_id)
             .map(|v| v.as_slice())
             .unwrap_or(&[])
+    }
+
+    pub fn patterns_with_ty(&self, ty: PatternTy) -> &[PatternId] {
+        self.with_ty.get(&ty).map(|v| v.as_slice()).unwrap_or(&[])
     }
 }
 
@@ -69,7 +79,7 @@ fn find_pattern_in_syntax(
         let mut patterns = Vec::new();
 
         loop {
-            match parse_pattern(str) {
+            match parse_pattern(str, PatternTy::Sentence) {
                 Ok(p) => patterns.push(p),
                 Err(ParseError::Backtrack(_)) => break,
                 Err(ParseError::Commit(e)) => return Err(ParseError::Commit(e)),
@@ -95,7 +105,7 @@ fn find_pattern_in_notation(
         str.expect_str("notation")?;
 
         let _name = parse_name(str)?;
-        let pattern = parse_pattern(str)?;
+        let pattern = parse_pattern(str, PatternTy::Sentence)?;
         str.expect_str("=>")?;
 
         // Just go to the end. We can catch other syntax errors latter.
@@ -116,7 +126,7 @@ fn find_pattern_in_definition(
         str.expect_str("definition")?;
 
         let _name = parse_name(str)?;
-        let pattern = parse_pattern(str)?;
+        let pattern = parse_pattern(str, PatternTy::Value)?;
         str.expect_str("=>").or_else(|_| str.expect_str("where"))?;
 
         arena.add(pattern, stmt_id);

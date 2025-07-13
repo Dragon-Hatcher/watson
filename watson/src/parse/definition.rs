@@ -1,3 +1,4 @@
+use super::pattern::PatternTy;
 use crate::{
     parse::{
         Document,
@@ -39,12 +40,11 @@ pub fn parse_definition(
         str.expect_str("definition")?;
 
         let name = parse_name(str)?;
-        let _pattern = parse_pattern(str)?;
+        let _pattern = parse_pattern(str, PatternTy::Value)?;
         let pattern = doc.patterns.patterns_for(stmt_id)[0];
 
         if str.expect_str("=>").is_ok() {
-            let replacement = parse_value(str)?;
-            str.expect_str("end")?;
+            let replacement = parse_value(str, "end")?;
 
             let notation = DefinitionNotation {
                 stmt_id,
@@ -55,10 +55,9 @@ pub fn parse_definition(
             doc.definition_notations.push(notation);
         } else {
             str.expect_str("where")?;
-            let hypotheses = parse_hypotheses(str)?;
+            let hypotheses = parse_hypotheses(str, doc)?;
             str.expect_str("|-")?;
-            let conclusion = parse_sentence(str)?;
-            str.expect_str("proof")?;
+            let conclusion = parse_sentence(str, "proof", doc)?;
             let proof = parse_proof(str)?;
             str.expect_str("end")?;
 

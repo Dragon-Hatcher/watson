@@ -1,3 +1,4 @@
+use super::pattern::PatternTy;
 use crate::{
     parse::{
         Document,
@@ -27,10 +28,9 @@ pub fn parse_notation(
         str.expect_str("notation")?;
 
         let name = parse_name(str)?;
-        let _pattern = parse_pattern(str)?;
+        let _pattern = parse_pattern(str, PatternTy::Sentence)?;
         str.expect_str("=>")?;
-        let replacement = parse_sentence(str)?;
-        str.expect_str("end")?;
+        let replacement = parse_sentence(str, "end", doc)?;
 
         let notation = SentenceNotation {
             stmt_id,

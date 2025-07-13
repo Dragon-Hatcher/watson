@@ -1,3 +1,4 @@
+use super::pattern::PatternTy;
 use crate::{
     parse::{
         Document,
@@ -20,7 +21,7 @@ pub fn parse_syntax(str: &mut Stream, doc: &mut Document, stmt_id: StatementId) 
         let mut patterns = Vec::new();
 
         loop {
-            match parse_pattern(str) {
+            match parse_pattern(str, PatternTy::Sentence) {
                 Ok(p) => patterns.push(p),
                 Err(ParseError::Backtrack(_)) => break,
                 Err(ParseError::Commit(e)) => return Err(ParseError::Commit(e)),

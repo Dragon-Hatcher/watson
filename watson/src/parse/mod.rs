@@ -15,6 +15,7 @@ use crate::{
 mod axiom;
 mod common;
 mod definition;
+mod earley;
 mod find_patterns;
 mod hypotheses;
 mod notation;

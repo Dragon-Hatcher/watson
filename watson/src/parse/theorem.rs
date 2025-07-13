@@ -32,10 +32,9 @@ pub fn parse_theorem(
         let name = parse_name(str)?;
         let templates = parse_templates(str)?;
         str.expect_char(':')?;
-        let hypotheses = parse_hypotheses(str)?;
+        let hypotheses = parse_hypotheses(str, doc)?;
         str.expect_str("|-")?;
-        let conclusion = parse_sentence(str)?;
-        str.expect_str("proof")?;
+        let conclusion = parse_sentence(str, "proof", doc)?;
         let proof = parse_proof(str)?;
         str.expect_str("qed")?;
 

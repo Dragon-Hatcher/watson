@@ -5,7 +5,7 @@ syntax
     100 | value '=' value
     300 | sentence '→' sentence
     200 | '∃' binding ',' sentence
-    100 | '⊥' 
+    100 | '⊥'
 end
 
 notation paren

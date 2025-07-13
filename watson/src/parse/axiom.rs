@@ -1,30 +1,42 @@
-use crate::parse::{
-    Stream,
-    common::{Template, parse_hypotheses, parse_name, parse_templates},
-    sentence::{Sentence, parse_sentence},
-    utils::ws_nl,
+use crate::{
+    parse::{
+        Document, Sentence,
+        common::parse_name,
+        hypotheses::parse_hypotheses,
+        sentence::parse_sentence,
+        stream::{ParseResult, Stream},
+        templates::{Template, parse_templates},
+    },
+    statements::StatementId,
 };
-use tap::Pipe;
 use ustr::Ustr;
-use winnow::{Parser, combinator::seq};
 
 pub struct Axiom {
+    stmt_id: StatementId,
     name: Ustr,
     templates: Vec<Template>,
     hypotheses: Vec<Sentence>,
     conclusion: Sentence,
 }
 
-pub fn parse_axiom(str: &mut Stream) -> winnow::ModalResult<Axiom> {
-    seq! {Axiom{
-        _: "theorem".pipe(ws_nl),
-        name: parse_name,
-        templates: parse_templates,
-        _: ":".pipe(ws_nl),
-        hypotheses: parse_hypotheses,
-        _: "|-".pipe(ws_nl),
-        conclusion: parse_sentence,
-        _: "end".pipe(ws_nl)
-    }}
-    .parse_next(str)
+pub fn parse_axiom(str: &mut Stream, doc: &mut Document, stmt_id: StatementId) -> ParseResult<()> {
+    str.expect_str("axiom")?;
+    let name = parse_name(str)?;
+    let templates = parse_templates(str)?;
+    str.expect_char(':')?;
+    let hypotheses = parse_hypotheses(str)?;
+    str.expect_str("|-")?;
+    let conclusion = parse_sentence(str)?;
+    str.expect_str("end")?;
+
+    let axiom = Axiom {
+        stmt_id,
+        name,
+        templates,
+        hypotheses,
+        conclusion,
+    };
+    doc.axioms.push(axiom);
+
+    Ok(())
 }

@@ -1,14 +1,12 @@
-macro_rules! uformat {
-        ($($t:tt)*) => {
-            ustr::Ustr::from(&format!($($t)*))
-        };
-    }
-
-use ustr::Ustr;
-use winnow::error::{ContextError, ParseError};
-
 use super::ReportLevel as RL;
 use crate::{diagnostics::Report, span::Span, statements::StatementTy};
+use ustr::Ustr;
+
+macro_rules! uformat {
+    ($($t:tt)*) => {
+        ustr::Ustr::from(&format!($($t)*))
+    };
+}
 
 fn render_statement_ty(ty: StatementTy) -> &'static str {
     match ty {
@@ -68,15 +66,4 @@ pub fn multiple_syntax_statements(mut spans: impl Iterator<Item = Span>) -> Repo
     }
 
     r
-}
-
-pub fn parse_error<S>(err: ParseError<S, ContextError>, span: Span) -> Report {
-    let span = Span::new(
-        span.file(),
-        span.start() + err.offset(),
-        span.start() + err.offset() + 1,
-    );
-    let msg = Ustr::from(&err.inner().to_string());
-
-    Report::new(RL::Error, uformat!("parsing error")).with_info(span, msg)
 }

@@ -1,30 +1,96 @@
-use winnow::Stateful;
-
 use crate::{
     diagnostics::{ReportTracker, WResult},
-    parse::parsing_rules::{ParsingRules, extract_parsing_rules},
-    statements::StatementsSet,
+    parse::{axiom::Axiom, find_patterns::PatternId, theorem::Theorem},
+    statements::{StatementId, StatementsSet},
 };
+use ustr::Ustr;
 
 mod axiom;
 mod common;
-mod parsing_rules;
+mod find_patterns;
+mod hypotheses;
+mod proof;
 mod sentence;
-mod tactic;
+mod stream;
+mod templates;
 mod theorem;
-mod utils;
-mod definition;
 
-pub fn parse(ss: StatementsSet, tracker: &mut ReportTracker) -> WResult<()> {
-    let rules = extract_parsing_rules(&ss, tracker)?;
-    dbg!(rules);
+#[derive(Debug)]
+pub struct Document {
+    patterns: PatternArena,
 
-    Ok(())
+    // Which sentences are allowed?
+    syntax: Vec<Syntax>,
+    sentence_notations: Vec<Notation>,
+    // Which values are allowed?
+    definitions: Vec<Definition>,
+    definition_notations: Vec<DefinitionNotation>,
+    // Which deductions are allowed?
+    axioms: Vec<Axiom>,
+    theorems: Vec<Theorem>,
 }
 
-type Stream<'s> = Stateful<&'s str, State>;
+pub fn parse(ss: StatementsSet, tracker: &mut ReportTracker) -> WResult<Document> {
+    Err(())
+}
 
-#[derive(Debug, Clone)]
-struct State {
-    parsing_rules: ParsingRules,
+pub struct Syntax {
+    patterns: Vec<PatternId>,
+}
+
+pub struct Notation {
+    statement: StatementId,
+    name: Ustr,
+    pattern: PatternId,
+    replacement: Sentence,
+}
+
+pub struct Definition {
+    statement: StatementId,
+    name: Ustr,
+    pattern: PatternId,
+    conclusion: Sentence,
+    proof: Proof,
+}
+
+pub struct DefinitionNotation {
+    statement: StatementId,
+    name: Ustr,
+    pattern: PatternId,
+    replacement: Value,
+}
+
+pub struct Sentence {
+    pattern: PatternId,
+    terms: Vec<Term>,
+}
+
+pub struct Value {
+    pattern: PatternId,
+    terms: Vec<Term>,
+}
+
+pub enum Term {
+    Sentence(Sentence),
+    Value(Value),
+    Binding(Ustr),
+}
+
+pub struct Proof {
+    tactics: Vec<Tactic>,
+}
+
+pub enum Tactic {
+    Have(HaveTactic),
+}
+
+pub struct HaveTactic {
+    conclusion: Sentence,
+    by: Ustr,
+    substitutions: Vec<Substitution>,
+}
+
+pub enum Substitution {
+    Value(Value),
+    Sentence(Sentence),
 }

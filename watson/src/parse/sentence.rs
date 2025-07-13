@@ -1,7 +1,8 @@
-use crate::parse::Stream;
+use crate::parse::{
+    Sentence,
+    stream::{ParseResult, Stream},
+};
 
-pub struct Sentence {}
-
-pub fn parse_sentence(str: &mut Stream) -> winnow::ModalResult<Sentence> {
+pub fn parse_sentence(str: &mut Stream) -> ParseResult<Sentence> {
     todo!()
 }

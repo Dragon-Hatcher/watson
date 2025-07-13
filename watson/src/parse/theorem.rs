@@ -1,33 +1,51 @@
-use crate::parse::{
-    common::{parse_hypotheses, parse_name, parse_templates, Template},
-    sentence::{parse_sentence, Sentence},
-    tactic::{parse_tactics, Tactic},
-    utils::ws_nl, Stream,
+use crate::{
+    parse::{
+        Document, Proof, Sentence,
+        common::parse_name,
+        hypotheses::parse_hypotheses,
+        proof::parse_proof,
+        sentence::parse_sentence,
+        stream::{ParseResult, Stream},
+        templates::{Template, parse_templates},
+    },
+    statements::StatementId,
 };
-use tap::Pipe;
 use ustr::Ustr;
-use winnow::{Parser, combinator::seq};
 
 pub struct Theorem {
+    stmt_id: StatementId,
     name: Ustr,
     templates: Vec<Template>,
     hypotheses: Vec<Sentence>,
     conclusion: Sentence,
-    proof: Vec<Tactic>,
+    proof: Proof,
 }
 
-pub fn parse_theorem(str: &mut Stream) -> winnow::ModalResult<Theorem> {
-    seq! {Theorem{
-        _: "theorem".pipe(ws_nl),
-        name: parse_name,
-        templates: parse_templates,
-        _: ":".pipe(ws_nl),
-        hypotheses: parse_hypotheses,
-        _: "|-".pipe(ws_nl),
-        conclusion: parse_sentence,
-        _: "proof".pipe(ws_nl),
-        proof: parse_tactics,
-        _: "qed".pipe(ws_nl)
-    }}
-    .parse_next(str)
+pub fn parse_theorem(
+    str: &mut Stream,
+    doc: &mut Document,
+    stmt_id: StatementId,
+) -> ParseResult<()> {
+    str.expect_str("axiom")?;
+    let name = parse_name(str)?;
+    let templates = parse_templates(str)?;
+    str.expect_char(':')?;
+    let hypotheses = parse_hypotheses(str)?;
+    str.expect_str("|-")?;
+    let conclusion = parse_sentence(str)?;
+    str.expect_str("proof")?;
+    let proof = parse_proof(str)?;
+    str.expect_str("qed")?;
+
+    let theorem = Theorem {
+        stmt_id,
+        name,
+        templates,
+        hypotheses,
+        conclusion,
+        proof,
+    };
+    doc.theorems.push(theorem);
+
+    Ok(())
 }

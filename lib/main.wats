@@ -33,7 +33,7 @@ notation forall
 end
 
 notation exists_at_most_one
-    200 | '∃*' v:binding ',' p:sentence => ∃y, ∀ $v, $p → $v = y
+    200 | '∃*' v:binding ',' p:sentence =>  
 end
 
 notation exists_uniq
@@ -55,15 +55,15 @@ end
 theorem eq_comm [x] [y] : (x = y)
     |- y = x
 proof
-    have x = x by ident
-    have y = x by subst [x] [y] [_ = x]
+    have (x = x) by ident
+    have (y = x) by subst [x] [y] [_ = x]
 qed
 
 theorem eq_trans [x] [y] [z] : (x = y) (y = z)
     |- x = z
 proof
-    have y = x by eq_comm
-    have x = z by subst [y] [x] [_ = z]
+    have (y = x) by eq_comm
+    have (x = z) by subst [y] [x] [_ = z]
 qed
 
 axiom mp [schema 'p 'q] : ('p → 'q) ('p)
@@ -91,7 +91,7 @@ axiom zfc_pairing :
 end
 
 axiom zfc_specification [s] [schema 'p(_)] :
-    |- ∃r, ∀x, x ∈ r ↔ (x ∈ s ∧ 'p(x))
+    |- (∃r, ∀x, x ∈ r ↔ (x ∈ s ∧ 'p(x)))
 end
 
 definition 

@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::parse::{
     common::{parse_name, parse_num},
-    stream::{ParseError, ParseResult, Stream},
+    stream::{ParseError, ParseErrorCtxHolder, ParseResult, Stream},
 };
 use ustr::Ustr;
 
@@ -59,11 +59,11 @@ pub fn parse_pattern(str: &mut Stream) -> ParseResult<Pattern> {
 fn parse_parts(str: &mut Stream) -> ParseResult<Vec<(Option<Ustr>, PatternPart)>> {
     let mut parts = Vec::new();
 
-    let first = parse_part(str)?;
+    let first = parse_name_and_part(str)?;
     parts.push(first);
 
     loop {
-        match parse_part(str) {
+        match parse_name_and_part(str) {
             Ok(p) => parts.push(p),
             Err(ParseError::Backtrack(_)) => break,
             Err(ParseError::Commit(e)) => return Err(ParseError::Commit(e)),
@@ -73,48 +73,58 @@ fn parse_parts(str: &mut Stream) -> ParseResult<Vec<(Option<Ustr>, PatternPart)>
     Ok(parts)
 }
 
-fn parse_part(str: &mut Stream) -> ParseResult<(Option<Ustr>, PatternPart)> {
+fn parse_name_and_part(str: &mut Stream) -> ParseResult<(Option<Ustr>, PatternPart)> {
     str.fallible(|str| {
-        let name = if let Ok(name) = parse_name(str) {
-            let name = match name.as_str() {
-                "sentence" => return Ok((None, PatternPart::Sentence)),
-                "value" => return Ok((None, PatternPart::Value)),
-                "binding" => return Ok((None, PatternPart::Binding)),
-                _ => Some(name),
-            };
-            str.expect_char(':')?;
-            name
-        } else {
-            None
-        };
+        let name = parse_name(str)?;
+        str.expect_char(':')?;
+        let part = parse_part(str)?;
 
-        let part = match parse_name(str).map(|s| s.as_str()) {
-            Ok("sentence") => PatternPart::Sentence,
-            Ok("value") => PatternPart::Value,
-            Ok("binding") => PatternPart::Binding,
-            Ok(_) => str.fail()?,
-            Err(_) => parse_lit(str)?,
-        };
-
-        Ok((name, part))
+        Ok((Some(name), part))
+    })
+    .or_else(|_| {
+        let part = parse_part(str)?;
+        Ok((None, part))
     })
 }
 
+fn parse_part(str: &mut Stream) -> ParseResult<PatternPart> {
+    if str.expect_str("sentence").is_ok() {
+        Ok(PatternPart::Sentence)
+    } else if str.expect_str("value").is_ok() {
+        Ok(PatternPart::Value)
+    } else if str.expect_str("binding").is_ok() {
+        Ok(PatternPart::Binding)
+    } else {
+        parse_lit(str)
+    }
+}
+
 fn parse_lit(str: &mut Stream) -> ParseResult<PatternPart> {
-    str.expect_char('\'')?;
-
-    str.commit(|str| {
-        let mut lit = String::new();
-        lit.push(str.expect_char_is(is_lit_char)?);
-        while let Ok(next) = str.expect_char_is(is_lit_char) {
-            lit.push(next);
-        }
-
+    str.include_ws(|str| {
         str.expect_char('\'')?;
-        Ok(PatternPart::Lit(Ustr::from(&lit)))
+
+        str.commit(|str| {
+            let mut lit = String::new();
+            lit.push(str.expect_char_is(is_lit_char)?);
+            while let Ok(next) = str.expect_char_is(is_lit_char) {
+                lit.push(next);
+            }
+
+            str.expect_char('\'')?;
+            Ok(PatternPart::Lit(Ustr::from(&lit)))
+        })
     })
 }
 
 fn is_lit_char(char: char) -> bool {
     char != '\''
+}
+
+#[test]
+fn test_parse_pattern() {
+    let mut str = Stream::new("100 | '(' p:sentence ')' => $p ");
+    let pat = parse_pattern(&mut str);
+
+    dbg!(&pat);
+    assert!(pat.is_ok());
 }

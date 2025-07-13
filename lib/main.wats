@@ -94,7 +94,7 @@ axiom zfc_specification [s] [schema 'p(_)] :
     |- (∃r, ∀x, x ∈ r ↔ (x ∈ s ∧ 'p(x)))
 end
 
-definition 
+definition set_pair
     000 | '{' x:value ',' y:value '}'
 where 
     |- ∀z, z ∈ _ ↔ (z = x ∨ z = y)
@@ -130,7 +130,7 @@ axiom zfc_union [schema 'p] :
     |- ∀F, ∃A, ∀Y, ∀x ((x ∈ Y ∧ Y ∈ F) → x ∈ A)
 end
 
-definition 
+definition set_union
     000 | 'set_union' x:value y:value 
 where
     |- ∀z, (z ∈ _) ↔ (z ∈ x ∨ z ∈ y)

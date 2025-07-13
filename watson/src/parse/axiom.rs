@@ -1,16 +1,17 @@
 use crate::{
     parse::{
-        Document, Sentence,
+        Document,
         common::parse_name,
         hypotheses::parse_hypotheses,
-        sentence::parse_sentence,
         stream::{ParseResult, Stream},
         templates::{Template, parse_templates},
+        term::{Sentence, parse_sentence},
     },
     statements::StatementId,
 };
 use ustr::Ustr;
 
+#[derive(Debug)]
 pub struct Axiom {
     stmt_id: StatementId,
     name: Ustr,

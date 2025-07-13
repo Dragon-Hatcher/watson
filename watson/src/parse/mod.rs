@@ -1,18 +1,27 @@
 use crate::{
     diagnostics::{ReportTracker, WResult},
-    parse::{axiom::Axiom, find_patterns::PatternId, theorem::Theorem},
-    statements::{StatementId, StatementsSet},
+    parse::{
+        axiom::Axiom,
+        definition::{Definition, DefinitionNotation},
+        find_patterns::{PatternArena, find_patterns},
+        notation::Notation,
+        syntax::Syntax,
+        theorem::Theorem,
+    },
+    statements::{Statement, StatementsSet},
 };
-use ustr::Ustr;
 
 mod axiom;
 mod common;
+mod definition;
 mod find_patterns;
 mod hypotheses;
+mod notation;
 mod proof;
-mod sentence;
 mod stream;
+mod syntax;
 mod templates;
+mod term;
 mod theorem;
 
 #[derive(Debug)]
@@ -31,66 +40,25 @@ pub struct Document {
 }
 
 pub fn parse(ss: StatementsSet, tracker: &mut ReportTracker) -> WResult<Document> {
-    Err(())
+    let patterns = find_patterns(&ss, tracker)?;
+    let mut doc = Document {
+        patterns,
+        syntax: Vec::new(),
+        sentence_notations: Vec::new(),
+        definitions: Vec::new(),
+        definition_notations: Vec::new(),
+        axioms: Vec::new(),
+        theorems: Vec::new(),
+    };
+
+    for s in ss.statements() {
+        parse_statement(s, &mut doc, tracker);
+    }
+
+    tracker.checkpoint()?;
+    Ok(doc)
 }
 
-pub struct Syntax {
-    patterns: Vec<PatternId>,
-}
-
-pub struct Notation {
-    statement: StatementId,
-    name: Ustr,
-    pattern: PatternId,
-    replacement: Sentence,
-}
-
-pub struct Definition {
-    statement: StatementId,
-    name: Ustr,
-    pattern: PatternId,
-    conclusion: Sentence,
-    proof: Proof,
-}
-
-pub struct DefinitionNotation {
-    statement: StatementId,
-    name: Ustr,
-    pattern: PatternId,
-    replacement: Value,
-}
-
-pub struct Sentence {
-    pattern: PatternId,
-    terms: Vec<Term>,
-}
-
-pub struct Value {
-    pattern: PatternId,
-    terms: Vec<Term>,
-}
-
-pub enum Term {
-    Sentence(Sentence),
-    Value(Value),
-    Binding(Ustr),
-}
-
-pub struct Proof {
-    tactics: Vec<Tactic>,
-}
-
-pub enum Tactic {
-    Have(HaveTactic),
-}
-
-pub struct HaveTactic {
-    conclusion: Sentence,
-    by: Ustr,
-    substitutions: Vec<Substitution>,
-}
-
-pub enum Substitution {
-    Value(Value),
-    Sentence(Sentence),
+fn parse_statement(s: &Statement, doc: &mut Document, tracker: &mut ReportTracker) {
+    todo!()
 }

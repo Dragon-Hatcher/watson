@@ -1,7 +1,6 @@
 use crate::parse::{
-    Sentence,
-    sentence::parse_sentence,
     stream::{ParseError, ParseResult, Stream},
+    term::{Sentence, parse_sentence},
 };
 
 pub fn parse_hypotheses(str: &mut Stream) -> ParseResult<Vec<Sentence>> {

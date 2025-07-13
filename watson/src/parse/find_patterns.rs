@@ -6,10 +6,13 @@ use crate::{
 };
 use ustr::Ustr;
 
+#[derive(Debug)]
 pub struct PatternId(usize);
 
+#[derive(Debug)]
 pub struct Precedence(u32);
 
+#[derive(Debug)]
 pub struct Pattern {
     id: PatternId,
     statement: StatementId,
@@ -17,15 +20,18 @@ pub struct Pattern {
     parts: Vec<(Option<Ustr>, PatternPart)>,
 }
 
+#[derive(Debug)]
 pub struct PatternArena {
     map: HashMap<PatternId, Pattern>,
 }
 
+#[derive(Debug)]
 pub enum PatternTy {
     Sentence,
     Value,
 }
 
+#[derive(Debug)]
 pub enum PatternPart {
     Sentence,
     Value,
@@ -33,6 +39,6 @@ pub enum PatternPart {
     Lit(Ustr),
 }
 
-pub fn find_patterns(ss: &StatementsSet, tracker: &mut ReportTracker) -> WResult<()> {
-    Ok(())
+pub fn find_patterns(ss: &StatementsSet, tracker: &mut ReportTracker) -> WResult<PatternArena> {
+    todo!()
 }

@@ -1,17 +1,18 @@
 use crate::{
     parse::{
-        Document, Proof, Sentence,
+        Document,
         common::parse_name,
         hypotheses::parse_hypotheses,
-        proof::parse_proof,
-        sentence::parse_sentence,
+        proof::{Proof, parse_proof},
         stream::{ParseResult, Stream},
         templates::{Template, parse_templates},
+        term::{Sentence, parse_sentence},
     },
     statements::StatementId,
 };
 use ustr::Ustr;
 
+#[derive(Debug)]
 pub struct Theorem {
     stmt_id: StatementId,
     name: Ustr,

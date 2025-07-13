@@ -4,6 +4,7 @@ use crate::parse::{
 };
 use ustr::Ustr;
 
+#[derive(Debug)]
 pub enum Template {
     Variable { fresh: bool, name: Ustr },
     Schema { args: u32, name: Ustr },
@@ -77,7 +78,7 @@ fn parse_schema_args(str: &mut Stream) -> ParseResult<u32> {
             count += 1;
         }
 
-        str.expect_char(')');
+        str.expect_char(')')?;
         Ok(count)
     })
 }

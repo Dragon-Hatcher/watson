@@ -3,29 +3,26 @@ use crate::{
     span::{Filename, SourceCache, Span},
     util::line_ranges,
 };
-use std::{
-    collections::HashMap,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use ustr::Ustr;
 
 pub struct StatementsSet {
-    by_ty: HashMap<StatementTy, Vec<Statement>>,
+    statements: Vec<Statement>,
 }
 
 impl StatementsSet {
     fn new() -> Self {
         Self {
-            by_ty: HashMap::new(),
+            statements: Vec::new(),
         }
     }
 
     fn add_statement(&mut self, statement: Statement) {
-        self.by_ty.entry(statement.ty).or_default().push(statement);
+        self.statements.push(statement);
     }
 
-    pub fn statements_with_ty(&self, ty: StatementTy) -> &[Statement] {
-        self.by_ty.get(&ty).map(|s| s.as_slice()).unwrap_or(&[])
+    pub fn statements(&self) -> impl Iterator<Item = &Statement> {
+        self.statements.iter()
     }
 }
 

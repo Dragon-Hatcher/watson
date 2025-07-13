@@ -42,5 +42,7 @@ fn compile(sources: &SourceCache, tracker: &mut ReportTracker) -> WResult<()> {
     let statements = statements::get_all_statements(sources, tracker)?;
     let parsed = parse::parse(statements, tracker)?;
 
+    dbg!(parsed);
+
     Ok(())
 }

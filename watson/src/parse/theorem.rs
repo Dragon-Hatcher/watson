@@ -28,25 +28,28 @@ pub fn parse_theorem(
     stmt_id: StatementId,
 ) -> ParseResult<()> {
     str.expect_str("axiom")?;
-    let name = parse_name(str)?;
-    let templates = parse_templates(str)?;
-    str.expect_char(':')?;
-    let hypotheses = parse_hypotheses(str)?;
-    str.expect_str("|-")?;
-    let conclusion = parse_sentence(str)?;
-    str.expect_str("proof")?;
-    let proof = parse_proof(str)?;
-    str.expect_str("qed")?;
 
-    let theorem = Theorem {
-        stmt_id,
-        name,
-        templates,
-        hypotheses,
-        conclusion,
-        proof,
-    };
-    doc.theorems.push(theorem);
+    str.commit(|str| {
+        let name = parse_name(str)?;
+        let templates = parse_templates(str)?;
+        str.expect_char(':')?;
+        let hypotheses = parse_hypotheses(str)?;
+        str.expect_str("|-")?;
+        let conclusion = parse_sentence(str)?;
+        str.expect_str("proof")?;
+        let proof = parse_proof(str)?;
+        str.expect_str("qed")?;
 
-    Ok(())
+        let theorem = Theorem {
+            stmt_id,
+            name,
+            templates,
+            hypotheses,
+            conclusion,
+            proof,
+        };
+        doc.theorems.push(theorem);
+
+        Ok(())
+    })
 }

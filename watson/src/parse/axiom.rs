@@ -22,22 +22,25 @@ pub struct Axiom {
 
 pub fn parse_axiom(str: &mut Stream, doc: &mut Document, stmt_id: StatementId) -> ParseResult<()> {
     str.expect_str("axiom")?;
-    let name = parse_name(str)?;
-    let templates = parse_templates(str)?;
-    str.expect_char(':')?;
-    let hypotheses = parse_hypotheses(str)?;
-    str.expect_str("|-")?;
-    let conclusion = parse_sentence(str)?;
-    str.expect_str("end")?;
 
-    let axiom = Axiom {
-        stmt_id,
-        name,
-        templates,
-        hypotheses,
-        conclusion,
-    };
-    doc.axioms.push(axiom);
+    str.commit(|str| {
+        let name = parse_name(str)?;
+        let templates = parse_templates(str)?;
+        str.expect_char(':')?;
+        let hypotheses = parse_hypotheses(str)?;
+        str.expect_str("|-")?;
+        let conclusion = parse_sentence(str)?;
+        str.expect_str("end")?;
 
-    Ok(())
+        let axiom = Axiom {
+            stmt_id,
+            name,
+            templates,
+            hypotheses,
+            conclusion,
+        };
+        doc.axioms.push(axiom);
+
+        Ok(())
+    })
 }

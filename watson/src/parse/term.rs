@@ -1,7 +1,7 @@
 use ustr::Ustr;
 
 use crate::parse::{
-    find_patterns::PatternId,
+    pattern::PatternId,
     stream::{ParseResult, Stream},
 };
 
@@ -25,5 +25,9 @@ pub enum Term {
 }
 
 pub fn parse_sentence(str: &mut Stream) -> ParseResult<Sentence> {
+    todo!()
+}
+
+pub fn parse_value(str: &mut Stream) -> ParseResult<Value> {
     todo!()
 }

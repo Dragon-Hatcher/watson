@@ -4,11 +4,12 @@ use crate::{
         axiom::Axiom,
         definition::{Definition, DefinitionNotation},
         find_patterns::{PatternArena, find_patterns},
-        notation::Notation,
+        notation::SentenceNotation,
+        stream::Stream,
         syntax::Syntax,
         theorem::Theorem,
     },
-    statements::{Statement, StatementsSet},
+    statements::{Statement, StatementTy, StatementsSet},
 };
 
 mod axiom;
@@ -17,6 +18,7 @@ mod definition;
 mod find_patterns;
 mod hypotheses;
 mod notation;
+mod pattern;
 mod proof;
 mod stream;
 mod syntax;
@@ -30,7 +32,7 @@ pub struct Document {
 
     // Which sentences are allowed?
     syntax: Vec<Syntax>,
-    sentence_notations: Vec<Notation>,
+    sentence_notations: Vec<SentenceNotation>,
     // Which values are allowed?
     definitions: Vec<Definition>,
     definition_notations: Vec<DefinitionNotation>,
@@ -60,5 +62,19 @@ pub fn parse(ss: StatementsSet, tracker: &mut ReportTracker) -> WResult<Document
 }
 
 fn parse_statement(s: &Statement, doc: &mut Document, tracker: &mut ReportTracker) {
-    todo!()
+    let text = s.text().as_str();
+    let mut str = Stream::new(text);
+
+    let res = match s.ty() {
+        StatementTy::Syntax => syntax::parse_syntax(&mut str, doc, s.id()),
+        StatementTy::Notation => notation::parse_notation(&mut str, doc, s.id()),
+        StatementTy::Definition => definition::parse_definition(&mut str, doc, s.id()),
+        StatementTy::Axiom => axiom::parse_axiom(&mut str, doc, s.id()),
+        StatementTy::Theorem => theorem::parse_theorem(&mut str, doc, s.id()),
+        StatementTy::Prose => return,
+    };
+
+    if let Err(_) = res {
+        tracker.add_message(todo!());
+    }
 }

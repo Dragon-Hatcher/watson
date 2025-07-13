@@ -46,6 +46,10 @@ pub struct Statement {
 }
 
 impl Statement {
+    pub fn id(&self) -> StatementId {
+        self.id
+    }
+
     pub fn ty(&self) -> StatementTy {
         self.ty
     }

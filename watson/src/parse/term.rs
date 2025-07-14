@@ -1,7 +1,7 @@
 use super::pattern::PatternPart;
 use crate::parse::{
     Document,
-    common::{parse_kw, parse_name, parse_schema_name},
+    common::{can_start_name, parse_kw, parse_name, parse_schema_name},
     earley::{EarleyGrammar, EarleySymbol, EarleyTerm, earley_parse},
     pattern::{Pattern, PatternId, PatternTy},
     stream::{Checkpoint, ParseResult, Stream},
@@ -29,7 +29,6 @@ pub struct Value {
 pub enum Term {
     Sentence(Sentence),
     Value(Value),
-    Binding(Ustr),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -93,6 +92,14 @@ fn pattern_to_earley(pat: &Pattern) -> Vec<EarleySymbol<MyEarleyTerm, MyEarleyNo
         .collect()
 }
 
+fn end_term(end: &str) -> MyEarleyTerm {
+    if can_start_name(end.chars().next().unwrap()) {
+        MyEarleyTerm::Kw(Ustr::from(end))
+    } else {
+        MyEarleyTerm::Lit(Ustr::from(end))
+    }
+}
+
 fn build_grammar(doc: &Document) -> EarleyGrammar<MyEarleyTerm, MyEarleyNonTerm> {
     let mut grammar = EarleyGrammar::new();
 
@@ -144,7 +151,7 @@ pub fn parse_sentence(str: &mut Stream, end: &str, doc: &Document) -> ParseResul
         MyEarleyNonTerm::StartSym,
         vec![
             EarleySymbol::NonTerminal(MyEarleyNonTerm::Sentence),
-            EarleySymbol::Terminal(MyEarleyTerm::Kw(Ustr::from(end))),
+            EarleySymbol::Terminal(end_term(end)),
         ],
     );
 
@@ -159,11 +166,33 @@ pub fn parse_value(str: &mut Stream, end: &str, doc: &Document) -> ParseResult<V
         MyEarleyNonTerm::StartSym,
         vec![
             EarleySymbol::NonTerminal(MyEarleyNonTerm::Value),
-            EarleySymbol::Terminal(MyEarleyTerm::Kw(Ustr::from(end))),
+            EarleySymbol::Terminal(end_term(end)),
         ],
     );
 
     let _res = earley_parse(str, grammar, MyEarleyNonTerm::StartSym);
 
-    Ok(Value {  })
+    Ok(Value {})
+}
+
+pub fn parse_sentence_or_value(str: &mut Stream, end: &str, doc: &Document) -> ParseResult<Term> {
+    let mut grammar = build_grammar(doc);
+    grammar.add_rule(
+        MyEarleyNonTerm::StartSym,
+        vec![
+            EarleySymbol::NonTerminal(MyEarleyNonTerm::Value),
+            EarleySymbol::Terminal(end_term(end)),
+        ],
+    );
+    grammar.add_rule(
+        MyEarleyNonTerm::StartSym,
+        vec![
+            EarleySymbol::NonTerminal(MyEarleyNonTerm::Sentence),
+            EarleySymbol::Terminal(end_term(end)),
+        ],
+    );
+
+    let _res = earley_parse(str, grammar, MyEarleyNonTerm::StartSym);
+
+    Ok(Term::Sentence(Sentence {}))
 }

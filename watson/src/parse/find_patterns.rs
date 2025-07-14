@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    diagnostics::{specifics, ReportTracker, WResult},
+    diagnostics::{ReportTracker, WResult, specifics},
     parse::{
         common::{parse_kw, parse_name},
-        pattern::{parse_pattern, Pattern, PatternId, PatternTy},
+        pattern::{Pattern, PatternId, PatternTy, parse_pattern},
         stream::{ParseError, ParseResult, Stream},
     },
     statements::{Statement, StatementId, StatementTy, StatementsSet},

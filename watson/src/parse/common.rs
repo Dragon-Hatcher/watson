@@ -1,11 +1,11 @@
 use crate::parse::stream::{ParseError, ParseErrorCtxHolder, ParseResult, Stream};
 use ustr::Ustr;
 
-fn can_start_name(char: char) -> bool {
+pub fn can_start_name(char: char) -> bool {
     char.is_alphabetic() || char == '_'
 }
 
-fn can_continue_name(char: char) -> bool {
+pub fn can_continue_name(char: char) -> bool {
     can_start_name(char) || char.is_numeric()
 }
 

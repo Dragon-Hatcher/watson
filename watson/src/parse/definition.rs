@@ -1,7 +1,13 @@
 use super::pattern::PatternTy;
 use crate::{
     parse::{
-        common::{parse_kw, parse_name}, hypotheses::parse_hypotheses, pattern::{parse_pattern, PatternId}, proof::{parse_proof, Proof}, stream::{ParseResult, Stream}, term::{parse_sentence, parse_value, Sentence, Value}, Document
+        Document,
+        common::{parse_kw, parse_name},
+        hypotheses::parse_hypotheses,
+        pattern::{PatternId, parse_pattern},
+        proof::{Proof, parse_proof},
+        stream::{ParseResult, Stream},
+        term::{Sentence, Value, parse_sentence, parse_value},
     },
     statements::StatementId,
 };
@@ -52,7 +58,7 @@ pub fn parse_definition(
             let hypotheses = parse_hypotheses(str, doc)?;
             str.expect_str("|-")?;
             let conclusion = parse_sentence(str, "proof", doc)?;
-            let proof = parse_proof(str)?;
+            let proof = parse_proof(str, doc)?;
             parse_kw(str, "end")?;
 
             let def = Definition {

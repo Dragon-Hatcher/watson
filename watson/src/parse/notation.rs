@@ -1,7 +1,11 @@
 use super::pattern::PatternTy;
 use crate::{
     parse::{
-        common::{parse_kw, parse_name}, pattern::{parse_pattern, PatternId}, stream::{ParseResult, Stream}, term::{parse_sentence, Sentence}, Document
+        Document,
+        common::{parse_kw, parse_name},
+        pattern::{PatternId, parse_pattern},
+        stream::{ParseResult, Stream},
+        term::{Sentence, parse_sentence},
     },
     statements::StatementId,
 };

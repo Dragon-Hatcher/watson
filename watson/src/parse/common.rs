@@ -6,7 +6,7 @@ pub fn can_start_name(char: char) -> bool {
 }
 
 pub fn can_continue_name(char: char) -> bool {
-    can_start_name(char) || char.is_numeric()
+    can_start_name(char) || char.is_numeric() || char == '\''
 }
 
 pub fn parse_name(str: &mut Stream) -> ParseResult<Ustr> {

@@ -67,7 +67,10 @@ fn parse_statement(s: &Statement, doc: &mut Document, tracker: &mut ReportTracke
         StatementTy::Prose => return,
     };
 
-    let res = res.or_else(|_| str.expect_eof());
+    let res = match res {
+        Ok(_) => str.expect_eof(),
+        Err(err) => Err(err),
+    };
 
     if let Err(e) = res {
         tracker.add_message(specifics::parse_error(e, s.span()));

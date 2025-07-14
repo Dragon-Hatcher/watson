@@ -3,14 +3,10 @@ use crate::parse::{
     Document,
     common::{can_start_name, parse_kw, parse_name, parse_schema_name},
     earley::{EarleyGrammar, EarleySymbol, EarleyTerm, earley_parse},
-    pattern::{Pattern, PatternId, PatternTy},
-    stream::{Checkpoint, ParseResult, Stream},
+    pattern::{Pattern, PatternTy},
+    stream::{Checkpoint, ParseErrorCtxHolder, ParseResult, Stream},
 };
-use std::{
-    fmt::Debug,
-    hash::Hash,
-    time::{Duration, Instant},
-};
+use std::{fmt::Debug, hash::Hash};
 use ustr::Ustr;
 
 #[derive(Debug)]
@@ -109,6 +105,15 @@ fn build_grammar(doc: &Document) -> EarleyGrammar<MyEarleyTerm, MyEarleyNonTerm>
     }
     grammar.add_rule(
         MyEarleyNonTerm::Sentence,
+        vec![
+            EarleySymbol::Terminal(MyEarleyTerm::Kw(Ustr::from("assume"))),
+            EarleySymbol::NonTerminal(MyEarleyNonTerm::Sentence),
+            EarleySymbol::Terminal(MyEarleyTerm::Lit(Ustr::from("|-"))),
+            EarleySymbol::NonTerminal(MyEarleyNonTerm::Sentence),
+        ],
+    );
+    grammar.add_rule(
+        MyEarleyNonTerm::Sentence,
         vec![EarleySymbol::Terminal(MyEarleyTerm::PatSubst)],
     );
     grammar.add_rule(
@@ -155,9 +160,9 @@ pub fn parse_sentence(str: &mut Stream, end: &str, doc: &Document) -> ParseResul
         ],
     );
 
-    let _res = earley_parse(str, grammar, MyEarleyNonTerm::StartSym);
-
-    Ok(Sentence {})
+    earley_parse(str, grammar, MyEarleyNonTerm::StartSym)
+        .map(|_| Sentence {})
+        .ctx_label("sentence")
 }
 
 pub fn parse_value(str: &mut Stream, end: &str, doc: &Document) -> ParseResult<Value> {
@@ -170,9 +175,9 @@ pub fn parse_value(str: &mut Stream, end: &str, doc: &Document) -> ParseResult<V
         ],
     );
 
-    let _res = earley_parse(str, grammar, MyEarleyNonTerm::StartSym);
-
-    Ok(Value {})
+    earley_parse(str, grammar, MyEarleyNonTerm::StartSym)
+        .map(|_| Value {})
+        .ctx_label("value")
 }
 
 pub fn parse_sentence_or_value(str: &mut Stream, end: &str, doc: &Document) -> ParseResult<Term> {
@@ -192,7 +197,5 @@ pub fn parse_sentence_or_value(str: &mut Stream, end: &str, doc: &Document) -> P
         ],
     );
 
-    let _res = earley_parse(str, grammar, MyEarleyNonTerm::StartSym);
-
-    Ok(Term::Sentence(Sentence {}))
+    earley_parse(str, grammar, MyEarleyNonTerm::StartSym).map(|_| Term::Sentence(Sentence {}))
 }

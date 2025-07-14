@@ -1,6 +1,5 @@
 use itertools::Itertools;
 use ustr::Ustr;
-
 use crate::parse::stream::{Checkpoint, ParseError, ParseResult, Stream};
 use std::{
     cmp::Reverse,
@@ -226,7 +225,9 @@ where
         .flatten()
     {
         let end = matches.iter().map(|m| m.end).max().unwrap();
-        return Ok(find_parse(start_pos, end, start_sym, &rev_chart, str));
+        let res = Ok(find_parse(start_pos, end, start_sym, &rev_chart, str));
+        str.rewind(end);
+        return res;
     }
 
     // The parse failed. Let's try to diagnose why:

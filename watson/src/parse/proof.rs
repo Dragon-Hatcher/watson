@@ -15,6 +15,7 @@ pub struct Proof {
 #[derive(Debug)]
 pub enum Tactic {
     Have(HaveTactic),
+    Todo,
 }
 
 #[derive(Debug)]
@@ -45,8 +46,13 @@ pub fn parse_proof(str: &mut Stream, doc: &Document) -> ParseResult<Proof> {
 }
 
 fn parse_tactic(str: &mut Stream, doc: &Document) -> ParseResult<Tactic> {
-    str.fallible(|str| {
-        parse_kw(str, "have")?;
+    if parse_kw(str, "todo").is_ok() {
+        return Ok(Tactic::Todo);
+    }
+
+    parse_kw(str, "have")?;
+
+    str.commit(|str| {
         let conclusion = parse_sentence(str, "by", doc)?;
         let by = parse_name(str)?;
         let substitutions = parse_substitutions(str, doc)?;

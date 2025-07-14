@@ -131,7 +131,7 @@ proof
 end
 
 axiom zfc_union [schema 'p] :
-    |- ∀F, ∃A, ∀Y, ∀x ((x ∈ Y ∧ Y ∈ F) → x ∈ A)
+    |- ∀F, ∃A, ∀Y, ∀x, ((x ∈ Y ∧ Y ∈ F) → x ∈ A)
 end
 
 definition set_union
@@ -185,11 +185,11 @@ qed
 theorem em [schema 'p] :
     |- 'p ∨ ¬'p
 proof
-    have ¬'p |- ¬'p by end
+    have assume ¬'p |- ¬'p by end
     have ¬'p → ¬'p  by end
 qed
 
-theorem or_intro_left [schema 'p 'q] : 'p
+theorem or_intro_left [schema 'p 'q] : ('p)
     |- ('p ∨ 'q)
 proof
     have assume ¬'p |- 'q by

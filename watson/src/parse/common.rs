@@ -1,8 +1,8 @@
-use crate::parse::stream::{ParseErrorCtxHolder, ParseResult, Stream};
+use crate::parse::stream::{ParseError, ParseErrorCtxHolder, ParseResult, Stream};
 use ustr::Ustr;
 
 fn can_start_name(char: char) -> bool {
-    char.is_alphabetic() || char == '\'' || char == '_'
+    char.is_alphabetic() || char == '_'
 }
 
 fn can_continue_name(char: char) -> bool {
@@ -21,6 +21,29 @@ pub fn parse_name(str: &mut Stream) -> ParseResult<Ustr> {
         }
 
         Ok(Ustr::from(&name))
+    })
+}
+
+pub fn parse_schema_name(str: &mut Stream) -> ParseResult<Ustr> {
+    str.include_ws(|str| {
+        str.expect_char('\'')?;
+        parse_name(str)
+    })
+}
+
+pub fn parse_kw(str: &mut Stream, kw: &str) -> ParseResult<()> {
+    str.fallible(|str| {
+        str.skip_ws();
+        let start = str.checkpoint();
+        let name = parse_name(str)
+            .ctx_clear(start.0)
+            .ctx_expect_str(Ustr::from(kw).as_str())?;
+
+        if name != kw {
+            Err(ParseError::new_backtrack(start.0)).ctx_expect_str(Ustr::from(kw).as_str())
+        } else {
+            Ok(())
+        }
     })
 }
 

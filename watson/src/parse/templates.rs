@@ -1,5 +1,5 @@
 use crate::parse::{
-    common::parse_name,
+    common::{parse_kw, parse_name, parse_schema_name},
     stream::{ParseError, ParseResult, Stream},
 };
 use ustr::Ustr;
@@ -28,9 +28,9 @@ fn parse_template(str: &mut Stream, templates: &mut Vec<Template>) -> ParseResul
     str.expect_char('[')?;
 
     str.commit(move |str| {
-        if str.expect_str("schema").is_ok() {
+        if parse_kw(str, "schema").is_ok() {
             parse_schemas(str, templates)?;
-        } else if str.expect_str("fresh").is_ok() {
+        } else if parse_kw(str, "fresh").is_ok() {
             let name = parse_name(str)?;
             templates.push(Template::Variable { fresh: true, name });
         } else {
@@ -60,7 +60,7 @@ fn parse_schemas(str: &mut Stream, templates: &mut Vec<Template>) -> ParseResult
 }
 
 fn parse_schema(str: &mut Stream) -> ParseResult<Template> {
-    let name = parse_name(str)?;
+    let name = parse_schema_name(str)?;
     let args = parse_schema_args(str)?;
 
     Ok(Template::Schema { args, name })

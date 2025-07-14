@@ -1,11 +1,7 @@
 use super::pattern::PatternTy;
 use crate::{
     parse::{
-        Document,
-        common::parse_name,
-        pattern::{PatternId, parse_pattern},
-        stream::{ParseResult, Stream},
-        term::{Sentence, parse_sentence},
+        common::{parse_kw, parse_name}, pattern::{parse_pattern, PatternId}, stream::{ParseResult, Stream}, term::{parse_sentence, Sentence}, Document
     },
     statements::StatementId,
 };
@@ -25,7 +21,7 @@ pub fn parse_notation(
     stmt_id: StatementId,
 ) -> ParseResult<()> {
     str.commit(|str| {
-        str.expect_str("notation")?;
+        parse_kw(str, "notation")?;
 
         let name = parse_name(str)?;
         let _pattern = parse_pattern(str, PatternTy::Sentence)?;

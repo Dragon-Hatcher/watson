@@ -1,11 +1,6 @@
 use crate::{
     parse::{
-        Document,
-        common::parse_name,
-        hypotheses::parse_hypotheses,
-        stream::{ParseResult, Stream},
-        templates::{Template, parse_templates},
-        term::{Sentence, parse_sentence},
+        common::{parse_kw, parse_name}, hypotheses::parse_hypotheses, stream::{ParseResult, Stream}, templates::{parse_templates, Template}, term::{parse_sentence, Sentence}, Document
     },
     statements::StatementId,
 };
@@ -22,7 +17,7 @@ pub struct Axiom {
 
 pub fn parse_axiom(str: &mut Stream, doc: &mut Document, stmt_id: StatementId) -> ParseResult<()> {
     str.commit(|str| {
-        str.expect_str("axiom")?;
+        parse_kw(str, "axiom")?;
 
         let name = parse_name(str)?;
         let templates = parse_templates(str)?;

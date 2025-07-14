@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    diagnostics::{ReportTracker, WResult, specifics},
+    diagnostics::{specifics, ReportTracker, WResult},
     parse::{
-        common::parse_name,
-        pattern::{Pattern, PatternId, PatternTy, parse_pattern},
+        common::{parse_kw, parse_name},
+        pattern::{parse_pattern, Pattern, PatternId, PatternTy},
         stream::{ParseError, ParseResult, Stream},
     },
     statements::{Statement, StatementId, StatementTy, StatementsSet},
@@ -74,7 +74,7 @@ fn find_pattern_in_syntax(
     arena: &mut PatternArena,
 ) -> ParseResult<()> {
     str.commit(|str| {
-        str.expect_str("syntax")?;
+        parse_kw(str, "syntax")?;
 
         let mut patterns = Vec::new();
 
@@ -86,7 +86,7 @@ fn find_pattern_in_syntax(
             }
         }
 
-        str.expect_str("end")?;
+        parse_kw(str, "end")?;
 
         for pattern in patterns {
             arena.add(pattern, stmt_id);
@@ -102,7 +102,7 @@ fn find_pattern_in_notation(
     arena: &mut PatternArena,
 ) -> ParseResult<()> {
     str.commit(|str| {
-        str.expect_str("notation")?;
+        parse_kw(str, "notation")?;
 
         let _name = parse_name(str)?;
         let pattern = parse_pattern(str, PatternTy::Sentence)?;
@@ -123,11 +123,11 @@ fn find_pattern_in_definition(
     arena: &mut PatternArena,
 ) -> ParseResult<()> {
     str.commit(|str| {
-        str.expect_str("definition")?;
+        parse_kw(str, "definition")?;
 
         let _name = parse_name(str)?;
         let pattern = parse_pattern(str, PatternTy::Value)?;
-        str.expect_str("=>").or_else(|_| str.expect_str("where"))?;
+        str.expect_str("=>").or_else(|_| parse_kw(str, "where"))?;
 
         arena.add(pattern, stmt_id);
 

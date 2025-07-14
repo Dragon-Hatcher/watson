@@ -1,9 +1,7 @@
 use super::pattern::PatternTy;
 use crate::{
     parse::{
-        Document,
-        pattern::{PatternId, parse_pattern},
-        stream::{ParseError, ParseResult, Stream},
+        common::parse_kw, pattern::{parse_pattern, PatternId}, stream::{ParseError, ParseResult, Stream}, Document
     },
     statements::StatementId,
 };
@@ -16,7 +14,7 @@ pub struct Syntax {
 
 pub fn parse_syntax(str: &mut Stream, doc: &mut Document, stmt_id: StatementId) -> ParseResult<()> {
     str.commit(|str| {
-        str.expect_str("syntax")?;
+        parse_kw(str, "syntax")?;
 
         let mut patterns = Vec::new();
 
@@ -28,7 +26,7 @@ pub fn parse_syntax(str: &mut Stream, doc: &mut Document, stmt_id: StatementId) 
             }
         }
 
-        str.expect_str("end")?;
+        parse_kw(str, "end")?;
 
         let patterns = doc.patterns.patterns_for(stmt_id).to_owned();
         let syntax = Syntax { stmt_id, patterns };

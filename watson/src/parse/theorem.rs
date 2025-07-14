@@ -1,12 +1,6 @@
 use crate::{
     parse::{
-        Document,
-        common::parse_name,
-        hypotheses::parse_hypotheses,
-        proof::{Proof, parse_proof},
-        stream::{ParseResult, Stream},
-        templates::{Template, parse_templates},
-        term::{Sentence, parse_sentence},
+        common::{parse_kw, parse_name}, hypotheses::parse_hypotheses, proof::{parse_proof, Proof}, stream::{ParseResult, Stream}, templates::{parse_templates, Template}, term::{parse_sentence, Sentence}, Document
     },
     statements::StatementId,
 };
@@ -28,7 +22,7 @@ pub fn parse_theorem(
     stmt_id: StatementId,
 ) -> ParseResult<()> {
     str.commit(|str| {
-        str.expect_str("axiom")?;
+        parse_kw(str, "theorem")?;
         let name = parse_name(str)?;
         let templates = parse_templates(str)?;
         str.expect_char(':')?;
@@ -36,7 +30,7 @@ pub fn parse_theorem(
         str.expect_str("|-")?;
         let conclusion = parse_sentence(str, "proof", doc)?;
         let proof = parse_proof(str)?;
-        str.expect_str("qed")?;
+        parse_kw(str, "qed")?;
 
         let theorem = Theorem {
             stmt_id,

@@ -1,5 +1,5 @@
 use crate::parse::{
-    common::{parse_name, parse_num},
+    common::{parse_kw, parse_name, parse_num},
     stream::{ParseError, ParseResult, Stream},
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -89,11 +89,11 @@ fn parse_name_and_part(str: &mut Stream) -> ParseResult<(Option<Ustr>, PatternPa
 }
 
 fn parse_part(str: &mut Stream) -> ParseResult<PatternPart> {
-    if str.expect_str("sentence").is_ok() {
+    if parse_kw(str, "sentence").is_ok() {
         Ok(PatternPart::Sentence)
-    } else if str.expect_str("value").is_ok() {
+    } else if parse_kw(str, "value").is_ok() {
         Ok(PatternPart::Value)
-    } else if str.expect_str("binding").is_ok() {
+    } else if parse_kw(str, "binding").is_ok() {
         Ok(PatternPart::Binding)
     } else {
         parse_lit(str)

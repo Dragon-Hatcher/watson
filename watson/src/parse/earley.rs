@@ -1,6 +1,7 @@
 use itertools::Itertools;
+use ustr::Ustr;
 
-use crate::parse::stream::{Checkpoint, Stream};
+use crate::parse::stream::{Checkpoint, ParseError, ParseResult, Stream};
 use std::{
     cmp::Reverse,
     collections::{HashMap, HashSet, VecDeque},
@@ -97,12 +98,11 @@ pub fn earley_parse<Term, NonTerm>(
     str: &mut Stream,
     grammar: EarleyGrammar<Term, NonTerm>,
     start_sym: NonTerm,
-) where
+) -> ParseResult<EarleyParseRes<Term, NonTerm>>
+where
     NonTerm: Hash + Eq + Clone + Debug,
     Term: EarleyTerm + Hash + Eq + Clone + Debug,
 {
-    dbg!(str.remaining_text());
-
     str.skip_ws();
 
     let mut chart: HashMap<Checkpoint, HashSet<EarleyItem<Term, NonTerm>>> = HashMap::new();
@@ -180,14 +180,16 @@ pub fn earley_parse<Term, NonTerm>(
     }
 
     // We have now recognized. Let's filter down to completed items.
-    for (_, items) in chart.iter_mut() {
+    let mut completion_chart = chart.clone();
+
+    for (_, items) in completion_chart.iter_mut() {
         items.retain(|i| i.pos == i.rule.len());
     }
 
     let mut rev_chart: HashMap<Checkpoint, HashMap<NonTerm, Vec<SearchItem<Term, NonTerm>>>> =
         HashMap::new();
 
-    for (end, items) in chart {
+    for (end, items) in completion_chart {
         for item in items {
             let map = rev_chart.entry(item.start).or_default();
             let list = map.entry(item.sym).or_default();
@@ -224,10 +226,13 @@ pub fn earley_parse<Term, NonTerm>(
         .flatten()
     {
         let end = matches.iter().map(|m| m.end).max().unwrap();
-        find_parse(start_pos, end, start_sym, &rev_chart, str, 0);
-    } else {
-        todo!("Parse failed!");
+        return Ok(find_parse(start_pos, end, start_sym, &rev_chart, str));
     }
+
+    // The parse failed. Let's try to diagnose why:
+
+    let last_pos = chart.keys().max().unwrap();
+    Err(ParseError::new_backtrack(last_pos.0))
 }
 
 #[derive(Debug, Clone)]
@@ -240,6 +245,18 @@ struct SearchItem<'a, Term, NonTerm> {
 struct InProgressPath {
     rule_pos: usize,
     taken: Vec<Checkpoint>,
+}
+
+#[derive(Debug, Clone)]
+pub enum EarleyParseRes<Term, NonTerm> {
+    NonTerminal {
+        symbol: NonTerm,
+        children: Vec<EarleyParseRes<Term, NonTerm>>,
+    },
+    Terminal {
+        term: Term,
+        text: Ustr,
+    },
 }
 
 impl InProgressPath {
@@ -256,8 +273,8 @@ fn find_parse<Term, NonTerm>(
     ty: NonTerm,
     chart: &HashMap<Checkpoint, HashMap<NonTerm, Vec<SearchItem<Term, NonTerm>>>>,
     str: &mut Stream,
-    depth: usize,
-) where
+) -> EarleyParseRes<Term, NonTerm>
+where
     NonTerm: Hash + Eq + Clone + Debug,
     Term: EarleyTerm + Hash + Eq + Clone + Debug,
 {
@@ -275,18 +292,31 @@ fn find_parse<Term, NonTerm>(
 
     while let Some(next) = search_stack.pop() {
         if next.rule_pos == top_choice.rule.len() {
-            for ((a, b), sym) in next.taken.iter().tuple_windows().zip(top_choice.rule) {
-                let text = str.text();
-                print!("{}", "  ".repeat(depth));
-                match sym {
-                    EarleySymbol::Terminal(t) => println!("{t:?}: `{}`", &text[a.0..b.0]),
-                    EarleySymbol::NonTerminal(nt) => {
-                        println!("{nt:?}: `{}`", &text[a.0..b.0]);
-                        find_parse(*a, *b, nt.clone(), chart, str, depth + 1);
-                    }
-                }
+            if *next.taken.last().unwrap() != end {
+                continue;
             }
-            return;
+
+            let children = next
+                .taken
+                .into_iter()
+                .tuple_windows()
+                .zip(top_choice.rule)
+                .map(|((start, end), sym)| match sym {
+                    EarleySymbol::Terminal(term) => {
+                        let text = str.text();
+                        EarleyParseRes::Terminal {
+                            term: term.clone(),
+                            text: Ustr::from(&text[start.0..end.0]),
+                        }
+                    }
+                    EarleySymbol::NonTerminal(nt) => find_parse(start, end, nt.clone(), chart, str),
+                })
+                .collect();
+
+            return EarleyParseRes::NonTerminal {
+                symbol: ty,
+                children,
+            };
         }
 
         match &top_choice.rule[next.rule_pos] {
@@ -305,7 +335,7 @@ fn find_parse<Term, NonTerm>(
                     choices.sort_by_key(|c| Reverse(c.end));
 
                     for choice in choices {
-                        if std::ptr::addr_eq(choice.rule, top_choice.rule) {
+                        if std::ptr::addr_eq(choice.rule, top_choice.rule) && *at == start {
                             continue;
                         }
 

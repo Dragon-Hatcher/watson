@@ -1,13 +1,7 @@
 use super::pattern::PatternTy;
 use crate::{
     parse::{
-        Document,
-        common::parse_name,
-        hypotheses::parse_hypotheses,
-        pattern::{PatternId, parse_pattern},
-        proof::{Proof, parse_proof},
-        stream::{ParseResult, Stream},
-        term::{Sentence, Value, parse_sentence, parse_value},
+        common::{parse_kw, parse_name}, hypotheses::parse_hypotheses, pattern::{parse_pattern, PatternId}, proof::{parse_proof, Proof}, stream::{ParseResult, Stream}, term::{parse_sentence, parse_value, Sentence, Value}, Document
     },
     statements::StatementId,
 };
@@ -37,14 +31,14 @@ pub fn parse_definition(
     stmt_id: StatementId,
 ) -> ParseResult<()> {
     str.commit(|str| {
-        str.expect_str("definition")?;
+        parse_kw(str, "definition")?;
 
         let name = parse_name(str)?;
         let _pattern = parse_pattern(str, PatternTy::Value)?;
         let pattern = doc.patterns.patterns_for(stmt_id)[0];
 
         if str.expect_str("=>").is_ok() {
-            let replacement = parse_value(str, "end")?;
+            let replacement = parse_value(str, "end", doc)?;
 
             let notation = DefinitionNotation {
                 stmt_id,
@@ -54,12 +48,12 @@ pub fn parse_definition(
             };
             doc.definition_notations.push(notation);
         } else {
-            str.expect_str("where")?;
+            parse_kw(str, "where")?;
             let hypotheses = parse_hypotheses(str, doc)?;
             str.expect_str("|-")?;
             let conclusion = parse_sentence(str, "proof", doc)?;
             let proof = parse_proof(str)?;
-            str.expect_str("end")?;
+            parse_kw(str, "end")?;
 
             let def = Definition {
                 stmt_id,

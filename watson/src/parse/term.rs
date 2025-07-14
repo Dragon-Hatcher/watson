@@ -1,24 +1,28 @@
 use super::pattern::PatternPart;
 use crate::parse::{
     Document,
-    common::parse_name,
+    common::{parse_kw, parse_name, parse_schema_name},
     earley::{EarleyGrammar, EarleySymbol, EarleyTerm, earley_parse},
     pattern::{Pattern, PatternId, PatternTy},
     stream::{Checkpoint, ParseResult, Stream},
 };
-use std::{fmt::Debug, hash::Hash};
+use std::{
+    fmt::Debug,
+    hash::Hash,
+    time::{Duration, Instant},
+};
 use ustr::Ustr;
 
 #[derive(Debug)]
 pub struct Sentence {
-    pattern: PatternId,
-    terms: Vec<Term>,
+    // pattern: PatternId,
+    // terms: Vec<Term>,
 }
 
 #[derive(Debug)]
 pub struct Value {
-    pattern: PatternId,
-    terms: Vec<Term>,
+    // pattern: PatternId,
+    // terms: Vec<Term>,
 }
 
 #[derive(Debug)]
@@ -30,6 +34,7 @@ pub enum Term {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum MyEarleyNonTerm {
+    StartSym,
     Sentence,
     Value,
     Binding,
@@ -38,9 +43,11 @@ enum MyEarleyNonTerm {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum MyEarleyTerm {
     Lit(Ustr),
+    SchemaName,
     VarName,
     PatSubst,
     DefSubst,
+    Kw(Ustr),
 }
 
 impl EarleyTerm for MyEarleyTerm {
@@ -53,6 +60,9 @@ impl EarleyTerm for MyEarleyTerm {
                 MyEarleyTerm::VarName => {
                     parse_name(str)?;
                 }
+                MyEarleyTerm::SchemaName => {
+                    parse_schema_name(str)?;
+                }
                 MyEarleyTerm::PatSubst => {
                     str.include_ws(|str| {
                         str.expect_char('$')?;
@@ -61,6 +71,9 @@ impl EarleyTerm for MyEarleyTerm {
                 }
                 MyEarleyTerm::DefSubst => {
                     str.expect_char('_')?;
+                }
+                MyEarleyTerm::Kw(kw) => {
+                    parse_kw(str, kw)?;
                 }
             };
             Ok(())
@@ -80,7 +93,7 @@ fn pattern_to_earley(pat: &Pattern) -> Vec<EarleySymbol<MyEarleyTerm, MyEarleyNo
         .collect()
 }
 
-pub fn parse_sentence(str: &mut Stream, end: &str, doc: &Document) -> ParseResult<Sentence> {
+fn build_grammar(doc: &Document) -> EarleyGrammar<MyEarleyTerm, MyEarleyNonTerm> {
     let mut grammar = EarleyGrammar::new();
 
     for pat in doc.patterns.patterns_with_ty(PatternTy::Sentence) {
@@ -93,7 +106,7 @@ pub fn parse_sentence(str: &mut Stream, end: &str, doc: &Document) -> ParseResul
     );
     grammar.add_rule(
         MyEarleyNonTerm::Sentence,
-        vec![EarleySymbol::Terminal(MyEarleyTerm::VarName)],
+        vec![EarleySymbol::Terminal(MyEarleyTerm::SchemaName)],
     );
 
     for pat in doc.patterns.patterns_with_ty(PatternTy::Value) {
@@ -122,11 +135,35 @@ pub fn parse_sentence(str: &mut Stream, end: &str, doc: &Document) -> ParseResul
         vec![EarleySymbol::Terminal(MyEarleyTerm::PatSubst)],
     );
 
-    earley_parse(str, grammar, MyEarleyNonTerm::Sentence);
-
-    todo!()
+    grammar
 }
 
-pub fn parse_value(str: &mut Stream, end: &str) -> ParseResult<Value> {
-    todo!()
+pub fn parse_sentence(str: &mut Stream, end: &str, doc: &Document) -> ParseResult<Sentence> {
+    let mut grammar = build_grammar(doc);
+    grammar.add_rule(
+        MyEarleyNonTerm::StartSym,
+        vec![
+            EarleySymbol::NonTerminal(MyEarleyNonTerm::Sentence),
+            EarleySymbol::Terminal(MyEarleyTerm::Kw(Ustr::from(end))),
+        ],
+    );
+
+    let _res = earley_parse(str, grammar, MyEarleyNonTerm::StartSym);
+
+    Ok(Sentence {})
+}
+
+pub fn parse_value(str: &mut Stream, end: &str, doc: &Document) -> ParseResult<Value> {
+    let mut grammar = build_grammar(doc);
+    grammar.add_rule(
+        MyEarleyNonTerm::StartSym,
+        vec![
+            EarleySymbol::NonTerminal(MyEarleyNonTerm::Value),
+            EarleySymbol::Terminal(MyEarleyTerm::Kw(Ustr::from(end))),
+        ],
+    );
+
+    let _res = earley_parse(str, grammar, MyEarleyNonTerm::StartSym);
+
+    Ok(Value {  })
 }

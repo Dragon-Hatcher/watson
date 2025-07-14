@@ -8,8 +8,8 @@ syntax
     100 | '⊥'
 end
 
-axiom zfc_specification [s] [schema 'p(_)] :
-    |- (∃r, ∀x, x ∈ r ↔ (x ∈ s ∧ 'p))
+axiom zfc_pairing : 
+    |- ∀x, ∀y, ∃z, ((x ∈ z) ∧ (y ∈ z))
 end
 
 notation paren
@@ -33,7 +33,7 @@ notation iff
 end
 
 notation forall
-    200 | '∀' v:binding ',' p:sentence => ¬∃ $v, $p
+    200 | '∀' v:binding ',' p:sentence => ¬∃ $v, ¬$p
 end
 
 notation exists_at_most_one

@@ -8,6 +8,10 @@ syntax
     100 | '⊥'
 end
 
+axiom zfc_specification [s] [schema 'p(_)] :
+    |- (∃r, ∀x, x ∈ r ↔ (x ∈ s ∧ 'p))
+end
+
 notation paren
     100 | '(' p:sentence ')' => $p 
 end

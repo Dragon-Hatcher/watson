@@ -9,7 +9,7 @@ pub struct Stream<'a> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Checkpoint(usize);
+pub struct Checkpoint(pub usize);
 
 impl<'a> Stream<'a> {
     pub fn new(text: &'a str) -> Self {
@@ -167,6 +167,10 @@ impl<'a> Stream<'a> {
 
     pub fn remaining_text(&self) -> &str {
         &self.text[self.pos..]
+    }
+
+    pub fn text(&self) -> &str {
+        self.text
     }
 }
 

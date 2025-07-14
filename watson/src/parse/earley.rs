@@ -1,5 +1,8 @@
+use itertools::Itertools;
+
 use crate::parse::stream::{Checkpoint, Stream};
 use std::{
+    cmp::Reverse,
     collections::{HashMap, HashSet, VecDeque},
     fmt::Debug,
     hash::Hash,
@@ -164,10 +167,11 @@ pub fn earley_parse<Term, NonTerm>(
                 None => {
                     // Completion
                     if let Some(creators) = creators.get(&(next.start, next.sym.clone())) {
-                        // dbg!(&(next.start, next.sym));
                         for creator in creators.clone() {
                             let item = creator.advance();
-                            chart.entry(cur_pos).or_default().insert(item.clone());
+                            if chart.entry(cur_pos).or_default().insert(item.clone()) {
+                                queue.push_back(item.clone());
+                            }
                         }
                     }
                 }
@@ -175,29 +179,142 @@ pub fn earley_parse<Term, NonTerm>(
         }
     }
 
-    let mut vec: Vec<_> = chart.into_iter().collect();
-    vec.sort_by_key(|x| x.0);
-    for (check, items) in vec {
-        let mut items: Vec<_> = items.into_iter().collect();
-        items.sort_by_key(|i| format!("{:?}", i.sym));
-
-        println!("{check:?}:");
-        for item in items {
-            print!("  ({:?}) {:?} ->", item.start, item.sym);
-            for (i, p) in item.rule.iter().enumerate() {
-                if i == item.pos {
-                    print!(" •");
-                }
-                match p {
-                    EarleySymbol::Terminal(t) => print!(" {t:?}"),
-                    EarleySymbol::NonTerminal(nt) => print!(" {nt:?}"),
-                }
-            }
-            if item.rule.len() == item.pos {
-                print!(" •");
-            }
-            println!();
-        }
-        println!();
+    // We have now recognized. Let's filter down to completed items.
+    for (_, items) in chart.iter_mut() {
+        items.retain(|i| i.pos == i.rule.len());
     }
+
+    let mut rev_chart: HashMap<Checkpoint, HashMap<NonTerm, Vec<SearchItem<Term, NonTerm>>>> =
+        HashMap::new();
+
+    for (end, items) in chart {
+        for item in items {
+            let map = rev_chart.entry(item.start).or_default();
+            let list = map.entry(item.sym).or_default();
+            list.push(SearchItem {
+                end,
+                rule: item.rule,
+            });
+        }
+    }
+
+    // let mut vec: Vec<_> = rev_chart.clone().into_iter().collect();
+    // vec.sort_by_key(|x| x.0);
+    // for (check, items) in vec {
+    //     println!("{check:?}:");
+    //     for (sym, items) in items {
+    //         println!("  {sym:?} ->");
+    //         for item in items {
+    //             print!("    {:?}", item.end);
+    //             for part in item.rule {
+    //                 match part {
+    //                     EarleySymbol::Terminal(t) => print!(" {t:?}"),
+    //                     EarleySymbol::NonTerminal(nt) => print!(" {nt:?}"),
+    //                 }
+    //             }
+    //             println!();
+    //         }
+    //     }
+    //     println!();
+    // }
+
+    if let Some(matches) = rev_chart
+        .get(&start_pos)
+        .map(|p| p.get(&start_sym))
+        .flatten()
+    {
+        let end = matches.iter().map(|m| m.end).max().unwrap();
+        find_parse(start_pos, end, start_sym, &rev_chart, str, 0);
+    } else {
+        todo!("Parse failed!");
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SearchItem<'a, Term, NonTerm> {
+    end: Checkpoint,
+    rule: &'a [EarleySymbol<Term, NonTerm>],
+}
+
+#[derive(Debug, Clone)]
+struct InProgressPath {
+    rule_pos: usize,
+    taken: Vec<Checkpoint>,
+}
+
+impl InProgressPath {
+    fn advance_to(mut self, pos: Checkpoint) -> Self {
+        self.rule_pos += 1;
+        self.taken.push(pos);
+        self
+    }
+}
+
+fn find_parse<Term, NonTerm>(
+    start: Checkpoint,
+    end: Checkpoint,
+    ty: NonTerm,
+    chart: &HashMap<Checkpoint, HashMap<NonTerm, Vec<SearchItem<Term, NonTerm>>>>,
+    str: &mut Stream,
+    depth: usize,
+) where
+    NonTerm: Hash + Eq + Clone + Debug,
+    Term: EarleyTerm + Hash + Eq + Clone + Debug,
+{
+    let candidates = &chart[&start][&ty];
+    let mut candidates = candidates.iter().filter(|c| c.end == end);
+
+    // TODO: choose based on correct factors.
+    let top_choice = candidates.next().unwrap();
+
+    let mut search_stack = Vec::new();
+    search_stack.push(InProgressPath {
+        rule_pos: 0,
+        taken: vec![start],
+    });
+
+    while let Some(next) = search_stack.pop() {
+        if next.rule_pos == top_choice.rule.len() {
+            for ((a, b), sym) in next.taken.iter().tuple_windows().zip(top_choice.rule) {
+                let text = str.text();
+                print!("{}", "  ".repeat(depth));
+                match sym {
+                    EarleySymbol::Terminal(t) => println!("{t:?}: `{}`", &text[a.0..b.0]),
+                    EarleySymbol::NonTerminal(nt) => {
+                        println!("{nt:?}: `{}`", &text[a.0..b.0]);
+                        find_parse(*a, *b, nt.clone(), chart, str, depth + 1);
+                    }
+                }
+            }
+            return;
+        }
+
+        match &top_choice.rule[next.rule_pos] {
+            EarleySymbol::Terminal(term) => {
+                str.rewind(*next.taken.last().unwrap());
+                if let Some(end) = term.scan(str) {
+                    search_stack.push(next.advance_to(end));
+                }
+            }
+            EarleySymbol::NonTerminal(nt) => {
+                let at = next.taken.last().unwrap();
+                if let Some(map) = chart.get(&at)
+                    && let Some(choices) = map.get(nt)
+                {
+                    let mut choices = choices.clone();
+                    choices.sort_by_key(|c| Reverse(c.end));
+
+                    for choice in choices {
+                        if std::ptr::addr_eq(choice.rule, top_choice.rule) {
+                            continue;
+                        }
+
+                        search_stack.push(next.clone().advance_to(choice.end));
+                    }
+                }
+            }
+        }
+    }
+
+    unreachable!("There must be a valid path.");
 }

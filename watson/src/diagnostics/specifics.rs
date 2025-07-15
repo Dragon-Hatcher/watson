@@ -71,7 +71,7 @@ pub fn parse_error(err: ParseError, span: Span) -> Report {
     let span = Span::new(
         span.file(),
         span.start() + err.place(),
-        span.start() + err.place() + 1,
+        span.start() + err.place(),
     );
 
     let mut msg = String::new();

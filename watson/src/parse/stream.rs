@@ -28,9 +28,9 @@ impl<'a> Stream<'a> {
         self.pos = to.0;
     }
 
-    pub fn fallible<F, T>(&mut self, mut f: F) -> ParseResult<T>
+    pub fn fallible<F, T>(&mut self, f: F) -> ParseResult<T>
     where
-        F: FnMut(&mut Self) -> ParseResult<T>,
+        F: FnOnce(&mut Self) -> ParseResult<T>,
     {
         let check = self.checkpoint();
         let res = f(self);
@@ -42,9 +42,9 @@ impl<'a> Stream<'a> {
         res
     }
 
-    pub fn commit<F, T>(&mut self, mut f: F) -> ParseResult<T>
+    pub fn commit<F, T>(&mut self, f: F) -> ParseResult<T>
     where
-        F: FnMut(&mut Self) -> ParseResult<T>,
+        F: FnOnce(&mut Self) -> ParseResult<T>,
     {
         f(self).map_err(|e| match e {
             ParseError::Backtrack(e) => ParseError::Commit(e),
@@ -52,9 +52,9 @@ impl<'a> Stream<'a> {
         })
     }
 
-    pub fn include_ws<F, T>(&mut self, mut f: F) -> ParseResult<T>
+    pub fn include_ws<F, T>(&mut self, f: F) -> ParseResult<T>
     where
-        F: FnMut(&mut Self) -> ParseResult<T>,
+        F: FnOnce(&mut Self) -> ParseResult<T>,
     {
         self.skip_ws();
 
@@ -153,9 +153,9 @@ impl<'a> Stream<'a> {
         Err(ParseError::new_backtrack(self.pos))
     }
 
-    pub fn measure<F, T>(&mut self, mut f: F) -> Option<Checkpoint>
+    pub fn measure<F, T>(&mut self, f: F) -> Option<Checkpoint>
     where
-        F: FnMut(&mut Self) -> ParseResult<T>,
+        F: FnOnce(&mut Self) -> ParseResult<T>,
     {
         let start = self.checkpoint();
         let parsed = f(self).ok();

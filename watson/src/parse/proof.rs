@@ -15,6 +15,7 @@ pub struct Proof {
 #[derive(Debug)]
 pub enum Tactic {
     Have(HaveTactic),
+    HaveIn(HaveInTactic),
     Todo,
 }
 
@@ -23,6 +24,12 @@ pub struct HaveTactic {
     conclusion: Sentence,
     by: Ustr,
     substitutions: Vec<Substitution>,
+}
+
+#[derive(Debug)]
+pub struct HaveInTactic {
+    conclusion: Sentence,
+    using: Proof,
 }
 
 #[derive(Debug)]
@@ -52,17 +59,29 @@ fn parse_tactic(str: &mut Stream, doc: &Document) -> ParseResult<Tactic> {
 
     parse_kw(str, "have")?;
 
-    str.commit(|str| {
-        let conclusion = parse_sentence(str, "by", doc)?;
-        let by = parse_name(str)?;
-        let substitutions = parse_substitutions(str, doc)?;
+    if let Ok(conclusion) = parse_sentence(str, "in", doc) {
+        str.commit(move |str| {
+            let proof = parse_proof(str, doc)?;
+            parse_kw(str, "end")?;
 
-        Ok(Tactic::Have(HaveTactic {
-            conclusion,
-            by,
-            substitutions,
-        }))
-    })
+            Ok(Tactic::HaveIn(HaveInTactic {
+                conclusion,
+                using: proof,
+            }))
+        })
+    } else {
+        str.commit(|str| {
+            let conclusion = parse_sentence(str, "by", doc)?;
+            let by = parse_name(str)?;
+            let substitutions = parse_substitutions(str, doc)?;
+
+            Ok(Tactic::Have(HaveTactic {
+                conclusion,
+                by,
+                substitutions,
+            }))
+        })
+    }
 }
 
 fn parse_substitutions(str: &mut Stream, doc: &Document) -> ParseResult<Vec<Substitution>> {

@@ -1,6 +1,11 @@
 use crate::{
     parse::{
-        common::{parse_kw, parse_name}, hypotheses::parse_hypotheses, stream::{ParseErrorCtxHolder, ParseResult, Stream}, templates::{parse_templates, Template}, term::{parse_sentence, Sentence}, Document
+        Document,
+        common::{parse_kw, parse_name},
+        hypotheses::parse_hypotheses,
+        stream::{ParseResult, Stream},
+        templates::{Template, parse_templates},
+        term::{Sentence, parse_sentence},
     },
     statements::StatementId,
 };

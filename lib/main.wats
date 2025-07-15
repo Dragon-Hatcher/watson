@@ -37,7 +37,7 @@ notation forall
 end
 
 notation exists_at_most_one
-    200 | '∃*' v:binding ',' p:sentence =>  
+    200 | '∃*' v:binding ',' p:sentence => ∃y, ∀ $v, $p → $v = y
 end
 
 notation exists_uniq
@@ -192,7 +192,7 @@ qed
 theorem or_intro_left [schema 'p 'q] : ('p)
     |- ('p ∨ 'q)
 proof
-    have assume ¬'p |- 'q by
+    have assume ¬'p |- 'q in
         have ⊥  by mp
         have 'q by ex_falso
     end
@@ -209,15 +209,14 @@ qed
 theorem double_neg [schema 'p 'q] : (¬¬'p)
     |- 'p
 proof
-    have p ∨ ¬'p by em
-
+    have 'p ∨ ¬'p by em
 qed
 
 theorem contrapos_f [schema 'p 'q] : ('p → 'q)
     |- ¬'q → ¬'p
 proof
-    have assume ¬'q |- ¬'p by
-        have assume 'p |- ⊥ by
+    have assume ¬'q |- ¬'p in
+        have assume 'p |- ⊥ in
             have 'q by mp
             have  ⊥ by mp
         end
@@ -229,8 +228,8 @@ qed
 theorem contrapos_r [schema 'p 'q] : (¬'q → ¬'p) 
     |- 'p → 'q
 proof
-    have assume 'p |- 'q by
-        have assume ¬'q |- ⊥ by
+    have assume 'p |- 'q in
+        have assume ¬'q |- ⊥ in
             have ¬'p by mp
             have   ⊥ by mp
         end
@@ -243,10 +242,10 @@ qed
 theorem or_elim [schema 'p 'q 'r] : ('p → 'r) ('q → 'r) ('p ∨ 'q)
     |- 'r
 proof
-    have assume 'p |- 'r by 
+    have assume 'p |- 'r in 
         have 'r by mp 
     end
-    have assume ¬'p |- 'r by 
+    have assume ¬'p |- 'r in 
         have 'q by mp 
         have 'r by mp
     end
@@ -285,8 +284,7 @@ proof
     have 'q ∧ 'p by and_intro
 qed
 
-axiom closed [p]
+axiom closed [p] :
     |- p = p
 end
 
-The end

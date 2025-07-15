@@ -31,6 +31,7 @@ pub enum Term {
 enum MyEarleyNonTerm {
     StartSym,
     Sentence,
+    SchemaReplacements,
     Value,
     Binding,
 }
@@ -118,7 +119,33 @@ fn build_grammar(doc: &Document) -> EarleyGrammar<MyEarleyTerm, MyEarleyNonTerm>
     );
     grammar.add_rule(
         MyEarleyNonTerm::Sentence,
+        vec![EarleySymbol::Terminal(MyEarleyTerm::PatSubst)],
+    );
+    grammar.add_rule(
+        MyEarleyNonTerm::Sentence,
         vec![EarleySymbol::Terminal(MyEarleyTerm::SchemaName)],
+    );
+    grammar.add_rule(
+        MyEarleyNonTerm::Sentence,
+        vec![
+            EarleySymbol::Terminal(MyEarleyTerm::SchemaName),
+            EarleySymbol::Terminal(MyEarleyTerm::Lit(Ustr::from("("))),
+            EarleySymbol::NonTerminal(MyEarleyNonTerm::SchemaReplacements),
+            EarleySymbol::Terminal(MyEarleyTerm::Lit(Ustr::from(")"))),
+        ],
+    );
+
+    grammar.add_rule(
+        MyEarleyNonTerm::SchemaReplacements,
+        vec![EarleySymbol::NonTerminal(MyEarleyNonTerm::Value)],
+    );
+    grammar.add_rule(
+        MyEarleyNonTerm::SchemaReplacements,
+        vec![
+            EarleySymbol::NonTerminal(MyEarleyNonTerm::Value),
+            EarleySymbol::Terminal(MyEarleyTerm::Lit(Ustr::from(","))),
+            EarleySymbol::NonTerminal(MyEarleyNonTerm::SchemaReplacements),
+        ],
     );
 
     for pat in doc.patterns.patterns_with_ty(PatternTy::Value) {

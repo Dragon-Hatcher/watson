@@ -1,12 +1,12 @@
-use itertools::Itertools;
-use ustr::Ustr;
 use crate::parse::stream::{Checkpoint, ParseError, ParseResult, Stream};
+use itertools::Itertools;
 use std::{
     cmp::Reverse,
     collections::{HashMap, HashSet, VecDeque},
     fmt::Debug,
     hash::Hash,
 };
+use ustr::Ustr;
 
 #[derive(Debug)]
 pub enum EarleySymbol<Term, NonTerm> {
@@ -232,6 +232,7 @@ where
 
     // The parse failed. Let's try to diagnose why:
 
+    str.rewind(start_pos);
     let last_pos = chart.keys().max().unwrap();
     Err(ParseError::new_backtrack(last_pos.0))
 }

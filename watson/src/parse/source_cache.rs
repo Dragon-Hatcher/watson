@@ -1,14 +1,16 @@
 use crate::parse::location::SourceId;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 /// Stores the text of all the loaded source files.
 pub struct SourceCache {
+    root_dir: PathBuf,
     sources: HashMap<SourceId, String>,
 }
 
 impl SourceCache {
-    pub fn new() -> Self {
+    pub fn new(root_dir: PathBuf) -> Self {
         Self {
+            root_dir,
             sources: HashMap::new(),
         }
     }

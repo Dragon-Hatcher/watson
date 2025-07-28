@@ -20,17 +20,50 @@ macro_rules! rule_id {
 }
 
 category_id!(COMMAND_CAT = "command");
-rule_id!(IMPORT_RULE = "import");
+rule_id!(MODULE_RULE = "module");
 rule_id!(MACRO_RULE = "macro");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseTree {
     Atom(ParseAtom),
     Node(ParseNode),
-    Missing,
+    Missing(Span),
 }
 
 impl ParseTree {
+    pub fn span(&self) -> Span {
+        match self {
+            ParseTree::Atom(parse_atom) => parse_atom.full_span,
+            ParseTree::Node(parse_node) => parse_node.span,
+            ParseTree::Missing(span) => *span,
+        }
+    }
+
+    pub fn is_missing(&self) -> bool {
+        matches!(self, ParseTree::Missing(_))
+    }
+
+    pub fn is_atom_kind(&self, kind: ParseAtomKind) -> bool {
+        match self {
+            ParseTree::Atom(got) => got.kind == kind,
+            _ => false,
+        }
+    }
+
+    pub fn is_kw(&self, str: Ustr) -> bool {
+        self.is_atom_kind(ParseAtomKind::Kw(str))
+    }
+
+    pub fn as_name(&self) -> Option<Ustr> {
+        match self {
+            ParseTree::Atom(ParseAtom {
+                kind: ParseAtomKind::Name(name),
+                ..
+            }) => Some(*name),
+            _ => None,
+        }
+    }
+
     pub fn as_rule(&self, rule: ParseRuleId) -> Option<&[ParseTree]> {
         if let Self::Node(n) = self
             && n.rule == rule
@@ -47,9 +80,10 @@ pub struct ParseNode {
     category: SyntaxCategoryId,
     rule: ParseRuleId,
     children: Vec<ParseTree>,
+    span: Span,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SyntaxCategoryId {
     Builtin(Ustr),
     UserDef(),
@@ -76,9 +110,9 @@ pub enum ParseRuleId {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseRule {
-    id: ParseRuleId,
-    cat: SyntaxCategoryId,
-    pattern: Vec<PatternPart>,
+    pub id: ParseRuleId,
+    pub cat: SyntaxCategoryId,
+    pub pattern: Vec<PatternPart>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

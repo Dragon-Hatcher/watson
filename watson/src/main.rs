@@ -4,6 +4,8 @@ use ustr::Ustr;
 use walkdir::WalkDir;
 
 mod parse;
+mod diagnostics;
+mod strings;
 
 fn main() {
     let base_dir = std::env::args_os().nth(1).unwrap();

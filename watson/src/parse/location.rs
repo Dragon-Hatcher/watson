@@ -60,6 +60,14 @@ impl Location {
     pub fn forward(&self, bytes: usize) -> Self {
         Self::new(self.source, self.offset.forward(bytes))
     }
+
+    pub fn max(&self, other: &Self) -> Self {
+        if self.byte_offset() > other.byte_offset() {
+            *self
+        } else {
+            *other
+        }
+    }
 }
 
 /// A range within a specific source. Identified by the start byte offset

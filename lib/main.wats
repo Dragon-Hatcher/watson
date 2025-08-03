@@ -1,2 +1,70 @@
 module nat.def
 module bar
+
+syntax_category term
+
+syntax syntax.equality
+    sentence ::= term "=" term
+end
+
+syntax syntax.membership
+    sentence ::= term "∈" term
+end
+
+syntax syntax.implication
+    sentence ::= sentence "→" sentence
+end
+
+syntax syntax.existence
+    sentence ::= ∃ binding "," sentence
+end
+
+syntax syntax.false
+    sentence ::= "⊥"
+end
+
+syntax syntax.variable
+    term ::= variable
+end
+
+syntax syntax.epsilon
+    term ::= "ε" binding "," sentence
+end
+
+macro command.notation
+    command ::= "notation":kw $n:name $p:pattern "=>" $s:sentence
+             => macro $n sentence ::= $p => $s end
+end
+
+macro command.definition
+    command ::= "definition":kw $n:name $p:pattern "=>" $t:term
+             => macro $n term ::= $p => $t end
+end
+
+notation sentence.parens
+    "(" $p:sentence ")" => $p
+end
+
+notation notation.neg
+    "¬" $t:term => $t → ⊥
+end
+
+definition term.parens
+    "(" $t:term ")" => $t
+end
+
+macro template.variable_shorthand
+    template ::= "[" $n:name "]" => [$n:term]
+end
+
+macro template.sentence_shorthand
+    template ::= "[" "schema":kw $n:name "]" => [$n:sentence]
+end
+
+axiom fol.equality.intro [x] :
+    |- x = x
+end
+
+axiom fol.equality.elim [x] [y] [schema 'p(_)] : (x = y) ('p(x))
+    |- 'p(y)
+end

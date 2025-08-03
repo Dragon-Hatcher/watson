@@ -81,7 +81,7 @@ pub struct ParseNode {
     pub span: Span,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SyntaxCategoryId {
     Builtin(Ustr),
     UserDef(),
@@ -108,6 +108,7 @@ pub enum ParseAtomKind {
     Lit(Ustr),
     Kw(Ustr),
     Name(Ustr),
+    Str(Ustr),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -133,4 +134,5 @@ pub enum AtomPattern {
     Lit(Ustr),
     Kw(Ustr),
     Name,
+    Str
 }

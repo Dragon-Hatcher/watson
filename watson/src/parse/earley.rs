@@ -102,7 +102,7 @@ fn build_chart(
                         creators
                             .entry((current_position, *cat))
                             .or_default()
-                            .insert(new_item);
+                            .insert(item);
 
                         // If this is a new item we need to consider it at our current position.
                         if chart.entry(current_position).or_default().insert(new_item) {
@@ -133,6 +133,44 @@ fn build_chart(
     }
 
     chart
+}
+
+fn _debug_chart(
+    chart: &HashMap<Location, HashSet<EarleyItem>>,
+    rules: &HashMap<ParseRuleId, ParseRule>,
+) {
+    let mut locations: Vec<Location> = chart.keys().copied().collect();
+    locations.sort_by_key(|l| l.byte_offset());
+
+    for l in locations {
+        println!("{l:?}:");
+        let mut items: Vec<_> = chart[&l].iter().collect();
+        items.sort_by_key(|i| rules[&i.rule].cat);
+
+        for item in items {
+            let rule = &rules[&item.rule];
+            print!("  {:?} ::= ", rule.cat);
+            for (i, part) in rule.pattern.iter().enumerate() {
+                if i == item.pattern_pos {
+                    print!("· ");
+                }
+                match part {
+                    PatternPart::Atom(AtomPattern::Kw(kw)) => print!("\"{kw}\" "),
+                    PatternPart::Atom(AtomPattern::Lit(lit)) => print!("\"{lit}\" "),
+                    PatternPart::Atom(AtomPattern::Name) => print!("name "),
+                    PatternPart::Atom(AtomPattern::Str) => print!("str "),
+                    PatternPart::Category(cat) => print!("{cat:?} "),
+                }
+            }
+
+            if item.pattern_pos == rule.pattern.len() {
+                print!("·");
+            }
+
+            println!();
+        }
+        println!();
+    }
 }
 
 fn trim_chart(
@@ -196,6 +234,13 @@ fn read_chart(
         pattern: &[PatternPart],
         chart: &HashMap<(Location, SyntaxCategoryId), Vec<(ParseRuleId, Span)>>,
     ) -> Option<Vec<Span>> {
+        if let Some(last) = search_stack.last()
+            && last.end().byte_offset() > full_span.end().byte_offset()
+        {
+            // This match is too long
+            return None;
+        }
+
         if search_stack.len() == pattern.len() {
             // We have found a match. We already did things in the optimal order
             // so this is the match we want.
@@ -322,6 +367,42 @@ fn parse_atom_at_offset(text: &str, start: Location, atom: AtomPattern) -> Optio
                 kind: ParseAtomKind::Name(name),
             })
         }
+        AtomPattern::Str => {
+            let content_text = &text[content_offset.byte_offset()..];
+
+            let mut end = content_offset;
+            let mut chars = content_text.chars();
+
+            if let Some('"') = chars.next() {
+                end = end.forward('"'.len_utf8());
+            } else {
+                return None;
+            }
+
+            for char in chars {
+                end = end.forward(char.len_utf8());
+
+                if char == '"' {
+                    let full_span = Span::new(start, end);
+                    let content_span = Span::new(content_offset, end);
+                    let inner_text = &text[content_span.start().byte_offset() + 1
+                        ..content_span.end().byte_offset() - 1];
+                    let inner_text = Ustr::from(inner_text);
+                    return Some(ParseAtom {
+                        full_span,
+                        content_span,
+                        kind: ParseAtomKind::Str(inner_text),
+                    });
+                }
+
+                if char.is_ascii_whitespace() {
+                    return None;
+                }
+            }
+
+            // No end quote so return false.
+            None
+        }
     }
 }
 
@@ -375,9 +456,53 @@ pub fn parse_name(text: &str, mut offset: Location) -> Option<(Ustr, Location)> 
 }
 
 fn char_can_start_name(char: char) -> bool {
-    char.is_alphabetic() || char == '.'
+    char.is_alphabetic() || char == '.' || char == '_'
 }
 
 fn char_can_continue_name(char: char) -> bool {
     char_can_start_name(char) || char.is_numeric() || char == '\''
+}
+
+pub fn find_start_keywords(
+    root: SyntaxCategoryId,
+    rules: &HashMap<ParseRuleId, ParseRule>,
+) -> HashSet<Ustr> {
+    fn search<'a>(
+        cat: SyntaxCategoryId,
+        start_keywords: &'a mut HashMap<SyntaxCategoryId, HashSet<Ustr>>,
+        rules: &HashMap<ParseRuleId, ParseRule>,
+        by_category: &HashMap<SyntaxCategoryId, Vec<ParseRuleId>>,
+    ) {
+        if start_keywords.contains_key(&cat) {
+            return;
+        }
+
+        start_keywords.insert(cat, HashSet::new());
+
+        let mut set = HashSet::new();
+
+        for rule in by_category.get(&cat).unwrap_or(&Vec::new()) {
+            match &rules[rule].pattern[0] {
+                // TODO
+                PatternPart::Atom(atom) => match atom {
+                    AtomPattern::Kw(ustr) => {
+                        set.insert(*ustr);
+                    }
+                    AtomPattern::Name | AtomPattern::Lit(_) | AtomPattern::Str => todo!(),
+                },
+                PatternPart::Category(cat) => {
+                    search(*cat, start_keywords, rules, by_category);
+                    set.extend(&start_keywords[&cat]);
+                }
+            }
+        }
+
+        start_keywords.insert(cat, set);
+    }
+
+    let by_category = group_by_category(rules);
+    let mut start_keywords = HashMap::new();
+    search(root, &mut start_keywords, rules, &by_category);
+
+    start_keywords.remove(&root).unwrap()
 }

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use ustr::Ustr;
 
 /// Identifies a source file by its path from the root, given in the form
@@ -35,7 +37,7 @@ impl SourceOffset {
 
 /// A location within a specific source. Identified by the source's `SourceKey`
 /// and the location's `SourceOffset`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Location {
     source: SourceId,
     offset: SourceOffset,
@@ -71,11 +73,16 @@ impl Location {
     }
 }
 
+impl Debug for Location {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Location({}:{})", self.source.0, self.offset.byte_offset())
+    }
+}
+
 /// A range within a specific source. Identified by the start byte offset
 /// (inclusive) and the end byte offset (exclusive).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Span {
-    source: SourceId,
     start: Location,
     end: Location,
 }
@@ -85,14 +92,13 @@ impl Span {
         assert_eq!(start.source(), end.source());
 
         Self {
-            source: start.source(),
             start,
             end,
         }
     }
 
     pub fn source(&self) -> SourceId {
-        self.source
+        self.start.source()
     }
 
     pub fn start(&self) -> Location {
@@ -101,5 +107,11 @@ impl Span {
 
     pub fn end(&self) -> Location {
         self.end
+    }
+}
+
+impl Debug for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Span({}:{}-{})", self.source().0, self.start.byte_offset(), self.end.byte_offset())
     }
 }

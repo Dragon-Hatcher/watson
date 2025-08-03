@@ -9,7 +9,19 @@ macro_rules! str_const {
 
 // Keywords:
 str_const! {
+    END = "end";
     MODULE = "module";
+    SYNTAX_CAT = "syntax_category";
+    SYNTAX = "syntax";
+}
+
+// Symbols:
+str_const! {
+    BNF_REPLACE = "::=";
+}
+
+str_const! {
+    SENTENCE = "sentence";
 }
 
 str_const! {

@@ -62,4 +62,12 @@ impl DiagManager {
 
         Err(())
     }
+
+    pub fn err_duplicate_formal_syntax_cat<T>(&mut self) -> WResult<T> {
+        self.add_diag(Diagnostic {
+            msg: "err_duplicate_formal_syntax_cat",
+        });
+
+        Err(())
+    }
 }

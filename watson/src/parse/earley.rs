@@ -140,7 +140,10 @@ fn trim_chart(
     target_cat: SyntaxCategoryId,
     rules: &HashMap<ParseRuleId, ParseRule>,
     chart: &HashMap<Location, HashSet<EarleyItem>>,
-) -> (Span, HashMap<(Location, SyntaxCategoryId), Vec<(ParseRuleId, Span)>>) {
+) -> (
+    Span,
+    HashMap<(Location, SyntaxCategoryId), Vec<(ParseRuleId, Span)>>,
+) {
     let mut best_span = Span::new(start_offset, start_offset);
     let mut trimmed: HashMap<(Location, SyntaxCategoryId), Vec<(ParseRuleId, Span)>> =
         HashMap::new();

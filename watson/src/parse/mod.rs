@@ -6,7 +6,7 @@ mod parse_tree;
 mod source_cache;
 
 use crate::{
-    diagnostics::DiagManager,
+    diagnostics::{DiagManager, WResult},
     parse::{
         builtin::{COMMAND_CAT, add_builtin_syntax, elaborate_command},
         earley::{parse_category, parse_name},
@@ -74,16 +74,22 @@ fn parse_source(
             // Now we can force parsing of a command at this spot in the source.
             let command = parse_category(text, loc, *COMMAND_CAT, &progress.rules);
 
+            let mut skipped = false;
+            // Now we can skip the command we just parsed. If we didn't manage
+            // to parse anything then we skip to the next line below.
+            if !command.is_missing() {
+                loc = command.span().end();
+                skipped = true;
+            } else {
+                // We continue past the parse failure.
+                let _: WResult<()> = diags.err_parse_failure();
+            }
+
             // Elaborate the command in our current context.
             let command = elaborate_command(command, progress, sources, diags);
 
-            // Now we can skip the command we just parsed. If we didn't manage
-            // to parse anything then we skip to the next line below.
-            if let Ok(command) = command && !command.is_missing() {
-                loc = command.span().end();
+            if skipped {
                 continue;
-            } else {
-                // TODO: send error about unparsable command,
             }
         }
 

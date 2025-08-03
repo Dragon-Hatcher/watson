@@ -59,13 +59,11 @@ pub fn elaborate_module(
 
     // It isn't allowed to load the same file twice.
     if sources.has_source(source_id) {
-        // TODO: add diagnostic
-        return Err(());
+        return diags.err_source_redeclaration();
     }
 
     let Ok(source_text) = fs::read_to_string(path) else {
-        // TODO: add diagnostic
-        return Err(());
+        return diags.err_non_existent_file();
     };
 
     sources.add(source_id, source_text);

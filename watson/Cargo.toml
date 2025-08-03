@@ -5,4 +5,3 @@ edition = "2024"
 
 [dependencies]
 ustr = "1.1.0"
-walkdir = "2.5.0"

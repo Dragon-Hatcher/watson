@@ -22,8 +22,7 @@ pub fn reduce_to_builtin(tree: ParseTree, diags: &mut DiagManager) -> WResult<Pa
 
         depth += 1;
         if depth >= MAX_DEPTH {
-            // TODO: Real error
-            return Err(());
+            return diags.err_elaboration_infinite_recursion();
         }
     }
 

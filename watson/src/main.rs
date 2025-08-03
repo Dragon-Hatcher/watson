@@ -2,7 +2,7 @@ use crate::{
     diagnostics::{DiagManager, WResult},
     parse::{SourceCache, SourceId, parse},
 };
-use std::{fs, path::Path};
+use std::{fs, path::Path, process::exit};
 use ustr::Ustr;
 
 mod diagnostics;
@@ -17,6 +17,11 @@ fn main() {
     let (mut sources, root_source) = make_source_cache(root_file).unwrap();
 
     compile(root_source, &mut sources, &mut diags);
+
+    if diags.has_errors() {
+        diags.print_errors();
+        exit(1);
+    }
 }
 
 fn make_source_cache(root_file: &Path) -> WResult<(SourceCache, SourceId)> {

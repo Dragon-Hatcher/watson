@@ -1,45 +1,41 @@
-use crate::parse::{SourceCache, SourceId, parse};
-use std::{ffi::OsStr, path::Path};
+use crate::{
+    diagnostics::{DiagManager, WResult},
+    parse::{SourceCache, SourceId, parse},
+};
+use std::{fs, path::Path};
 use ustr::Ustr;
-use walkdir::WalkDir;
 
-mod parse;
 mod diagnostics;
+mod parse;
 mod strings;
 
 fn main() {
-    let base_dir = std::env::args_os().nth(1).unwrap();
-    let base_dir = Path::new(&base_dir);
+    let root_file = std::env::args_os().nth(1).unwrap();
+    let root_file = Path::new(&root_file);
 
-    let sources = collect_sources(base_dir);
+    let mut diags = DiagManager::new();
+    let (mut sources, root_source) = make_source_cache(root_file).unwrap();
 
-    compile(&sources);
+    compile(root_source, &mut sources, &mut diags);
 }
 
-fn collect_sources(base_dir: &Path) -> SourceCache {
-    fn get_source_key(base_dir: &Path, file: &Path) -> SourceId {
-        let relative = file.strip_prefix(base_dir).unwrap();
-        let relative = Ustr::from(&relative.to_string_lossy());
-        SourceId::new(relative)
-    }
+fn make_source_cache(root_file: &Path) -> WResult<(SourceCache, SourceId)> {
+    let parent = root_file.parent().unwrap();
+    let mut sources = SourceCache::new(parent.to_path_buf());
 
-    let extension = OsStr::new("wats");
+    let source_id = Ustr::from(&root_file.file_stem().unwrap().to_string_lossy());
+    let source_id = SourceId::new(source_id);
 
-    let mut source_cache = SourceCache::new();
+    let Ok(text) = fs::read_to_string(root_file) else {
+        // TODO
+        return Err(());
+    };
 
-    for entry in WalkDir::new(base_dir).into_iter().filter_map(Result::ok) {
-        if !entry.file_type().is_file() || entry.path().extension() != Some(extension) {
-            continue;
-        }
+    sources.add(source_id, text);
 
-        let key = get_source_key(base_dir, entry.path());
-        let text = std::fs::read_to_string(entry.path()).unwrap();
-        source_cache.add(key, text);
-    }
-
-    source_cache
+    Ok((sources, source_id))
 }
 
-fn compile(sources: &SourceCache) {
-    parse(sources);
+fn compile(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager) {
+    parse(root, sources, diags);
 }

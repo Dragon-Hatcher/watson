@@ -1,3 +1,4 @@
+mod builtin;
 mod earley;
 mod elaborator;
 mod location;
@@ -7,20 +8,33 @@ mod source_cache;
 use crate::{
     diagnostics::DiagManager,
     parse::{
+        builtin::{COMMAND_CAT, add_builtin_syntax, elaborate_command},
         earley::{parse_category, parse_name},
-        elaborator::elaborate,
         location::SourceOffset,
-        parse_tree::{COMMAND_CAT, ParseRule, ParseRuleId, ParseTree},
+        parse_tree::{ParseRule, ParseRuleId, ParseTree},
     },
+    strings,
 };
 pub use location::{Location, SourceId, Span};
 pub use source_cache::SourceCache;
 use std::collections::{HashMap, HashSet, VecDeque};
 use ustr::Ustr;
 
-pub fn parse(sources: &SourceCache) {
-    for key in sources.source_keys() {
-        println!("{:?}", key);
+pub fn parse(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager) {
+    let mut progress = SourceParseProgress {
+        command_starters: HashSet::new(),
+        rules: HashMap::new(),
+        commands: Vec::new(),
+        next_sources: VecDeque::new(),
+    };
+
+    add_builtin_syntax(&mut progress.rules);
+    progress.command_starters.insert(*strings::MODULE);
+    progress.next_sources.push_back(root);
+
+    while let Some(next) = progress.next_sources.pop_front() {
+        dbg!(next);
+        parse_source(next, &mut progress, sources, diags);
     }
 }
 
@@ -61,13 +75,15 @@ fn parse_source(
             let command = parse_category(text, loc, *COMMAND_CAT, &progress.rules);
 
             // Elaborate the command in our current context.
-            elaborate(&command, progress, sources, diags);
+            let command = elaborate_command(command, progress, sources, diags);
 
             // Now we can skip the command we just parsed. If we didn't manage
             // to parse anything then we skip to the next line below.
-            if !command.is_missing() {
+            if let Ok(command) = command && !command.is_missing() {
                 loc = command.span().end();
                 continue;
+            } else {
+                // TODO: send error about unparsable command,
             }
         }
 

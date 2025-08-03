@@ -1,15 +1,16 @@
 use ustr::Ustr;
 
-/// Identifies a source file by its file name.
+/// Identifies a source file by its path from the root, given in the form
+/// path.from.root
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SourceId(Ustr);
 
 impl SourceId {
-    pub fn new(filename: Ustr) -> Self {
-        Self(filename)
+    pub fn new(path: Ustr) -> Self {
+        Self(path)
     }
 
-    pub fn filename(&self) -> Ustr {
+    pub fn path(&self) -> Ustr {
         self.0
     }
 }

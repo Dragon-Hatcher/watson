@@ -1,6 +1,7 @@
 use crate::parse::Span;
 use ustr::Ustr;
 
+#[macro_export]
 macro_rules! category_id {
     ($name:ident = $str:literal) => {
         pub static $name: std::sync::LazyLock<crate::parse::parse_tree::SyntaxCategoryId> =
@@ -10,6 +11,7 @@ macro_rules! category_id {
     };
 }
 
+#[macro_export]
 macro_rules! rule_id {
     ($name:ident = $str:literal) => {
         pub static $name: std::sync::LazyLock<crate::parse::parse_tree::ParseRuleId> =
@@ -18,10 +20,6 @@ macro_rules! rule_id {
             });
     };
 }
-
-category_id!(COMMAND_CAT = "command");
-rule_id!(MODULE_RULE = "module");
-rule_id!(MACRO_RULE = "macro");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseTree {
@@ -77,16 +75,25 @@ impl ParseTree {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseNode {
-    category: SyntaxCategoryId,
-    rule: ParseRuleId,
-    children: Vec<ParseTree>,
-    span: Span,
+    pub category: SyntaxCategoryId,
+    pub rule: ParseRuleId,
+    pub children: Vec<ParseTree>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SyntaxCategoryId {
     Builtin(Ustr),
     UserDef(),
+}
+
+impl SyntaxCategoryId {
+    pub fn is_builtin(&self) -> bool {
+        match self {
+            SyntaxCategoryId::Builtin(_) => true,
+            SyntaxCategoryId::UserDef() => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

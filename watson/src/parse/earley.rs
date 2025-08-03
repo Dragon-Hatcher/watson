@@ -1,11 +1,14 @@
 use crate::parse::{
     Location, Span,
     parse_tree::{
-        AtomPattern, ParseAtom, ParseAtomKind, ParseRule, ParseRuleId, ParseTree, PatternPart,
-        SyntaxCategoryId,
+        AtomPattern, ParseAtom, ParseAtomKind, ParseNode, ParseRule, ParseRuleId, ParseTree,
+        PatternPart, SyntaxCategoryId,
     },
 };
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    cmp::Reverse,
+    collections::{HashMap, HashSet, VecDeque},
+};
 use ustr::Ustr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -38,6 +41,17 @@ pub fn parse_category(
     category: SyntaxCategoryId,
     rules: &HashMap<ParseRuleId, ParseRule>,
 ) -> ParseTree {
+    let chart = build_chart(text, start_offset, category, rules);
+    let (span, trimmed_chart) = trim_chart(start_offset, category, rules, &chart);
+    read_chart(text, span, category, rules, &trimmed_chart)
+}
+
+fn build_chart(
+    text: &str,
+    start_offset: Location,
+    category: SyntaxCategoryId,
+    rules: &HashMap<ParseRuleId, ParseRule>,
+) -> HashMap<Location, HashSet<EarleyItem>> {
     let by_category = group_by_category(rules);
 
     let mut chart: HashMap<Location, HashSet<EarleyItem>> = HashMap::new();
@@ -59,6 +73,7 @@ pub fn parse_category(
     while current_position.byte_offset() <= last_position.byte_offset() {
         let Some(items) = chart.get(&current_position) else {
             // There were no items starting at this position so we move on.
+            current_position = current_position.forward(1);
             continue;
         };
         let mut item_queue: VecDeque<EarleyItem> = items.iter().copied().collect();
@@ -112,12 +127,139 @@ pub fn parse_category(
                     }
                 }
             }
+        }
 
-            current_position = current_position.forward(1);
+        current_position = current_position.forward(1);
+    }
+
+    chart
+}
+
+fn trim_chart(
+    start_offset: Location,
+    target_cat: SyntaxCategoryId,
+    rules: &HashMap<ParseRuleId, ParseRule>,
+    chart: &HashMap<Location, HashSet<EarleyItem>>,
+) -> (Span, HashMap<(Location, SyntaxCategoryId), Vec<(ParseRuleId, Span)>>) {
+    let mut best_span = Span::new(start_offset, start_offset);
+    let mut trimmed: HashMap<(Location, SyntaxCategoryId), Vec<(ParseRuleId, Span)>> =
+        HashMap::new();
+
+    for (&end_loc, items) in chart {
+        for item in items {
+            if item.pattern_pos != rules[&item.rule].pattern.len() {
+                // This item didn't complete so we don't include it in the chart.
+                continue;
+            }
+
+            let start_loc = item.start_offset;
+            let cat = rules[&item.rule].cat;
+            let span = Span::new(start_loc, end_loc);
+            let entry = trimmed.entry((start_loc, cat)).or_default();
+            entry.push((item.rule, span));
+
+            if cat == target_cat && end_loc.byte_offset() > best_span.end().byte_offset() {
+                best_span = span;
+            }
         }
     }
 
-    todo!()
+    for (_, spans) in trimmed.iter_mut() {
+        spans.sort_by_key(|s| Reverse(s.1.end().byte_offset()));
+    }
+
+    (best_span, trimmed)
+}
+
+fn read_chart(
+    text: &str,
+    span: Span,
+    category: SyntaxCategoryId,
+    rules: &HashMap<ParseRuleId, ParseRule>,
+    chart: &HashMap<(Location, SyntaxCategoryId), Vec<(ParseRuleId, Span)>>,
+) -> ParseTree {
+    // Find all the matches that span the full given range and have the right
+    // category.
+    let candidates = &chart[&(span.start(), category)];
+
+    // TODO: check all options and choose the best one.
+    let (best_choice_rule_id, _) = candidates.iter().find(|c| c.1.end() == span.end()).unwrap();
+    let best_choice_rule = &rules[&best_choice_rule_id];
+
+    fn find_path(
+        text: &str,
+        full_span: Span,
+        search_stack: &mut Vec<Span>,
+        pattern: &[PatternPart],
+        chart: &HashMap<(Location, SyntaxCategoryId), Vec<(ParseRuleId, Span)>>,
+    ) -> Option<Vec<Span>> {
+        if search_stack.len() == pattern.len() {
+            // We have found a match. We already did things in the optimal order
+            // so this is the match we want.
+            return Some(search_stack.clone());
+        }
+
+        let at = search_stack
+            .last()
+            .map(Span::end)
+            .unwrap_or(full_span.start());
+
+        match pattern[search_stack.len()] {
+            PatternPart::Atom(atom_pat) => {
+                if let Some(atom) = parse_atom_at_offset(text, at, atom_pat) {
+                    search_stack.push(atom.full_span);
+                    let res = find_path(text, full_span, search_stack, pattern, chart);
+                    search_stack.pop();
+
+                    res
+                } else {
+                    None
+                }
+            }
+            PatternPart::Category(cat) => {
+                for (_, span) in &chart[&(at, cat)] {
+                    search_stack.push(*span);
+                    let res = find_path(text, full_span, search_stack, pattern, chart);
+                    search_stack.pop();
+
+                    if res.is_some() {
+                        return res;
+                    }
+                }
+
+                None
+            }
+        }
+    }
+
+    let mut search_stack: Vec<Span> = Vec::new();
+
+    let spans = find_path(
+        text,
+        span,
+        &mut search_stack,
+        &best_choice_rule.pattern,
+        chart,
+    )
+    .expect("Recognizer must produce valid parse.");
+
+    let mut children = Vec::new();
+    for (span, pat) in spans.into_iter().zip(best_choice_rule.pattern.iter()) {
+        let child = match pat {
+            PatternPart::Atom(atom_pat) => {
+                ParseTree::Atom(parse_atom_at_offset(text, span.start(), *atom_pat).unwrap())
+            }
+            PatternPart::Category(cat) => read_chart(text, span, *cat, rules, chart),
+        };
+        children.push(child);
+    }
+
+    ParseTree::Node(ParseNode {
+        category,
+        rule: *best_choice_rule_id,
+        children,
+        span,
+    })
 }
 
 fn group_by_category(
@@ -152,7 +294,7 @@ fn parse_atom_at_offset(text: &str, start: Location, atom: AtomPattern) -> Optio
             })
         }
         AtomPattern::Kw(kw) => {
-            let (name, end) = parse_name(text, start)?;
+            let (name, end) = parse_name(text, content_offset)?;
 
             if name != kw {
                 return None;
@@ -167,7 +309,7 @@ fn parse_atom_at_offset(text: &str, start: Location, atom: AtomPattern) -> Optio
             })
         }
         AtomPattern::Name => {
-            let (name, end) = parse_name(text, start)?;
+            let (name, end) = parse_name(text, content_offset)?;
 
             let full_span = Span::new(start, end);
             let content_span = Span::new(content_offset, end);

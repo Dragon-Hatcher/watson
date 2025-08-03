@@ -1,5 +1,8 @@
 use crate::parse::location::SourceId;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 /// Stores the text of all the loaded source files.
 pub struct SourceCache {
@@ -15,8 +18,16 @@ impl SourceCache {
         }
     }
 
+    pub fn root_dir(&self) -> &Path {
+        &self.root_dir
+    }
+
+    pub fn has_source(&mut self, id: SourceId) -> bool {
+        self.sources.contains_key(&id)
+    }
+
     pub fn add(&mut self, id: SourceId, text: String) {
-        assert!(!self.sources.contains_key(&id));
+        assert!(!self.has_source(id));
         self.sources.insert(id, text);
     }
 

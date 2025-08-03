@@ -7,6 +7,11 @@ macro_rules! str_const {
     };
 }
 
+// Keywords:
 str_const! {
     MODULE = "module";
+}
+
+str_const! {
+    FILE_EXTENSION = "wats";
 }

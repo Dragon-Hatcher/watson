@@ -16,7 +16,7 @@ syntax syntax.implication
 end
 
 syntax syntax.existence
-    sentence ::= "∃" binding "," sentence
+    sentence ::= "∃" @binding "," sentence
 end
 
 syntax syntax.false
@@ -24,15 +24,15 @@ syntax syntax.false
 end
 
 syntax syntax.variable
-    term ::= variable
+    term ::= @variable
 end
 
 syntax syntax.epsilon
-    term ::= "ε" binding "," sentence
+    term ::= "ε" @binding "," sentence
 end
 
 macro command.notation
-    command ::= "notation":kw $n:name $p:pattern "=>" $s:sentence
+    command ::= @kw "notation" $n:name $p:pattern "=>" $s:sentence
              => macro $n sentence ::= $p => $s end
 end
 

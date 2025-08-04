@@ -8,10 +8,10 @@ mod source_cache;
 use crate::{
     diagnostics::{DiagManager, WResult},
     parse::{
-        builtin::{COMMAND_CAT, add_builtin_syntax, elaborate_command},
+        builtin::{COMMAND_CAT, add_builtin_syntax, add_macro_match_syntax, elaborate_command},
         earley::{find_start_keywords, parse_category, parse_name},
         location::SourceOffset,
-        parse_tree::{ParseRule, ParseRuleId, ParseTree},
+        parse_tree::{ParseRule, ParseRuleId, ParseTree, SyntaxCategoryId},
     },
     semant::formal_syntax::{FormalSyntax, FormalSyntaxCatId},
     strings,
@@ -23,6 +23,7 @@ use ustr::Ustr;
 
 pub fn parse(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager) {
     let mut progress = SourceParseProgress {
+        categories: HashMap::new(),
         rules: HashMap::new(),
         command_starters: HashSet::new(),
         formal_syntax: FormalSyntax::new(),
@@ -34,7 +35,11 @@ pub fn parse(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager)
         .formal_syntax
         .add_cat(FormalSyntaxCatId::new(*strings::SENTENCE));
 
-    add_builtin_syntax(&mut progress.rules);
+    add_builtin_syntax(&mut progress);
+    for (_name, cat) in progress.categories.clone() {
+        add_macro_match_syntax(cat, &mut progress);
+    }
+
     progress.command_starters = find_start_keywords(*COMMAND_CAT, &progress.rules);
     progress.next_sources.push_back(root);
 
@@ -45,6 +50,9 @@ pub fn parse(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager)
 }
 
 struct SourceParseProgress {
+    /// The grammar categories from our grammar so far.
+    categories: HashMap<Ustr, SyntaxCategoryId>,
+
     /// What parsing rules have been declared?
     rules: HashMap<ParseRuleId, ParseRule>,
 
@@ -61,6 +69,13 @@ struct SourceParseProgress {
 
     /// The sources that we are going to parse and elaborate next.
     next_sources: VecDeque<SourceId>,
+}
+
+impl SourceParseProgress {
+    fn add_builtin_rule(&mut self, id: ParseRuleId, rule: ParseRule) {
+        self.categories.insert(rule.cat.name(), rule.cat);
+        self.rules.insert(id, rule);
+    }
 }
 
 #[allow(unused)]
@@ -81,7 +96,7 @@ fn parse_source(
             && progress.command_starters.contains(&kw)
         {
             // Now we can force parsing of a command at this spot in the source.
-            let command = parse_category(text, loc, *COMMAND_CAT, &progress.rules);
+            let command = parse_category(text, loc, *COMMAND_CAT, &progress.rules, diags);
 
             let mut skipped = false;
             // Now we can skip the command we just parsed. If we didn't manage
@@ -94,10 +109,10 @@ fn parse_source(
                 let _: WResult<()> = diags.err_parse_failure();
             }
 
-            // Elaborate the command in our current context.
-            elaborate_command(command, progress, sources, diags);
-
             if skipped {
+                // Elaborate the command in our current context.
+                elaborate_command(command, progress, sources, diags);
+
                 continue;
             }
         }

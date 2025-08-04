@@ -13,11 +13,13 @@ str_const! {
     MODULE = "module";
     SYNTAX_CAT = "syntax_category";
     SYNTAX = "syntax";
+    MACRO = "macro";
 }
 
 // Symbols:
 str_const! {
     BNF_REPLACE = "::=";
+    FAT_ARROW = "=>";
 }
 
 str_const! {

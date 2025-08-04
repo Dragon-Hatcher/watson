@@ -98,14 +98,21 @@ pub struct ParseNode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SyntaxCategoryId {
     Builtin(Ustr),
-    UserDef(),
+    FormalLang(Ustr),
 }
 
 impl SyntaxCategoryId {
     pub fn is_builtin(&self) -> bool {
         match self {
             SyntaxCategoryId::Builtin(_) => true,
-            SyntaxCategoryId::UserDef() => false,
+            SyntaxCategoryId::FormalLang(_) => false,
+        }
+    }
+
+    pub fn name(&self) -> Ustr {
+        match self {
+            SyntaxCategoryId::Builtin(name) => *name,
+            SyntaxCategoryId::FormalLang(name) => *name,
         }
     }
 }

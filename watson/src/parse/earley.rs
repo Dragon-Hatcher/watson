@@ -1,8 +1,11 @@
-use crate::parse::{
-    Location, Span,
-    parse_tree::{
-        AtomPattern, ParseAtom, ParseAtomKind, ParseNode, ParseRule, ParseRuleId, ParseTree,
-        PatternPart, SyntaxCategoryId,
+use crate::{
+    diagnostics::{DiagManager, WResult},
+    parse::{
+        Location, Span,
+        parse_tree::{
+            AtomPattern, ParseAtom, ParseAtomKind, ParseNode, ParseRule, ParseRuleId, ParseTree,
+            PatternPart, SyntaxCategoryId,
+        },
     },
 };
 use std::{
@@ -40,9 +43,17 @@ pub fn parse_category(
     start_offset: Location,
     category: SyntaxCategoryId,
     rules: &HashMap<ParseRuleId, ParseRule>,
+    diags: &mut DiagManager,
 ) -> ParseTree {
     let chart = build_chart(text, start_offset, category, rules);
     let (span, trimmed_chart) = trim_chart(start_offset, category, rules, &chart);
+
+    if !trimmed_chart.contains_key(&(start_offset, category)) {
+        // The parse failed.
+        let _: WResult<()> = diags.err_parse_failure();
+        return ParseTree::Missing(Span::new(start_offset, start_offset));
+    }
+
     read_chart(text, span, category, rules, &trimmed_chart)
 }
 

@@ -4,7 +4,9 @@ use crate::{
     parse::{
         SourceCache, SourceId, SourceParseProgress,
         elaborator::reduce_to_builtin,
-        parse_tree::{AtomPattern, ParseRule, ParseRuleId, ParseTree, PatternPart},
+        parse_tree::{
+            AtomPattern, ParseRule, ParseRuleId, ParseTree, PatternPart, SyntaxCategoryId,
+        },
     },
     rule_id,
     semant::formal_syntax::{
@@ -39,7 +41,7 @@ pub fn elaborate_command(
         elaborate_syntax(command, progress, diags)?;
         Ok(())
     } else {
-        unreachable!("No elaborator for parse tree.")
+        unreachable!("No elaborator for parse tree {:?}.", command);
     }
 }
 
@@ -213,9 +215,19 @@ fn elaborate_syntax_pat(
     }
 }
 
-pub fn add_builtin_syntax(rules: &mut HashMap<ParseRuleId, ParseRule>) {
+rule_id!(MACRO_RULE = "macro");
+
+fn elaborate_macro() {
+    todo!()
+}
+
+category_id!(MACRO_PAT_CAT = "macro_pat");
+
+fn elaborate_macro_pat() -> WResult<Vec<PatternPart>> {}
+
+pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
     let mut insert = |cat, rule, pattern| {
-        rules.insert(
+        progress.add_builtin_rule(
             rule,
             ParseRule {
                 id: rule,
@@ -281,4 +293,41 @@ pub fn add_builtin_syntax(rules: &mut HashMap<ParseRuleId, ParseRule>) {
 
     insert(*SYNTAX_PAT, *SYNTAX_PAT_NAME, vec![name()]);
     insert(*SYNTAX_PAT, *SYNTAX_PAT_STR, vec![str()]);
+}
+
+pub fn add_macro_match_syntax(match_cat: SyntaxCategoryId, progress: &mut SourceParseProgress) {
+    let mut insert = |cat, rule, pattern| {
+        progress.add_builtin_rule(
+            rule,
+            ParseRule {
+                id: rule,
+                cat,
+                pattern,
+            },
+        )
+    };
+
+    use AtomPattern as AP;
+    use PatternPart as PP;
+
+    let cat = |c| PP::Category(c);
+    let kw = |s| PP::Atom(AP::Kw(s));
+    let lit = |s| PP::Atom(AP::Lit(s));
+    let name = || PP::Atom(AP::Name);
+
+    // command ::= "macro" name $category:name "::=" macro_pat "=>" $category "end"
+
+    insert(
+        *COMMAND_CAT,
+        *MACRO_RULE,
+        vec![
+            kw(*strings::MACRO),
+            name(),
+            kw(match_cat.name()),
+            lit(*strings::BNF_REPLACE),
+            lit(*strings::FAT_ARROW),
+            cat(match_cat),
+            kw(*strings::END),
+        ],
+    );
 }

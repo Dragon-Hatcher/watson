@@ -13,6 +13,7 @@ use crate::{
         location::SourceOffset,
         parse_tree::{ParseRule, ParseRuleId, ParseTree},
     },
+    semant::formal_syntax::{FormalSyntax, FormalSyntaxCatId},
     strings,
 };
 pub use location::{Location, SourceId, Span};
@@ -24,12 +25,14 @@ pub fn parse(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager)
     let mut progress = SourceParseProgress {
         rules: HashMap::new(),
         command_starters: HashSet::new(),
-        formal_syntax_categories: HashSet::new(),
+        formal_syntax: FormalSyntax::new(),
         commands: Vec::new(),
         next_sources: VecDeque::new(),
     };
 
-    progress.formal_syntax_categories.insert(*strings::SENTENCE);
+    progress
+        .formal_syntax
+        .add_cat(FormalSyntaxCatId::new(*strings::SENTENCE));
 
     add_builtin_syntax(&mut progress.rules);
     progress.command_starters = find_start_keywords(*COMMAND_CAT, &progress.rules);
@@ -48,8 +51,8 @@ struct SourceParseProgress {
     /// Given the current parsing rules, what keywords can start a command?
     command_starters: HashSet<Ustr>,
 
-    /// The syntactic categories of the formal language.
-    formal_syntax_categories: HashSet<Ustr>,
+    /// The syntax of the formal language.
+    formal_syntax: FormalSyntax,
 
     /// The commands that have been recovered from the source so far. Note that
     /// these have already been elaborated so nothing more needs to be done with
@@ -80,8 +83,6 @@ fn parse_source(
             // Now we can force parsing of a command at this spot in the source.
             let command = parse_category(text, loc, *COMMAND_CAT, &progress.rules);
 
-            dbg!(&command);
-
             let mut skipped = false;
             // Now we can skip the command we just parsed. If we didn't manage
             // to parse anything then we skip to the next line below.
@@ -94,7 +95,7 @@ fn parse_source(
             }
 
             // Elaborate the command in our current context.
-            let command = elaborate_command(command, progress, sources, diags);
+            elaborate_command(command, progress, sources, diags);
 
             if skipped {
                 continue;

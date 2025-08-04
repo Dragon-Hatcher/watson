@@ -75,7 +75,12 @@ impl Location {
 
 impl Debug for Location {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Location({}:{})", self.source.0, self.offset.byte_offset())
+        write!(
+            f,
+            "Location({}:{})",
+            self.source.0,
+            self.offset.byte_offset()
+        )
     }
 }
 
@@ -91,10 +96,7 @@ impl Span {
     pub fn new(start: Location, end: Location) -> Self {
         assert_eq!(start.source(), end.source());
 
-        Self {
-            start,
-            end,
-        }
+        Self { start, end }
     }
 
     pub fn source(&self) -> SourceId {
@@ -112,6 +114,12 @@ impl Span {
 
 impl Debug for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Span({}:{}-{})", self.source().0, self.start.byte_offset(), self.end.byte_offset())
+        write!(
+            f,
+            "Span({}:{}-{})",
+            self.source().0,
+            self.start.byte_offset(),
+            self.end.byte_offset()
+        )
     }
 }

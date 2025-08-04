@@ -6,29 +6,38 @@ use crate::{
         elaborator::reduce_to_builtin,
         parse_tree::{AtomPattern, ParseRule, ParseRuleId, ParseTree, PatternPart},
     },
-    rule_id, strings,
+    rule_id,
+    semant::formal_syntax::{
+        FormalSyntaxCatId, FormalSyntaxPattern, FormalSyntaxPatternPart, FormalSyntaxRuleId,
+    },
+    strings,
 };
-use std::{collections::HashMap, fs};
+use std::{
+    collections::{HashMap, VecDeque},
+    fs,
+};
 
 category_id!(COMMAND_CAT = "command");
-rule_id!(MACRO_RULE = "macro");
 
 pub fn elaborate_command(
     command: ParseTree,
     progress: &mut SourceParseProgress,
     sources: &mut SourceCache,
     diags: &mut DiagManager,
-) -> WResult<ParseTree> {
+) -> WResult<()> {
     let command = reduce_to_builtin(command, diags)?;
 
     if command.as_rule(*MODULE_RULE).is_some() {
-        let new_source = elaborate_module(&command, sources, diags)?;
+        let new_source = elaborate_module(command, sources, diags)?;
         progress.next_sources.push_back(new_source);
 
-        Ok(command)
+        Ok(())
     } else if command.as_rule(*SYNTAX_CAT_RULE).is_some() {
-        elaborate_syntax_cat(&command, progress, diags)?;
-        Ok(command)
+        elaborate_syntax_cat(command, progress, diags)?;
+        Ok(())
+    } else if command.as_rule(*SYNTAX_RULE).is_some() {
+        elaborate_syntax(command, progress, diags)?;
+        Ok(())
     } else {
         unreachable!("No elaborator for parse tree.")
     }
@@ -37,7 +46,7 @@ pub fn elaborate_command(
 rule_id!(MODULE_RULE = "module");
 
 fn elaborate_module(
-    module: &ParseTree,
+    module: ParseTree,
     sources: &mut SourceCache,
     diags: &mut DiagManager,
 ) -> WResult<SourceId> {
@@ -77,7 +86,7 @@ fn elaborate_module(
 rule_id!(SYNTAX_CAT_RULE = "syntax_cat");
 
 fn elaborate_syntax_cat(
-    command: &ParseTree,
+    command: ParseTree,
     progress: &mut SourceParseProgress,
     diags: &mut DiagManager,
 ) -> WResult<()> {
@@ -88,28 +97,121 @@ fn elaborate_syntax_cat(
     };
 
     let _ = assert!(syntax_cat_kw.is_kw(*strings::SYNTAX_CAT));
-    let name_str = name.as_name().unwrap();
+    let cat = FormalSyntaxCatId::new(name.as_name().unwrap());
 
-    if progress.formal_syntax_categories.contains(&name_str) {
+    if progress.formal_syntax.has_cat(cat) {
         return diags.err_duplicate_formal_syntax_cat();
     }
 
-    progress.formal_syntax_categories.insert(name_str);
+    progress.formal_syntax.add_cat(cat);
 
     Ok(())
 }
 
 rule_id!(SYNTAX_RULE = "syntax");
 
+fn elaborate_syntax(
+    command: ParseTree,
+    progress: &mut SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<()> {
+    // syntax ::= "syntax" name $category:name "::=" syntax_pat "end"
+
+    let Some([syntax_kw, name, cat, bnf_sym, pat_list, end_kw]) = command.as_rule(*SYNTAX_RULE)
+    else {
+        panic!("Failed to match builtin rule.");
+    };
+
+    let _ = assert!(syntax_kw.is_kw(*strings::SYNTAX));
+    let rule = FormalSyntaxRuleId::new(name.as_name().unwrap());
+    let cat = FormalSyntaxCatId::new(cat.as_name().unwrap());
+    let _ = assert!(bnf_sym.is_lit(*strings::BNF_REPLACE));
+    let pat = elaborate_syntax_pat_list(pat_list.clone(), progress, diags);
+    let _ = assert!(end_kw.is_kw(*strings::END));
+
+    if progress.formal_syntax.has_rule(rule) {
+        return diags.err_duplicate_formal_syntax_rule();
+    }
+
+    if !progress.formal_syntax.has_cat(cat) {
+        return diags.err_unknown_formal_syntax_cat();
+    }
+
+    let pat = pat?;
+
+    progress.formal_syntax.add_rule(rule, cat, pat);
+
+    Ok(())
+}
+
 category_id!(SYNTAX_PAT_LIST = "syntax_pat_list");
 rule_id!(SYNTAX_PAT_LIST_ONE = "syntax_pat_list_one");
 rule_id!(SYNTAX_PAT_LIST_MORE = "syntax_pat_list_more");
+
+fn elaborate_syntax_pat_list(
+    mut pat_list: ParseTree,
+    progress: &mut SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<FormalSyntaxPattern> {
+    // syntax_pat_list ::= syntax_pat
+    //                   | syntax_pat syntax_pat_list
+
+    let mut parts = Vec::new();
+
+    loop {
+        let builtin_pat_list = reduce_to_builtin(pat_list, diags)?;
+
+        if let Some([part]) = builtin_pat_list.as_rule(*SYNTAX_PAT_LIST_ONE) {
+            let part = elaborate_syntax_pat(part, progress, diags)?;
+            parts.push(part);
+            break;
+        } else if let Some([part, rest]) = builtin_pat_list.as_rule(*SYNTAX_PAT_LIST_MORE) {
+            let part = elaborate_syntax_pat(part, progress, diags)?;
+            parts.push(part);
+            pat_list = rest.clone();
+        } else {
+            panic!("Failed to match builtin rule.");
+        }
+    }
+
+    Ok(FormalSyntaxPattern::new(parts))
+}
 
 category_id!(SYNTAX_PAT = "syntax_pat");
 rule_id!(SYNTAX_PAT_NAME = "syntax_pat_name");
 rule_id!(SYNTAX_PAT_STR = "syntax_pat_str");
 
-fn elaborate_syntax() {}
+fn elaborate_syntax_pat(
+    pat: &ParseTree,
+    progress: &mut SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<FormalSyntaxPatternPart> {
+    // syntax_pat ::= name | str
+
+    let pat = reduce_to_builtin(pat.clone(), diags)?;
+
+    if let Some([name]) = pat.as_rule(*SYNTAX_PAT_NAME) {
+        let name = name.as_name().unwrap();
+
+        if name == *strings::BINDING {
+            Ok(FormalSyntaxPatternPart::Binding)
+        } else if name == *strings::VARIABLE {
+            Ok(FormalSyntaxPatternPart::Variable)
+        } else {
+            let cat = FormalSyntaxCatId::new(name);
+            if !progress.formal_syntax.has_cat(cat) {
+                return diags.err_unknown_formal_syntax_cat();
+            }
+
+            Ok(FormalSyntaxPatternPart::Cat(cat))
+        }
+    } else if let Some([str]) = pat.as_rule(*SYNTAX_PAT_STR) {
+        let str = str.as_str().unwrap();
+        Ok(FormalSyntaxPatternPart::Lit(str))
+    } else {
+        panic!("Failed to match builtin rule.");
+    }
+}
 
 pub fn add_builtin_syntax(rules: &mut HashMap<ParseRuleId, ParseRule>) {
     let mut insert = |cat, rule, pattern| {
@@ -161,11 +263,22 @@ pub fn add_builtin_syntax(rules: &mut HashMap<ParseRuleId, ParseRule>) {
         ],
     );
 
-    // syntax_pat_list ::= syntax_pat | syntax_pat_list syntax_pat
-    insert(*SYNTAX_PAT_LIST, *SYNTAX_PAT_LIST_ONE, vec![cat(*SYNTAX_PAT)]);
-    insert(*SYNTAX_PAT_LIST, *SYNTAX_PAT_LIST_MORE, vec![cat(*SYNTAX_PAT), cat(*SYNTAX_PAT_LIST)]);
+    // syntax_pat_list ::= syntax_pat
+    //                   | syntax_pat syntax_pat_list
+
+    insert(
+        *SYNTAX_PAT_LIST,
+        *SYNTAX_PAT_LIST_ONE,
+        vec![cat(*SYNTAX_PAT)],
+    );
+    insert(
+        *SYNTAX_PAT_LIST,
+        *SYNTAX_PAT_LIST_MORE,
+        vec![cat(*SYNTAX_PAT), cat(*SYNTAX_PAT_LIST)],
+    );
 
     // syntax_pat ::= name | str
+
     insert(*SYNTAX_PAT, *SYNTAX_PAT_NAME, vec![name()]);
     insert(*SYNTAX_PAT, *SYNTAX_PAT_STR, vec![str()]);
 }

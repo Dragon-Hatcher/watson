@@ -7,6 +7,7 @@ use ustr::Ustr;
 
 mod diagnostics;
 mod parse;
+mod semant;
 mod strings;
 
 fn main() {

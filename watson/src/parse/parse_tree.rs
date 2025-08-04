@@ -52,12 +52,26 @@ impl ParseTree {
         self.is_atom_kind(ParseAtomKind::Kw(str))
     }
 
+    pub fn is_lit(&self, str: Ustr) -> bool {
+        self.is_atom_kind(ParseAtomKind::Lit(str))
+    }
+
     pub fn as_name(&self) -> Option<Ustr> {
         match self {
             ParseTree::Atom(ParseAtom {
                 kind: ParseAtomKind::Name(name),
                 ..
             }) => Some(*name),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(&self) -> Option<Ustr> {
+        match self {
+            ParseTree::Atom(ParseAtom {
+                kind: ParseAtomKind::Str(text),
+                ..
+            }) => Some(*text),
             _ => None,
         }
     }
@@ -134,5 +148,5 @@ pub enum AtomPattern {
     Lit(Ustr),
     Kw(Ustr),
     Name,
-    Str
+    Str,
 }

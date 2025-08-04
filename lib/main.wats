@@ -16,7 +16,7 @@ syntax syntax.implication
 end
 
 syntax syntax.existence
-    sentence ::= ∃ binding "," sentence
+    sentence ::= "∃" binding "," sentence
 end
 
 syntax syntax.false
@@ -45,12 +45,24 @@ notation sentence.parens
     "(" $p:sentence ")" => $p
 end
 
+definition term.parens
+    "(" $t:term ")" => $t
+end
+
 notation notation.neg
     "¬" $t:term => $t → ⊥
 end
 
-definition term.parens
-    "(" $t:term ")" => $t
+notation notation.or
+    $p:sentence "∨" $q:sentence => ¬$p → $q
+end
+
+notation notation.and
+    $p:sentence "∧" $q:sentence => ¬(¬$p ∨ ¬$q)
+end
+
+notation notation.iff
+    $p:sentence "↔" $q:sentence => ($p → $q) ∧ ($q → $p)
 end
 
 macro template.variable_shorthand

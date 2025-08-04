@@ -237,7 +237,7 @@ fn read_chart(
         if let Some(last) = search_stack.last()
             && last.end().byte_offset() > full_span.end().byte_offset()
         {
-            // This match is too long
+            // This match is too long.
             return None;
         }
 

@@ -1,9 +1,9 @@
 mod builtin;
 mod earley;
 mod elaborator;
-mod location;
-mod parse_tree;
-mod source_cache;
+pub mod location;
+pub mod parse_tree;
+pub mod source_cache;
 
 use crate::{
     diagnostics::{DiagManager, WResult},
@@ -44,7 +44,6 @@ pub fn parse(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager)
     progress.next_sources.push_back(root);
 
     while let Some(next) = progress.next_sources.pop_front() {
-        dbg!(next);
         parse_source(next, &mut progress, sources, diags);
     }
 }

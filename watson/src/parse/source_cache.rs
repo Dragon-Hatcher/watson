@@ -1,4 +1,4 @@
-use crate::parse::location::SourceId;
+use crate::parse::{Span, location::SourceId};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -7,7 +7,12 @@ use std::{
 /// Stores the text of all the loaded source files.
 pub struct SourceCache {
     root_dir: PathBuf,
-    sources: HashMap<SourceId, String>,
+    sources: HashMap<SourceId, SourceInfo>,
+}
+
+struct SourceInfo {
+    text: String,
+    decl: Option<Span>,
 }
 
 impl SourceCache {
@@ -26,9 +31,9 @@ impl SourceCache {
         self.sources.contains_key(&id)
     }
 
-    pub fn add(&mut self, id: SourceId, text: String) {
+    pub fn add(&mut self, id: SourceId, text: String, decl: Option<Span>) {
         assert!(!self.has_source(id));
-        self.sources.insert(id, text);
+        self.sources.insert(id, SourceInfo { text, decl });
     }
 
     pub fn source_keys(&self) -> impl Iterator<Item = SourceId> {
@@ -36,6 +41,10 @@ impl SourceCache {
     }
 
     pub fn get_text(&self, id: SourceId) -> &str {
-        &self.sources[&id]
+        &self.sources[&id].text
+    }
+
+    pub fn get_decl(&self, id: SourceId) -> Option<Span> {
+        self.sources[&id].decl
     }
 }

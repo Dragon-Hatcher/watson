@@ -14,10 +14,7 @@ use crate::{
     },
     strings,
 };
-use std::{
-    collections::{HashMap, VecDeque},
-    fs,
-};
+use std::fs;
 
 category_id!(COMMAND_CAT = "command");
 
@@ -73,14 +70,14 @@ fn elaborate_module(
 
     // It isn't allowed to load the same file twice.
     if sources.has_source(source_id) {
-        return diags.err_source_redeclaration();
+        return diags.err_module_redeclaration(source_id, &module, sources.get_decl(source_id));
     }
 
-    let Ok(source_text) = fs::read_to_string(path) else {
-        return diags.err_non_existent_file();
+    let Ok(source_text) = fs::read_to_string(&path) else {
+        return diags.err_non_existent_file(&path, &module);
     };
 
-    sources.add(source_id, source_text);
+    sources.add(source_id, source_text, Some(module.span()));
 
     Ok(source_id)
 }
@@ -221,9 +218,15 @@ fn elaborate_macro() {
     todo!()
 }
 
+category_id!(MACRO_PAT_LIST_CAT = "macro_pat");
+rule_id!(MACRO_PAT_LIST_ONE = "macro_pat_list_one");
+rule_id!(MACRO_PAT_LIST_MORE = "macro_pat_list_more");
+
 category_id!(MACRO_PAT_CAT = "macro_pat");
 
-fn elaborate_macro_pat() -> WResult<Vec<PatternPart>> {}
+fn elaborate_macro_pat() -> WResult<Vec<PatternPart>> {
+    todo!()
+}
 
 pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
     let mut insert = |cat, rule, pattern| {
@@ -293,6 +296,22 @@ pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
 
     insert(*SYNTAX_PAT, *SYNTAX_PAT_NAME, vec![name()]);
     insert(*SYNTAX_PAT, *SYNTAX_PAT_STR, vec![str()]);
+
+    // macro_pat_list ::= macro_pat
+    //                  | macro_pat macro_pat_list
+
+    insert(
+        *MACRO_PAT_LIST_CAT,
+        *MACRO_PAT_LIST_ONE,
+        vec![cat(*MACRO_PAT_CAT)],
+    );
+    insert(
+        *MACRO_PAT_LIST_CAT,
+        *MACRO_PAT_LIST_MORE,
+        vec![cat(*MACRO_PAT_CAT), cat(*MACRO_PAT_CAT)],
+    );
+
+    // macro_pat ::=
 }
 
 pub fn add_macro_match_syntax(match_cat: SyntaxCategoryId, progress: &mut SourceParseProgress) {
@@ -315,7 +334,7 @@ pub fn add_macro_match_syntax(match_cat: SyntaxCategoryId, progress: &mut Source
     let lit = |s| PP::Atom(AP::Lit(s));
     let name = || PP::Atom(AP::Name);
 
-    // command ::= "macro" name $category:name "::=" macro_pat "=>" $category "end"
+    // command ::= "macro" name $category:name "::=" macro_pat_list "=>" $category "end"
 
     insert(
         *COMMAND_CAT,
@@ -325,6 +344,7 @@ pub fn add_macro_match_syntax(match_cat: SyntaxCategoryId, progress: &mut Source
             name(),
             kw(match_cat.name()),
             lit(*strings::BNF_REPLACE),
+            cat(*MACRO_PAT_LIST_CAT),
             lit(*strings::FAT_ARROW),
             cat(match_cat),
             kw(*strings::END),

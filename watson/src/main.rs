@@ -20,7 +20,7 @@ fn main() {
     compile(root_source, &mut sources, &mut diags);
 
     if diags.has_errors() {
-        diags.print_errors();
+        diags.print_errors(&sources);
         exit(1);
     }
 }
@@ -37,7 +37,7 @@ fn make_source_cache(root_file: &Path) -> WResult<(SourceCache, SourceId)> {
         return Err(());
     };
 
-    sources.add(source_id, text);
+    sources.add(source_id, text, None);
 
     Ok((sources, source_id))
 }

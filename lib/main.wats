@@ -32,12 +32,12 @@ syntax syntax.epsilon
 end
 
 macro command.notation
-    command ::= @kw "notation" $n:name $p:pattern "=>" $s:sentence
+    command ::= @kw"notation" $n:@name $p:macro_pat "=>" $s:sentence
              => macro $n sentence ::= $p => $s end
 end
 
 macro command.definition
-    command ::= "definition":kw $n:name $p:pattern "=>" $t:term
+    command ::= @kw"definition" $n:@name $p:macro_pat "=>" $t:term
              => macro $n term ::= $p => $t end
 end
 

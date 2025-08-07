@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Range};
 
 use ustr::Ustr;
 
@@ -109,6 +109,10 @@ impl Span {
 
     pub fn end(&self) -> Location {
         self.end
+    }
+
+    pub fn bytes(&self) -> Range<usize> {
+        self.start().byte_offset()..self.end().byte_offset()
     }
 }
 

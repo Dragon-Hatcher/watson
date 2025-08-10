@@ -1,6 +1,9 @@
-use std::path::Path;
+use std::{fmt::format, path::Path};
 
-use crate::parse::{SourceCache, SourceId, Span, parse_tree::ParseTree};
+use crate::parse::{
+    Location, SourceCache, SourceId, Span,
+    parse_tree::{AtomPattern, ParseTree},
+};
 use annotate_snippets::{Level, Message, Renderer, Snippet};
 use itertools::Itertools;
 use ustr::Ustr;
@@ -21,6 +24,7 @@ impl DiagManager {
         for diag in &self.diags {
             let msg = diag.to_message(sources);
             println!("{}", renderer.render(msg));
+            println!();
         }
     }
 
@@ -92,15 +96,6 @@ impl Diagnostic {
         }
 
         msg
-
-        // let source = sources.get_text(self.span.source());
-
-        // Level::Error.title(self.title).snippet(
-        //     Snippet::source(source)
-        //         .origin(self.span.source().path().as_str())
-        //         .fold(true)
-        //         .annotation(Level::Error.span(self.span.bytes())),
-        // )
     }
 }
 
@@ -114,11 +109,11 @@ impl DiagManager {
     pub fn err_module_redeclaration<T>(
         &mut self,
         source_id: SourceId,
-        second_decl: &ParseTree,
+        second_decl: Span,
         first_decl: Option<Span>,
     ) -> WResult<T> {
         let mut diag = Diagnostic::new(&format!("redeclaration of module `{}`", source_id.path()))
-            .with_error("module declared again here", second_decl.span());
+            .with_error("module declared again here", second_decl);
 
         if let Some(first_decl) = first_decl {
             diag = diag.with_info("module first declared here", first_decl);
@@ -128,16 +123,9 @@ impl DiagManager {
         Err(())
     }
 
-    pub fn err_non_existent_file<T>(
-        &mut self,
-        path: &Path,
-        decl: &ParseTree,
-    ) -> WResult<T> {
-        let diag = Diagnostic::new(&format!(
-            "source file `{:?}` does not exist",
-            path
-        ))
-        .with_error("", decl.span());
+    pub fn err_non_existent_file<T>(&mut self, path: &Path, decl: &ParseTree) -> WResult<T> {
+        let diag = Diagnostic::new(&format!("source file `{:?}` does not exist", path))
+            .with_error("", decl.span());
 
         self.add_diag(diag);
         Err(())
@@ -150,8 +138,40 @@ impl DiagManager {
         Err(())
     }
 
-    pub fn err_parse_failure<T>(&mut self) -> WResult<T> {
-        let diag = Diagnostic::new("err_parse_failure");
+    pub fn err_parse_failure<T>(
+        &mut self,
+        location: Location,
+        possible_atoms: &[AtomPattern],
+    ) -> WResult<T> {
+        fn format_atom(atom: &AtomPattern) -> String {
+            match atom {
+                AtomPattern::Lit(lit) => format!("\"{}\"", lit),
+                AtomPattern::Kw(kw) => format!("\"{}\"", kw),
+                AtomPattern::Name => format!("a name"),
+                AtomPattern::Str => format!("a string literal"),
+                AtomPattern::MacroBinding => format!("a macro binding"),
+            }
+        }
+
+        let expected = if let [] = possible_atoms {
+            format!("what")
+        } else if let [atom] = possible_atoms {
+            format!("expected {}", format_atom(atom))
+        } else if let [atom1, atom2] = possible_atoms {
+            format!("expected {} or {}", format_atom(atom1), format_atom(atom2))
+        } else {
+            format!(
+                "expected {}, or {}",
+                possible_atoms[..possible_atoms.len() - 1]
+                    .iter()
+                    .map(format_atom)
+                    .join(", "),
+                format_atom(possible_atoms.last().unwrap())
+            )
+        };
+
+        let diag = Diagnostic::new("error while parsing command")
+            .with_error(&expected, Span::new(location, location));
 
         self.add_diag(diag);
         Err(())

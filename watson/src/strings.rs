@@ -14,18 +14,24 @@ str_const! {
     SYNTAX_CAT = "syntax_category";
     SYNTAX = "syntax";
     MACRO = "macro";
+    MACRO_RULE = "macro_rule";
 }
 
 // Symbols:
 str_const! {
     BNF_REPLACE = "::=";
     FAT_ARROW = "=>";
+    AT = "@";
+    DOLLAR = "$";
+    COLON = ":";
 }
 
 str_const! {
     SENTENCE = "sentence";
     BINDING = "binding";
     VARIABLE = "variable";
+    KW = "kw";
+    NAME = "name";
 }
 
 str_const! {

@@ -65,6 +65,10 @@ notation notation.iff
     $p:sentence "↔" $q:sentence => ($p → $q) ∧ ($q → $p)
 end
 
+notation notation.forall
+    "∀" $x:@name "," $p:sentence => ¬∃ $x, ¬$p
+end
+
 macro template.variable_shorthand
     template ::= "[" $n:name "]" => [$n:term]
 end

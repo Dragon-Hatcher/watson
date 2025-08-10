@@ -4,7 +4,7 @@ use ustr::Ustr;
 #[derive(Debug, Clone)]
 pub struct FormalSyntax {
     categories: HashMap<FormalSyntaxCatId, ()>,
-    rules: HashMap<FormalSyntaxRuleId, (FormalSyntaxCatId, FormalSyntaxPattern)>,
+    rules: HashMap<FormalSyntaxRuleId, FormalSyntaxRule>,
 }
 
 impl FormalSyntax {
@@ -27,31 +27,59 @@ impl FormalSyntax {
         self.rules.contains_key(&id)
     }
 
-    pub fn add_rule(
-        &mut self,
-        id: FormalSyntaxRuleId,
-        cat: FormalSyntaxCatId,
-        pattern: FormalSyntaxPattern,
-    ) {
-        self.rules.insert(id, (cat, pattern));
+    pub fn add_rule(&mut self, rule: FormalSyntaxRule) {
+        self.rules.insert(rule.id(), rule);
+    }
+
+    pub fn rules(&self) -> impl Iterator<Item = &FormalSyntaxRule> {
+        self.rules.values()
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FormalSyntaxCatId(Ustr);
 
 impl FormalSyntaxCatId {
     pub fn new(name: Ustr) -> Self {
         Self(name)
     }
+
+    pub fn name(&self) -> Ustr {
+        self.0
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct FormalSyntaxRuleId(Ustr);
 
 impl FormalSyntaxRuleId {
     pub fn new(name: Ustr) -> Self {
         Self(name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FormalSyntaxRule {
+    cat: FormalSyntaxCatId,
+    rule: FormalSyntaxRuleId,
+    pat: FormalSyntaxPattern,
+}
+
+impl FormalSyntaxRule {
+    pub fn new(cat: FormalSyntaxCatId, rule: FormalSyntaxRuleId, pat: FormalSyntaxPattern) -> Self {
+        Self { cat, rule, pat }
+    }
+
+    pub fn cat(&self) -> FormalSyntaxCatId {
+        self.cat
+    }
+
+    pub fn id(&self) -> FormalSyntaxRuleId {
+        self.rule
+    }
+
+    pub fn pat(&self) -> &FormalSyntaxPattern {
+        &self.pat
     }
 }
 
@@ -63,6 +91,10 @@ pub struct FormalSyntaxPattern {
 impl FormalSyntaxPattern {
     pub fn new(parts: Vec<FormalSyntaxPatternPart>) -> Self {
         Self { parts }
+    }
+
+    pub fn parts(&self) -> &[FormalSyntaxPatternPart] {
+        &self.parts
     }
 }
 

@@ -10,8 +10,9 @@ pub enum ElaborationError {
 
 pub fn reduce_to_builtin(tree: ParseTree, diags: &mut DiagManager) -> WResult<ParseTree> {
     let mut node = match tree {
-        ParseTree::Atom(_) | ParseTree::Missing(_) => return Ok(tree),
+        ParseTree::Atom(_) => return Ok(tree),
         ParseTree::Node(node) => node,
+        ParseTree::MacroBinding(_) => todo!(),
     };
 
     const MAX_DEPTH: usize = 128;

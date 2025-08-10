@@ -3,8 +3,8 @@ use crate::{
     parse::{
         Location, Span,
         parse_tree::{
-            AtomPattern, ParseAtom, ParseAtomKind, ParseNode, ParseRule, ParseRuleId, ParseTree,
-            PatternPart, SyntaxCategoryId,
+            AtomPattern, MacroBindingNode, ParseAtom, ParseAtomKind, ParseNode, ParseRule,
+            ParseRuleId, ParseTree, PatternPart, SyntaxCategoryId,
         },
     },
 };
@@ -44,17 +44,17 @@ pub fn parse_category(
     category: SyntaxCategoryId,
     rules: &HashMap<ParseRuleId, ParseRule>,
     diags: &mut DiagManager,
-) -> ParseTree {
+) -> Option<ParseTree> {
     let chart = build_chart(text, start_offset, category, rules);
     let (span, trimmed_chart) = trim_chart(start_offset, category, rules, &chart);
 
     if !trimmed_chart.contains_key(&(start_offset, category)) {
         // The parse failed.
-        let _: WResult<()> = diags.err_parse_failure();
-        return ParseTree::Missing(Span::new(start_offset, start_offset));
+        create_error(&chart, rules, text, diags);
+        return None;
     }
 
-    read_chart(text, span, category, rules, &trimmed_chart)
+    Some(read_chart(text, span, category, rules, &trimmed_chart))
 }
 
 fn build_chart(
@@ -89,7 +89,34 @@ fn build_chart(
         };
         let mut item_queue: VecDeque<EarleyItem> = items.iter().copied().collect();
 
+        let macro_binding = parse_atom_at_offset(text, current_position, AtomPattern::MacroBinding);
+
         while let Some(item) = item_queue.pop_front() {
+            if let Some(macro_binding) = macro_binding {
+                // There is a macro binding at the current position. We will use
+                // this to either advance an atom or fully complete a rule that
+                // hasn't been started yet.
+
+                let end_pos = macro_binding.full_span.end();
+                let entry = chart.entry(end_pos).or_default();
+
+                if item.pattern_pos == 0 {
+                    // Fully complete this rule.
+                    entry.insert(EarleyItem {
+                        pattern_pos: rules[&item.rule].pattern.len(),
+                        ..item
+                    });
+                    last_position = last_position.max(&end_pos);
+                }
+
+                if let Some(PatternPart::Atom(_)) = rules[&item.rule].pattern.get(item.pattern_pos)
+                {
+                    // Advance past this atom.
+                    entry.insert(item.advance());
+                    last_position = last_position.max(&end_pos);
+                }
+            }
+
             match rules[&item.rule].pattern.get(item.pattern_pos) {
                 Some(PatternPart::Atom(atom_pat)) => {
                     // Scan. We look for this atom at our current position.
@@ -146,6 +173,34 @@ fn build_chart(
     chart
 }
 
+fn create_error(
+    chart: &HashMap<Location, HashSet<EarleyItem>>,
+    rules: &HashMap<ParseRuleId, ParseRule>,
+    text: &str,
+    diags: &mut DiagManager,
+) {
+    // To find the error we want to find all the atoms that could have worked
+    // at the last matched position.
+
+    let last_pos = chart.keys().max_by_key(|l| l.byte_offset()).unwrap();
+    let items = &chart[last_pos];
+    let mut possible_atoms = HashSet::new();
+
+    for item in items {
+        let parts = &rules[&item.rule].pattern;
+        if let Some(PatternPart::Atom(atom)) = parts.get(item.pattern_pos) {
+            possible_atoms.insert(*atom);
+        }
+    }
+
+    // Sort the atoms so we get a consistent ordering for error messages.
+    let mut possible_atoms: Vec<_> = possible_atoms.into_iter().collect();
+    possible_atoms.sort();
+
+    let post_ws_pos = skip_ws_and_comments(text, *last_pos);
+    let _: WResult<()> = diags.err_parse_failure(post_ws_pos, &possible_atoms);
+}
+
 fn _debug_chart(
     chart: &HashMap<Location, HashSet<EarleyItem>>,
     rules: &HashMap<ParseRuleId, ParseRule>,
@@ -170,6 +225,7 @@ fn _debug_chart(
                     PatternPart::Atom(AtomPattern::Lit(lit)) => print!("\"{lit}\" "),
                     PatternPart::Atom(AtomPattern::Name) => print!("name "),
                     PatternPart::Atom(AtomPattern::Str) => print!("str "),
+                    PatternPart::Atom(AtomPattern::MacroBinding) => print!("macro_binding "),
                     PatternPart::Category(cat) => print!("{cat:?} "),
                 }
             }
@@ -271,12 +327,24 @@ fn read_chart(
                     search_stack.pop();
 
                     res
+                } else if let Some(macro_binding) =
+                    parse_atom_at_offset(text, at, AtomPattern::MacroBinding)
+                {
+                    search_stack.push(macro_binding.full_span);
+                    let res = find_path(text, full_span, search_stack, pattern, chart);
+                    search_stack.pop();
+
+                    res
                 } else {
                     None
                 }
             }
             PatternPart::Category(cat) => {
-                for (_, span) in &chart[&(at, cat)] {
+                let Some(spans) = &chart.get(&(at, cat)) else {
+                    return None;
+                };
+
+                for (_, span) in *spans {
                     search_stack.push(*span);
                     let res = find_path(text, full_span, search_stack, pattern, chart);
                     search_stack.pop();
@@ -293,20 +361,46 @@ fn read_chart(
 
     let mut search_stack: Vec<Span> = Vec::new();
 
-    let spans = find_path(
+    let Some(spans) = find_path(
         text,
         span,
         &mut search_stack,
         &best_choice_rule.pattern,
         chart,
-    )
-    .expect("Recognizer must produce valid parse.");
+    ) else {
+        // If we didn't find a match another option is must be that there was a
+        // macro binding at this position. Check that now.
+        let macro_binding = parse_atom_at_offset(text, span.start(), AtomPattern::MacroBinding)
+            .expect("Recognizer must produce a valid parse.");
+        let name = match macro_binding.kind {
+            ParseAtomKind::MacroBinding(name) => name,
+            _ => unreachable!(),
+        };
+
+        return ParseTree::MacroBinding(MacroBindingNode { name, span });
+    };
 
     let mut children = Vec::new();
     for (span, pat) in spans.into_iter().zip(best_choice_rule.pattern.iter()) {
         let child = match pat {
             PatternPart::Atom(atom_pat) => {
-                ParseTree::Atom(parse_atom_at_offset(text, span.start(), *atom_pat).unwrap())
+                if let Some(atom) = parse_atom_at_offset(text, span.start(), *atom_pat) {
+                    ParseTree::Atom(atom)
+                } else if let Some(binding) =
+                    parse_atom_at_offset(text, span.start(), AtomPattern::MacroBinding)
+                {
+                    let ParseAtomKind::MacroBinding(name) = binding.kind else {
+                        unreachable!();
+                    };
+
+                    let node = MacroBindingNode {
+                        name,
+                        span: binding.full_span,
+                    };
+                    ParseTree::MacroBinding(node)
+                } else {
+                    unreachable!()
+                }
             }
             PatternPart::Category(cat) => read_chart(text, span, *cat, rules, chart),
         };
@@ -414,6 +508,21 @@ fn parse_atom_at_offset(text: &str, start: Location, atom: AtomPattern) -> Optio
             // No end quote so return false.
             None
         }
+        AtomPattern::MacroBinding => {
+            if text[content_offset.byte_offset()..].chars().next() != Some('$') {
+                return None;
+            }
+
+            let (name, end) = parse_name(text, content_offset.forward(1))?;
+
+            let full_span = Span::new(start, end);
+            let content_span = Span::new(content_offset, end);
+            Some(ParseAtom {
+                full_span,
+                content_span,
+                kind: ParseAtomKind::MacroBinding(name),
+            })
+        }
     }
 }
 
@@ -499,7 +608,10 @@ pub fn find_start_keywords(
                     AtomPattern::Kw(ustr) => {
                         set.insert(*ustr);
                     }
-                    AtomPattern::Name | AtomPattern::Lit(_) | AtomPattern::Str => todo!(),
+                    AtomPattern::Name
+                    | AtomPattern::Lit(_)
+                    | AtomPattern::Str
+                    | AtomPattern::MacroBinding => todo!(),
                 },
                 PatternPart::Category(cat) => {
                     search(*cat, start_keywords, rules, by_category);

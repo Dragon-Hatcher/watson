@@ -1,4 +1,7 @@
-use crate::parse::Span;
+use crate::{
+    parse::Span,
+    semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
+};
 use ustr::Ustr;
 
 #[macro_export]
@@ -25,7 +28,7 @@ macro_rules! rule_id {
 pub enum ParseTree {
     Atom(ParseAtom),
     Node(ParseNode),
-    Missing(Span),
+    MacroBinding(MacroBindingNode),
 }
 
 impl ParseTree {
@@ -33,12 +36,8 @@ impl ParseTree {
         match self {
             ParseTree::Atom(parse_atom) => parse_atom.full_span,
             ParseTree::Node(parse_node) => parse_node.span,
-            ParseTree::Missing(span) => *span,
+            ParseTree::MacroBinding(macro_binding) => macro_binding.span,
         }
-    }
-
-    pub fn is_missing(&self) -> bool {
-        matches!(self, ParseTree::Missing(_))
     }
 
     pub fn is_atom_kind(&self, kind: ParseAtomKind) -> bool {
@@ -95,10 +94,16 @@ pub struct ParseNode {
     pub span: Span,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MacroBindingNode {
+    pub name: Ustr,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SyntaxCategoryId {
     Builtin(Ustr),
-    FormalLang(Ustr),
+    FormalLang(FormalSyntaxCatId),
 }
 
 impl SyntaxCategoryId {
@@ -112,7 +117,7 @@ impl SyntaxCategoryId {
     pub fn name(&self) -> Ustr {
         match self {
             SyntaxCategoryId::Builtin(name) => *name,
-            SyntaxCategoryId::FormalLang(name) => *name,
+            SyntaxCategoryId::FormalLang(id) => id.name(),
         }
     }
 }
@@ -130,11 +135,14 @@ pub enum ParseAtomKind {
     Kw(Ustr),
     Name(Ustr),
     Str(Ustr),
+    MacroBinding(Ustr),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ParseRuleId {
     Builtin(Ustr),
+    Pattern(Ustr, SyntaxCategoryId),
+    FormalLang(FormalSyntaxRuleId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -150,10 +158,11 @@ pub enum PatternPart {
     Category(SyntaxCategoryId),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AtomPattern {
     Lit(Ustr),
     Kw(Ustr),
     Name,
     Str,
+    MacroBinding,
 }

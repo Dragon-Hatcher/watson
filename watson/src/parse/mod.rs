@@ -6,9 +6,12 @@ pub mod parse_tree;
 pub mod source_cache;
 
 use crate::{
-    diagnostics::{DiagManager, WResult},
+    diagnostics::DiagManager,
     parse::{
-        builtin::{COMMAND_CAT, add_builtin_syntax, add_macro_match_syntax, elaborate_command},
+        builtin::{
+            COMMAND_CAT, add_builtin_syntax, add_formal_lang_syntax, add_macro_match_syntax,
+            elaborate_command,
+        },
         earley::{find_start_keywords, parse_category, parse_name},
         location::SourceOffset,
         parse_tree::{ParseRule, ParseRuleId, ParseTree, SyntaxCategoryId},
@@ -16,6 +19,7 @@ use crate::{
     semant::formal_syntax::{FormalSyntax, FormalSyntaxCatId},
     strings,
 };
+use itertools::Itertools;
 pub use location::{Location, SourceId, Span};
 pub use source_cache::SourceCache;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -40,7 +44,7 @@ pub fn parse(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager)
         add_macro_match_syntax(cat, &mut progress);
     }
 
-    progress.command_starters = find_start_keywords(*COMMAND_CAT, &progress.rules);
+    progress.build_parser_state();
     progress.next_sources.push_back(root);
 
     while let Some(next) = progress.next_sources.pop_front() {
@@ -71,9 +75,21 @@ struct SourceParseProgress {
 }
 
 impl SourceParseProgress {
-    fn add_builtin_rule(&mut self, id: ParseRuleId, rule: ParseRule) {
+    fn add_rule(&mut self, rule: ParseRule) {
         self.categories.insert(rule.cat.name(), rule.cat);
-        self.rules.insert(id, rule);
+        self.rules.insert(rule.id, rule);
+    }
+
+    fn build_parser_state(&mut self) {
+        add_builtin_syntax(self);
+        add_formal_lang_syntax(self);
+
+        for (_name, cat) in self.categories.clone() {
+            // self.categories.insert(k, v)
+            add_macro_match_syntax(cat, self);
+        }
+
+        self.command_starters = find_start_keywords(*COMMAND_CAT, &self.rules);
     }
 }
 
@@ -97,20 +113,14 @@ fn parse_source(
             // Now we can force parsing of a command at this spot in the source.
             let command = parse_category(text, loc, *COMMAND_CAT, &progress.rules, diags);
 
-            let mut skipped = false;
             // Now we can skip the command we just parsed. If we didn't manage
             // to parse anything then we skip to the next line below.
-            if !command.is_missing() {
+            if let Some(command) = command {
                 loc = command.span().end();
-                skipped = true;
-            } else {
-                // We continue past the parse failure.
-                let _: WResult<()> = diags.err_parse_failure();
-            }
 
-            if skipped {
                 // Elaborate the command in our current context.
                 elaborate_command(command, progress, sources, diags);
+                progress.build_parser_state();
 
                 continue;
             }

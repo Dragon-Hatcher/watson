@@ -1,5 +1,5 @@
 use crate::{
-    parse::Span,
+    parse::{Span, macros::MacroId},
     semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
 };
 use ustr::Ustr;
@@ -84,6 +84,25 @@ impl ParseTree {
             None
         }
     }
+
+    pub fn as_rule_pat(&self, expected_name: Ustr) -> Option<&[ParseTree]> {
+        if let Self::Node(n) = self
+            && let ParseRuleId::Pattern(name, _) = n.rule
+            && name == expected_name
+        {
+            Some(&n.children)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_atom(&self) -> Option<&ParseAtom> {
+        if let Self::Atom(atom) = self {
+            Some(atom)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,7 +116,14 @@ pub struct ParseNode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MacroBindingNode {
     pub name: Ustr,
+    pub kind: MacroBindingKind,
     pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MacroBindingKind {
+    Atom(AtomPattern),
+    Cat(SyntaxCategoryId),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -107,13 +133,6 @@ pub enum SyntaxCategoryId {
 }
 
 impl SyntaxCategoryId {
-    pub fn is_builtin(&self) -> bool {
-        match self {
-            SyntaxCategoryId::Builtin(_) => true,
-            SyntaxCategoryId::FormalLang(_) => false,
-        }
-    }
-
     pub fn name(&self) -> Ustr {
         match self {
             SyntaxCategoryId::Builtin(name) => *name,
@@ -135,7 +154,6 @@ pub enum ParseAtomKind {
     Kw(Ustr),
     Name(Ustr),
     Str(Ustr),
-    MacroBinding(Ustr),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -143,6 +161,7 @@ pub enum ParseRuleId {
     Builtin(Ustr),
     Pattern(Ustr, SyntaxCategoryId),
     FormalLang(FormalSyntaxRuleId),
+    Macro(MacroId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,5 +183,4 @@ pub enum AtomPattern {
     Kw(Ustr),
     Name,
     Str,
-    MacroBinding,
 }

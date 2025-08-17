@@ -131,8 +131,8 @@ impl DiagManager {
         Err(())
     }
 
-    pub fn err_elaboration_infinite_recursion<T>(&mut self) -> WResult<T> {
-        let diag = Diagnostic::new("err_elaboration_infinite_recursion");
+    pub fn err_elaboration_infinite_recursion<T>(&mut self, span: Span) -> WResult<T> {
+        let diag = Diagnostic::new("infinite recursion while expanding").with_error("", span);
 
         self.add_diag(diag);
         Err(())
@@ -149,7 +149,6 @@ impl DiagManager {
                 AtomPattern::Kw(kw) => format!("\"{}\"", kw),
                 AtomPattern::Name => format!("a name"),
                 AtomPattern::Str => format!("a string literal"),
-                AtomPattern::MacroBinding => format!("a macro binding"),
             }
         }
 
@@ -193,6 +192,14 @@ impl DiagManager {
 
     pub fn err_unknown_formal_syntax_cat<T>(&mut self) -> WResult<T> {
         let diag = Diagnostic::new("err_unknown_formal_syntax_cat");
+
+        self.add_diag(diag);
+        Err(())
+    }
+
+    pub fn err_undefined_macro_binding<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
+        let diag =
+            Diagnostic::new(&format!("undefined macro binding `${}`", name)).with_error("", span);
 
         self.add_diag(diag);
         Err(())

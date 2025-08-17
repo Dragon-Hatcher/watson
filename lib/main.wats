@@ -32,12 +32,12 @@ syntax syntax.epsilon
 end
 
 macro command.notation
-    command ::= @kw"notation" $n:@name $p:macro_pat "=>" $s:sentence
+    command ::= @kw"notation" $n:@name $p:macro_pat_list "=>" $s:sentence @kw"end"
              => macro $n sentence ::= $p => $s end
 end
 
 macro command.definition
-    command ::= @kw"definition" $n:@name $p:macro_pat "=>" $t:term
+    command ::= @kw"definition" $n:@name $p:macro_pat_list "=>" $t:term @kw"end"
              => macro $n term ::= $p => $t end
 end
 
@@ -50,7 +50,7 @@ definition term.parens
 end
 
 notation notation.neg
-    "¬" $t:term => $t → ⊥
+    "¬" $t:sentence => $t → ⊥
 end
 
 notation notation.or
@@ -69,11 +69,11 @@ notation notation.forall
     "∀" $x:@name "," $p:sentence => ¬∃ $x, ¬$p
 end
 
-macro template.variable_shorthand
+-- macro template.variable_shorthand
     template ::= "[" $n:name "]" => [$n:term]
 end
 
-macro template.sentence_shorthand
+-- macro template.sentence_shorthand
     template ::= "[" "schema":kw $n:name "]" => [$n:sentence]
 end
 

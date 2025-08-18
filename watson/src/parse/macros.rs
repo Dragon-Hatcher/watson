@@ -1,4 +1,4 @@
-use crate::parse::parse_tree::{AtomPattern, ParseTree, SyntaxCategoryId};
+use crate::parse::parse_tree::{AtomPattern, ParseTree, PatternPart, SyntaxCategoryId};
 use std::collections::HashMap;
 use ustr::Ustr;
 
@@ -96,17 +96,24 @@ impl MacroPat {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum MacroPatPart {
     Cat(SyntaxCategoryId),
+    TempCat(SyntaxCategoryId),
     Lit(Ustr),
     Kw(Ustr),
     Name,
 }
 
 impl MacroPatPart {
-    pub fn matches_atom_pat(self, atom_pat: AtomPattern) -> bool {
-        match (self, atom_pat) {
-            (MacroPatPart::Lit(lit), AtomPattern::Lit(atom_lit)) => lit == atom_lit,
-            (MacroPatPart::Kw(kw), AtomPattern::Kw(atom_kw)) => kw == atom_kw,
-            (MacroPatPart::Name, AtomPattern::Name) => true,
+    pub fn matches_pat(self, pat: PatternPart) -> bool {
+        use PatternPart as PP;
+
+        match (self, pat) {
+            (
+                MacroPatPart::Cat(cat) | MacroPatPart::TempCat(cat),
+                PP::Category(pat_cat) | PP::TemplateCat(pat_cat),
+            ) => cat == pat_cat,
+            (MacroPatPart::Lit(lit), PP::Atom(AtomPattern::Lit(atom_lit))) => lit == atom_lit,
+            (MacroPatPart::Kw(kw), PP::Atom(AtomPattern::Kw(atom_kw))) => kw == atom_kw,
+            (MacroPatPart::Name, PP::Atom(AtomPattern::Name)) => true,
             _ => false,
         }
     }

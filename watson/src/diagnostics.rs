@@ -1,11 +1,10 @@
-use std::{fmt::format, path::Path};
-
 use crate::parse::{
     Location, SourceCache, SourceId, Span,
     parse_tree::{AtomPattern, ParseTree},
 };
 use annotate_snippets::{Level, Message, Renderer, Snippet};
 use itertools::Itertools;
+use std::path::Path;
 use ustr::Ustr;
 
 pub type WResult<T> = Result<T, ()>;
@@ -200,6 +199,14 @@ impl DiagManager {
     pub fn err_undefined_macro_binding<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
         let diag =
             Diagnostic::new(&format!("undefined macro binding `${}`", name)).with_error("", span);
+
+        self.add_diag(diag);
+        Err(())
+    }
+
+    pub fn err_non_existent_syntax_category<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
+        let diag =
+            Diagnostic::new(&format!("unknown syntax category `{}`", name)).with_error("", span);
 
         self.add_diag(diag);
         Err(())

@@ -36,10 +36,6 @@ impl SourceCache {
         self.sources.insert(id, SourceInfo { text, decl });
     }
 
-    pub fn source_keys(&self) -> impl Iterator<Item = SourceId> {
-        self.sources.keys().copied()
-    }
-
     pub fn get_text(&self, id: SourceId) -> &str {
         &self.sources[&id].text
     }

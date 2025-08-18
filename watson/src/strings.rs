@@ -15,6 +15,7 @@ str_const! {
     SYNTAX = "syntax";
     MACRO = "macro";
     MACRO_RULE = "macro_rule";
+    AXIOM = "axiom";
 }
 
 // Symbols:
@@ -24,6 +25,12 @@ str_const! {
     AT = "@";
     DOLLAR = "$";
     COLON = ":";
+    TURNSTILE = "|-";
+    LEFT_PAREN = "(";
+    RIGHT_PAREN = ")";
+    LEFT_BRACKET = "[";
+    RIGHT_BRACKET = "]";
+    COMMA = ",";
 }
 
 str_const! {
@@ -32,6 +39,7 @@ str_const! {
     VARIABLE = "variable";
     KW = "kw";
     NAME = "name";
+    TEMPLATE = "template";
 }
 
 str_const! {

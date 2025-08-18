@@ -103,6 +103,14 @@ impl ParseTree {
             None
         }
     }
+
+    pub fn has_unchecked_bindings(&self) -> bool {
+        match self {
+            ParseTree::Atom(_) => false,
+            ParseTree::Node(node) => node.has_unchecked_bindings,
+            ParseTree::MacroBinding(binding) => binding.is_unchecked,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,6 +119,7 @@ pub struct ParseNode {
     pub rule: ParseRuleId,
     pub children: Vec<ParseTree>,
     pub span: Span,
+    pub has_unchecked_bindings: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,6 +127,7 @@ pub struct MacroBindingNode {
     pub name: Ustr,
     pub kind: MacroBindingKind,
     pub span: Span,
+    pub is_unchecked: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -175,6 +185,7 @@ pub struct ParseRule {
 pub enum PatternPart {
     Atom(AtomPattern),
     Category(SyntaxCategoryId),
+    TemplateCat(SyntaxCategoryId),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

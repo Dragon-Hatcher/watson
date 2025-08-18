@@ -1,3 +1,4 @@
+use crate::strings;
 use std::collections::HashMap;
 use ustr::Ustr;
 
@@ -42,6 +43,10 @@ pub struct FormalSyntaxCatId(Ustr);
 impl FormalSyntaxCatId {
     pub fn new(name: Ustr) -> Self {
         Self(name)
+    }
+
+    pub fn sentence() -> Self {
+        Self::new(*strings::SENTENCE)
     }
 
     pub fn name(&self) -> Ustr {

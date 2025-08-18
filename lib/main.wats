@@ -32,12 +32,12 @@ syntax syntax.epsilon
 end
 
 macro command.notation
-    command ::= @kw"notation" $n:@name $p:macro_pat_list "=>" $s:sentence @kw"end"
+    command ::= @kw"notation" $n:@name $p:macro_pat_list "=>" $s:@template(sentence) @kw"end"
              => macro $n sentence ::= $p => $s end
 end
 
 macro command.definition
-    command ::= @kw"definition" $n:@name $p:macro_pat_list "=>" $t:term @kw"end"
+    command ::= @kw"definition" $n:@name $p:macro_pat_list "=>" $t:@template(term) @kw"end"
              => macro $n term ::= $p => $t end
 end
 
@@ -69,12 +69,16 @@ notation notation.forall
     "∀" $x:@name "," $p:sentence => ¬∃ $x, ¬$p
 end
 
--- macro template.variable_shorthand
-    template ::= "[" $n:name "]" => [$n:term]
+macro template.variable_shorthand
+    template ::= "[" $n:@name $a:maybe_template_args "]" => [$n $a :term]
 end
 
--- macro template.sentence_shorthand
-    template ::= "[" "schema":kw $n:name "]" => [$n:sentence]
+macro template.sentence_shorthand
+    template ::= "[" @kw"schema" $n:@name $a:maybe_template_args "]" => [$n $a :sentence]
+end
+
+macro template.arg_shorthand
+    template_arg ::= $n:@name => $n : term
 end
 
 axiom fol.equality.intro [x] :

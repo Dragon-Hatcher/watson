@@ -7,7 +7,7 @@ use crate::{
         elaborator::reduce_to_builtin,
         macros::{MacroId, MacroInfo, MacroPat},
         parse_tree::{
-            AtomPattern, ParseAtomKind, ParseRule, ParseRuleId, ParseTree, PatternPart,
+            AtomPattern, ParseAtomKind, ParseNode, ParseRule, ParseRuleId, ParseTree, PatternPart,
             SyntaxCategoryId,
         },
     },
@@ -48,7 +48,8 @@ pub fn elaborate_command(
         elaborate_macro(command, sources, progress, diags)?;
         Ok(())
     } else {
-        unreachable!("No elaborator for parse tree {:?}.", command);
+        Err(())
+        // unreachable!("No elaborator for parse tree {:?}.", command);
     }
 }
 
@@ -291,7 +292,7 @@ fn elaborate_macro(
         panic!("Failed to match builtin rule.");
     };
 
-    let replacement = reparse_replacement(replacement, *cat, &pattern, sources, &progress, diags)?;
+    let replacement = reparse_replacement(replacement, &pattern, sources, &progress, diags)?;
 
     progress.macros.add_macro(MacroInfo::new(
         MacroId::new(name_str),
@@ -333,28 +334,50 @@ fn check_macro_bindings_ok(
 
 fn reparse_replacement(
     replacement: &ParseTree,
-    cat: SyntaxCategoryId,
     pattern: &MacroPat,
     sources: &SourceCache,
     progress: &SourceParseProgress,
     diags: &mut DiagManager,
 ) -> WResult<ParseTree> {
-    let span = replacement.span();
-    let text = sources.get_text(span.source());
-    let new = parse_category(
-        text,
-        span.start(),
-        Some(span.end()),
-        cat,
-        &progress.rules,
-        Some(pattern),
-        diags,
-    )
-    .ok_or(())?;
+    match replacement {
+        ParseTree::Atom(atom) => Ok(ParseTree::Atom(*atom)),
+        ParseTree::Node(node) => {
+            if node.has_unchecked_bindings {
+                // We need to reparse this node.
+                let span = replacement.span();
+                let text = sources.get_text(span.source());
 
-    // TODO: There is no real justification for this but I'm too lazy right now.
-    assert!(new.span() == span);
-    Ok(new)
+                let new = parse_category(
+                    text,
+                    span.start(),
+                    Some(span.end()),
+                    node.category,
+                    &progress.rules,
+                    Some(pattern),
+                    true,
+                    diags,
+                )
+                .ok_or(())?;
+
+                // TODO: There is no real justification for this but I'm too lazy right now.
+                assert!(new.span() == span);
+                Ok(new)
+            } else {
+                let children: Result<Vec<_>, _> = node
+                    .children
+                    .iter()
+                    .map(|child| reparse_replacement(child, pattern, sources, progress, diags))
+                    .collect();
+                Ok(ParseTree::Node(ParseNode {
+                    children: children?,
+                    ..*node
+                }))
+            }
+        }
+        ParseTree::MacroBinding(_macro_binding_node) => {
+            todo!("TODO: should be the same as above but too lazy right now")
+        }
+    }
 }
 
 category_id!(MACRO_PAT_LIST_CAT = "macro_pat_list");
@@ -453,6 +476,7 @@ rule_id!(MACRO_PAT_KW = "macro_pat_kw");
 rule_id!(MACRO_PAT_NAME = "macro_pat_name");
 rule_id!(MACRO_PAT_STR = "macro_pat_str");
 rule_id!(MACRO_PAT_CAT_REF = "macro_pat_cat_ref");
+rule_id!(MACRO_PAT_TEMP_CAT_REF = "macro_pat_temp_cat_ref");
 
 fn elaborate_macro_pat(
     pat: ParseTree,
@@ -483,12 +507,60 @@ fn elaborate_macro_pat(
         if let Some(cat) = progress.categories.get(&name) {
             Ok(MacroPatPart::Cat(*cat))
         } else {
-            todo!("Err: non-existent syntax category.");
+            return diags.err_non_existent_syntax_category(name, pat.span());
+        }
+    } else if let Some([at, temp_cat, left_paren, name, right_paren]) =
+        pat.as_rule(*MACRO_PAT_TEMP_CAT_REF)
+    {
+        let _ = assert!(at.is_lit(*strings::AT));
+        let _ = assert!(temp_cat.is_kw(*strings::TEMPLATE));
+        let _ = assert!(left_paren.is_lit(*strings::LEFT_PAREN));
+        let _ = assert!(right_paren.is_lit(*strings::RIGHT_PAREN));
+        let name = name.as_name().unwrap();
+        if let Some(cat) = progress.categories.get(&name) {
+            Ok(MacroPatPart::TempCat(*cat))
+        } else {
+            return diags.err_non_existent_syntax_category(name, pat.span());
         }
     } else {
         panic!("failed to match builtin rule")
     }
 }
+
+// templates ::= <empty> | template templates
+// template ::= "[" name maybe_template_args ":" name "]"
+// maybe_template_args = <empty> | "(" template_args ")"
+// template_args ::= template_arg | template_arg "," template_args
+// template_arg ::= name ":" name
+// hypotheses ::= <empty> | hypothesis hypotheses
+// hypothesis ::= "(" sentence ")"
+
+rule_id!(AXIOM_RULE = "axiom");
+
+category_id!(TEMPLATES_CAT = "templates");
+rule_id!(TEMPLATES_EMPTY_RULE = "templates_empty");
+rule_id!(TEMPLATES_MORE_RULE = "templates_more");
+
+category_id!(TEMPLATE_CAT = "template");
+rule_id!(TEMPLATE_RULE = "template");
+
+category_id!(MAYBE_TEMPLATE_ARGS_CAT = "maybe_template_args");
+rule_id!(MAYBE_TEMPLATE_ARGS_EMPTY_RULE = "maybe_template_args_empty");
+rule_id!(MAYBE_TEMPLATE_ARGS_ARGS_RULE = "maybe_template_args_args");
+
+category_id!(TEMPLATE_ARGS_CAT = "template_args");
+rule_id!(TEMPLATE_ARGS_ONE_RULE = "template_args_one");
+rule_id!(TEMPLATE_ARGS_MORE_RULE = "template_args_more");
+
+category_id!(TEMPLATE_ARG_CAT = "template_arg");
+rule_id!(TEMPLATE_ARG_RULE = "template_arg");
+
+category_id!(HYPOTHESES_CAT = "hypotheses");
+rule_id!(HYPOTHESES_EMPTY_RULE = "hypotheses_empty");
+rule_id!(HYPOTHESES_MORE_RULE = "hypotheses_more");
+
+category_id!(HYPOTHESIS_CAT = "hypothesis");
+rule_id!(HYPOTHESIS_RULE = "hypothesis");
 
 pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
     let mut insert = |cat, rule, pattern| {
@@ -586,6 +658,7 @@ pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
     //             | "@" "name"
     //             | str
     //             | name
+    //             | "@" "template" "(" name ")"
     insert(
         *MACRO_PAT_PART_CAT,
         *MACRO_PAT_PART_RULE,
@@ -609,6 +682,113 @@ pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
     );
     insert(*MACRO_PAT_CAT, *MACRO_PAT_STR, vec![str()]);
     insert(*MACRO_PAT_CAT, *MACRO_PAT_CAT_REF, vec![name()]);
+    insert(
+        *MACRO_PAT_CAT,
+        *MACRO_PAT_TEMP_CAT_REF,
+        vec![
+            lit(*strings::AT),
+            kw(*strings::TEMPLATE),
+            lit(*strings::LEFT_PAREN),
+            name(),
+            lit(*strings::RIGHT_PAREN),
+        ],
+    );
+
+    // command ::= "axiom" name templates ":" hypotheses "|-" "end"
+    insert(
+        *COMMAND_CAT,
+        *AXIOM_RULE,
+        vec![
+            kw(*strings::AXIOM),
+            name(),
+            cat(*TEMPLATES_CAT),
+            lit(*strings::COLON),
+            cat(*HYPOTHESES_CAT),
+            lit(*strings::TURNSTILE),
+            cat(SyntaxCategoryId::FormalLang(FormalSyntaxCatId::sentence())),
+            kw(*strings::END),
+        ],
+    );
+
+    // templates ::= <empty> | template templates
+    // template ::= "[" name maybe_template_args ":" name "]"
+    insert(*TEMPLATES_CAT, *TEMPLATES_EMPTY_RULE, vec![]);
+    insert(
+        *TEMPLATES_CAT,
+        *TEMPLATES_MORE_RULE,
+        vec![cat(*TEMPLATE_CAT), cat(*TEMPLATES_CAT)],
+    );
+
+    insert(
+        *TEMPLATE_CAT,
+        *TEMPLATE_RULE,
+        vec![
+            lit(*strings::LEFT_BRACKET),
+            name(),
+            cat(*MAYBE_TEMPLATE_ARGS_CAT),
+            lit(*strings::COLON),
+            name(),
+            lit(*strings::RIGHT_BRACKET),
+        ],
+    );
+
+    // maybe_template_args = <empty> | "(" template_args ")"
+    // template_args ::= template_arg | template_arg "," template_args
+    // template_arg ::= name ":" name
+    insert(
+        *MAYBE_TEMPLATE_ARGS_CAT,
+        *MAYBE_TEMPLATE_ARGS_EMPTY_RULE,
+        vec![],
+    );
+    insert(
+        *MAYBE_TEMPLATE_ARGS_CAT,
+        *MAYBE_TEMPLATE_ARGS_ARGS_RULE,
+        vec![
+            lit(*strings::LEFT_PAREN),
+            cat(*TEMPLATE_ARGS_CAT),
+            lit(*strings::RIGHT_PAREN),
+        ],
+    );
+
+    insert(
+        *TEMPLATE_ARGS_CAT,
+        *TEMPLATE_ARGS_ONE_RULE,
+        vec![cat(*TEMPLATE_ARG_CAT)],
+    );
+    insert(
+        *TEMPLATE_ARGS_CAT,
+        *TEMPLATE_ARGS_MORE_RULE,
+        vec![
+            cat(*TEMPLATE_ARG_CAT),
+            lit(*strings::COMMA),
+            cat(*TEMPLATE_ARGS_CAT),
+        ],
+    );
+
+    insert(
+        *TEMPLATE_ARG_CAT,
+        *TEMPLATE_ARG_RULE,
+        vec![name(), lit(*strings::COLON), name()],
+    );
+
+    // hypotheses ::= <empty> | hypothesis hypotheses
+    // hypothesis ::= "(" sentence ")"
+    insert(*HYPOTHESES_CAT, *HYPOTHESES_EMPTY_RULE, vec![]);
+    insert(
+        *HYPOTHESES_CAT,
+        *HYPOTHESES_MORE_RULE,
+        vec![cat(*HYPOTHESIS_CAT), cat(*HYPOTHESES_CAT)],
+    );
+
+    insert(
+        *HYPOTHESIS_CAT,
+        *HYPOTHESIS_RULE,
+        vec![
+            lit(*strings::LEFT_PAREN),
+            cat(SyntaxCategoryId::FormalLang(FormalSyntaxCatId::sentence())),
+            lit(*strings::RIGHT_PAREN),
+        ],
+    );
 }
 
 fn formal_syntax_rule_to_rule(rule: &FormalSyntaxRule) -> ParseRule {
@@ -655,17 +835,13 @@ fn macro_to_rule(mac: &MacroInfo) -> ParseRule {
     use AtomPattern as AP;
     use PatternPart as PP;
 
-    let cat = |c| PP::Category(c);
-    let kw = |s| PP::Atom(AP::Kw(s));
-    let lit = |s| PP::Atom(AP::Lit(s));
-    let name = || PP::Atom(AP::Name);
-
     for part in mac.pat().parts() {
         let part = match part {
-            MacroPatPart::Cat(cat_id) => cat(*cat_id),
-            MacroPatPart::Lit(lit_str) => lit(*lit_str),
-            MacroPatPart::Kw(kw_str) => kw(*kw_str),
-            MacroPatPart::Name => name(),
+            MacroPatPart::Cat(cat_id) => PP::Category(*cat_id),
+            MacroPatPart::TempCat(cat_id) => PP::TemplateCat(*cat_id),
+            MacroPatPart::Lit(lit_str) => PP::Atom(AP::Lit(*lit_str)),
+            MacroPatPart::Kw(kw_str) => PP::Atom(AP::Kw(*kw_str)),
+            MacroPatPart::Name => PP::Atom(AP::Name),
         };
         pattern.push(part);
     }
@@ -714,7 +890,7 @@ pub fn add_macro_match_syntax(match_cat: SyntaxCategoryId, progress: &mut Source
             lit(*strings::BNF_REPLACE),
             cat(*MACRO_PAT_LIST_CAT),
             lit(*strings::FAT_ARROW),
-            cat(match_cat),
+            PP::TemplateCat(match_cat),
             kw(*strings::END),
         ],
     );

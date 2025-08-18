@@ -112,8 +112,16 @@ fn parse_source(
             && progress.command_starters.contains(&kw)
         {
             // Now we can force parsing of a command at this spot in the source.
-            let command =
-                parse_category(text, loc, None, *COMMAND_CAT, &progress.rules, None, diags);
+            let command = parse_category(
+                text,
+                loc,
+                None,
+                *COMMAND_CAT,
+                &progress.rules,
+                None,
+                false,
+                diags,
+            );
 
             // Now we can skip the command we just parsed. If we didn't manage
             // to parse anything then we skip to the next line below.

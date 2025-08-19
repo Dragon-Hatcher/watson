@@ -2,7 +2,7 @@ use crate::{
     diagnostics::{DiagManager, WResult},
     parse::{
         Location, Span,
-        macros::{MacroPat, MacroPatPart},
+        macros::MacroPat,
         parse_tree::{
             AtomPattern, MacroBindingKind, MacroBindingNode, ParseAtom, ParseAtomKind, ParseNode,
             ParseRule, ParseRuleId, ParseTree, PatternPart, SyntaxCategoryId,

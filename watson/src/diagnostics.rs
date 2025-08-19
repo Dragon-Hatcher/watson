@@ -189,6 +189,14 @@ impl DiagManager {
         Err(())
     }
 
+    pub fn err_duplicate_theorem<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
+        let diag = Diagnostic::new("err_duplicate_theorem")
+            .with_error(&format!("theorem `{}` declared again here", name), span);
+
+        self.add_diag(diag);
+        Err(())
+    }
+
     pub fn err_unknown_formal_syntax_cat<T>(&mut self) -> WResult<T> {
         let diag = Diagnostic::new("err_unknown_formal_syntax_cat");
 

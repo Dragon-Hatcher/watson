@@ -24,6 +24,10 @@ impl FormalSyntax {
         self.categories.insert(id, ());
     }
 
+    pub fn cats(&self) -> impl Iterator<Item = &FormalSyntaxCatId> {
+        self.categories.keys()
+    }
+
     pub fn has_rule(&self, id: FormalSyntaxRuleId) -> bool {
         self.rules.contains_key(&id)
     }

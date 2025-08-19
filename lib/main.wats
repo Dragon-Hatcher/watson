@@ -70,11 +70,15 @@ notation notation.forall
 end
 
 macro template.variable_shorthand
-    template ::= "[" $n:@name $a:maybe_template_args "]" => [$n $a :term]
+    template ::= "[" $n:@name $a:maybe_template_params "]" => [$n$a:term]
 end
 
 macro template.sentence_shorthand
-    template ::= "[" @kw"schema" $n:@name $a:maybe_template_args "]" => [$n $a :sentence]
+    template ::= "[" @kw"schema" $n:@name $a:maybe_template_params "]" => [$n$a:sentence]
+end
+
+macro template.param_shorthand
+    template_param ::= $n:@name => $n : term
 end
 
 macro template.arg_shorthand
@@ -87,4 +91,8 @@ end
 
 axiom fol.equality.elim [x] [y] [schema 'p(_)] : (x = y) ('p(x))
     |- 'p(y)
+end
+
+axiom imp.intro [schema 'p] [schema 'q] : (assume 'p |- 'q)
+    |- 'p → 'q
 end

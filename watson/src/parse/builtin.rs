@@ -12,13 +12,20 @@ use crate::{
         },
     },
     rule_id,
-    semant::formal_syntax::{
-        FormalSyntaxCatId, FormalSyntaxPattern, FormalSyntaxPatternPart, FormalSyntaxRule,
-        FormalSyntaxRuleId,
+    semant::{
+        formal_syntax::{
+            FormalSyntaxCatId, FormalSyntaxPattern, FormalSyntaxPatternPart, FormalSyntaxRule,
+            FormalSyntaxRuleId,
+        },
+        theorem::{Proof, Sentence, Template, Theorem, TheoremId},
     },
     strings::{self, MACRO_RULE},
 };
-use std::{collections::HashMap, fs};
+use itertools::Itertools;
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+};
 use ustr::Ustr;
 
 use super::macros::MacroPatPart;
@@ -47,9 +54,11 @@ pub fn elaborate_command(
     } else if command.as_rule_pat(*MACRO_RULE).is_some() {
         elaborate_macro(command, sources, progress, diags)?;
         Ok(())
+    } else if command.as_rule(*AXIOM_RULE).is_some() {
+        elaborate_axiom(command, progress, diags)?;
+        Ok(())
     } else {
-        Err(())
-        // unreachable!("No elaborator for parse tree {:?}.", command);
+        unreachable!("No elaborator for parse tree {:?}.", dbg!(command));
     }
 }
 
@@ -528,21 +537,235 @@ fn elaborate_macro_pat(
 }
 
 // templates ::= <empty> | template templates
-// template ::= "[" name maybe_template_args ":" name "]"
-// maybe_template_args = <empty> | "(" template_args ")"
-// template_args ::= template_arg | template_arg "," template_args
-// template_arg ::= name ":" name
+// template ::= "[" name maybe_template_params ":" name "]"
+// maybe_template_params = <empty> | "(" template_params ")"
+// template_params ::= template_param | template_param "," template_params
+// template_param ::= name ":" name
 // hypotheses ::= <empty> | hypothesis hypotheses
-// hypothesis ::= "(" sentence ")"
+// hypothesis ::= "(" fact ")"
+// fact ::= sentence | "assume" sentence "|-" sentence
 
 rule_id!(AXIOM_RULE = "axiom");
+
+fn elaborate_axiom(
+    axiom: ParseTree,
+    progress: &mut SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<()> {
+    let axiom = reduce_to_builtin(axiom, &progress.macros, diags)?;
+
+    // command ::= "axiom" name templates ":" hypotheses "|-" sentence "end"
+    let Some(
+        [
+            axiom_kw,
+            name,
+            templates,
+            colon,
+            hypotheses,
+            turnstile,
+            conclusion,
+            end_kw,
+        ],
+    ) = axiom.as_rule(*AXIOM_RULE)
+    else {
+        panic!("Failed to match builtin rule.");
+    };
+
+    let _ = assert!(axiom_kw.is_kw(*strings::AXIOM));
+    let name_str = name.as_name().unwrap();
+    let templates = elaborate_templates(templates.clone(), &progress, diags)?;
+    let _ = assert!(colon.is_lit(*strings::COLON));
+    let hypotheses = elaborate_hypotheses(hypotheses, diags)?;
+    let _ = assert!(turnstile.is_lit(*strings::TURNSTILE));
+    let _ = assert!(end_kw.is_kw(*strings::END));
+
+    let id = TheoremId::new(name_str);
+
+    if progress.theorems.has(id) {
+        return diags.err_duplicate_theorem(name_str, name.span());
+    }
+
+    let axiom = Theorem::new(id, templates, hypotheses, Sentence, Proof::Axiom);
+    progress.theorems.add(axiom);
+
+    Ok(())
+}
 
 category_id!(TEMPLATES_CAT = "templates");
 rule_id!(TEMPLATES_EMPTY_RULE = "templates_empty");
 rule_id!(TEMPLATES_MORE_RULE = "templates_more");
 
+fn elaborate_templates(
+    mut templates: ParseTree,
+    progress: &SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<Vec<Template>> {
+    let mut result = Vec::new();
+
+    loop {
+        templates = reduce_to_builtin(templates, &progress.macros, diags)?;
+
+        if let Some([]) = templates.as_rule(*TEMPLATES_EMPTY_RULE) {
+            break;
+        } else if let Some([template, rest]) = templates.as_rule(*TEMPLATES_MORE_RULE) {
+            let template = elaborate_template(template.clone(), progress, diags)?;
+            result.push(template);
+            templates = rest.clone();
+        } else {
+            panic!("Failed to match builtin rule.");
+        }
+    }
+
+    let mut seen_names = HashSet::new();
+    for template in &result {
+        if !seen_names.insert(template.name()) {
+            todo!();
+            // diags.err_duplicate_template(name, template.span());
+        }
+    }
+
+    Ok(result)
+}
+
 category_id!(TEMPLATE_CAT = "template");
 rule_id!(TEMPLATE_RULE = "template");
+
+fn elaborate_template(
+    template: ParseTree,
+    progress: &SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<Template> {
+    let template = reduce_to_builtin(template, &progress.macros, diags)?;
+
+    // template ::= "[" name maybe_template_params ":" name "]"
+    let Some([left_bracket, name, params, colon, cat_name, right_bracket]) =
+        template.as_rule(*TEMPLATE_RULE)
+    else {
+        panic!("Failed to match builtin rule.");
+    };
+
+    let _ = assert!(left_bracket.is_lit(*strings::LEFT_BRACKET));
+    let name_str = name.as_name().unwrap();
+    let params = elaborate_maybe_template_params(params.clone(), progress, diags)?;
+    let _ = assert!(colon.is_lit(*strings::COLON));
+    let cat_name_str = cat_name.as_name().unwrap();
+    let _ = assert!(right_bracket.is_lit(*strings::RIGHT_BRACKET));
+
+    let cat_id = FormalSyntaxCatId::new(cat_name_str);
+    if !progress.formal_syntax.has_cat(cat_id) {
+        return diags.err_unknown_formal_syntax_cat();
+    }
+
+    Ok(Template::new(name_str, cat_id, params))
+}
+
+category_id!(MAYBE_TEMPLATE_PARAMS_CAT = "maybe_template_params");
+rule_id!(MAYBE_TEMPLATE_PARAMS_EMPTY_RULE = "maybe_template_params_empty");
+rule_id!(MAYBE_TEMPLATE_PARAMS_PARAMS_RULE = "maybe_template_params_params");
+
+fn elaborate_maybe_template_params(
+    params: ParseTree,
+    progress: &SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<Vec<FormalSyntaxCatId>> {
+    let params = reduce_to_builtin(params, &progress.macros, diags)?;
+
+    // maybe_template_params = <empty> | "(" template_params ")"
+    if let Some([]) = params.as_rule(*MAYBE_TEMPLATE_PARAMS_EMPTY_RULE) {
+        return Ok(Vec::new());
+    } else if let Some([left_paren, template_params, right_paren]) =
+        params.as_rule(*MAYBE_TEMPLATE_PARAMS_PARAMS_RULE)
+    {
+        let _ = assert!(left_paren.is_lit(*strings::LEFT_PAREN));
+        let _ = assert!(right_paren.is_lit(*strings::RIGHT_PAREN));
+        elaborate_template_params(template_params.clone(), progress, diags)
+    } else {
+        panic!("Failed to match builtin rule.");
+    }
+}
+
+category_id!(TEMPLATE_PARAMS_CAT = "template_params");
+rule_id!(TEMPLATE_PARAMS_ONE_RULE = "template_params_one");
+rule_id!(TEMPLATE_PARAMS_MORE_RULE = "template_params_more");
+
+fn elaborate_template_params(
+    params: ParseTree,
+    progress: &SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<Vec<FormalSyntaxCatId>> {
+    // template_params ::= template_param | template_param "," template_params
+
+    let mut result = Vec::new();
+    let mut next_params = Some(params);
+
+    while let Some(params) = next_params {
+        let builtin_params = reduce_to_builtin(params, &progress.macros, diags)?;
+
+        if let Some([param]) = builtin_params.as_rule(*TEMPLATE_PARAMS_ONE_RULE) {
+            next_params = None;
+            let cat_id = elaborate_template_param(param.clone(), progress, diags)?;
+            result.push(cat_id);
+        } else if let Some([param, comma, rest]) =
+            builtin_params.as_rule(*TEMPLATE_PARAMS_MORE_RULE)
+        {
+            assert!(comma.is_lit(*strings::COMMA));
+            next_params = Some(rest.clone());
+            let cat_id = elaborate_template_param(param.clone(), progress, diags)?;
+            result.push(cat_id);
+        } else {
+            panic!("Failed to match builtin rule.");
+        }
+    }
+
+    Ok(result)
+}
+
+category_id!(TEMPLATE_PARAM_CAT = "template_param");
+rule_id!(TEMPLATE_PARAM_RULE = "template_param");
+
+fn elaborate_template_param(
+    param: ParseTree,
+    progress: &SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<FormalSyntaxCatId> {
+    let param = reduce_to_builtin(param, &progress.macros, diags)?;
+
+    // template_param ::= name ":" name
+    let Some([name, colon, cat_name]) = param.as_rule(*TEMPLATE_PARAM_RULE) else {
+        panic!("Failed to match template_param rule.");
+    };
+
+    let _ = assert!(colon.is_lit(*strings::COLON));
+    let _name_str = name.as_name().unwrap();
+    let cat_name_str = cat_name.as_name().unwrap();
+
+    let cat_id = FormalSyntaxCatId::new(cat_name_str);
+    if !progress.formal_syntax.has_cat(cat_id) {
+        return diags.err_unknown_formal_syntax_cat();
+    }
+
+    Ok(cat_id)
+}
+
+category_id!(HYPOTHESES_CAT = "hypotheses");
+rule_id!(HYPOTHESES_EMPTY_RULE = "hypotheses_empty");
+rule_id!(HYPOTHESES_MORE_RULE = "hypotheses_more");
+
+fn elaborate_hypotheses(hypotheses: &ParseTree, diags: &mut DiagManager) -> WResult<Vec<Sentence>> {
+    todo!()
+}
+
+category_id!(HYPOTHESIS_CAT = "hypothesis");
+rule_id!(HYPOTHESIS_RULE = "hypothesis");
+
+category_id!(FACT_CAT = "fact");
+rule_id!(FACT_SENTENCE_RULE = "fact_sentence");
+rule_id!(FACT_ASSUME_RULE = "fact_assume");
+
+// <formal_cat> ::= name maybe_template_args
+// maybe_template_args = <empty> | "(" template_args ")"
+// template_args ::= template_arg | template_arg "," template_args
+// template_arg ::= <formal_cat> ":" "formal_cat_name"
 
 category_id!(MAYBE_TEMPLATE_ARGS_CAT = "maybe_template_args");
 rule_id!(MAYBE_TEMPLATE_ARGS_EMPTY_RULE = "maybe_template_args_empty");
@@ -553,14 +776,6 @@ rule_id!(TEMPLATE_ARGS_ONE_RULE = "template_args_one");
 rule_id!(TEMPLATE_ARGS_MORE_RULE = "template_args_more");
 
 category_id!(TEMPLATE_ARG_CAT = "template_arg");
-rule_id!(TEMPLATE_ARG_RULE = "template_arg");
-
-category_id!(HYPOTHESES_CAT = "hypotheses");
-rule_id!(HYPOTHESES_EMPTY_RULE = "hypotheses_empty");
-rule_id!(HYPOTHESES_MORE_RULE = "hypotheses_more");
-
-category_id!(HYPOTHESIS_CAT = "hypothesis");
-rule_id!(HYPOTHESIS_RULE = "hypothesis");
 
 pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
     let mut insert = |cat, rule, pattern| {
@@ -694,7 +909,7 @@ pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
         ],
     );
 
-    // command ::= "axiom" name templates ":" hypotheses "|-" "end"
+    // command ::= "axiom" name templates ":" hypotheses "|-" sentence "end"
     insert(
         *COMMAND_CAT,
         *AXIOM_RULE,
@@ -725,7 +940,7 @@ pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
         vec![
             lit(*strings::LEFT_BRACKET),
             name(),
-            cat(*MAYBE_TEMPLATE_ARGS_CAT),
+            cat(*MAYBE_TEMPLATE_PARAMS_CAT),
             lit(*strings::COLON),
             name(),
             lit(*strings::RIGHT_BRACKET),
@@ -735,6 +950,84 @@ pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
     // maybe_template_args = <empty> | "(" template_args ")"
     // template_args ::= template_arg | template_arg "," template_args
     // template_arg ::= name ":" name
+    insert(
+        *MAYBE_TEMPLATE_PARAMS_CAT,
+        *MAYBE_TEMPLATE_PARAMS_EMPTY_RULE,
+        vec![],
+    );
+    insert(
+        *MAYBE_TEMPLATE_PARAMS_CAT,
+        *MAYBE_TEMPLATE_PARAMS_PARAMS_RULE,
+        vec![
+            lit(*strings::LEFT_PAREN),
+            cat(*TEMPLATE_PARAMS_CAT),
+            lit(*strings::RIGHT_PAREN),
+        ],
+    );
+
+    insert(
+        *TEMPLATE_PARAMS_CAT,
+        *TEMPLATE_PARAMS_ONE_RULE,
+        vec![cat(*TEMPLATE_PARAM_CAT)],
+    );
+    insert(
+        *TEMPLATE_PARAMS_CAT,
+        *TEMPLATE_PARAMS_MORE_RULE,
+        vec![
+            cat(*TEMPLATE_PARAM_CAT),
+            lit(*strings::COMMA),
+            cat(*TEMPLATE_PARAMS_CAT),
+        ],
+    );
+
+    insert(
+        *TEMPLATE_PARAM_CAT,
+        *TEMPLATE_PARAM_RULE,
+        vec![name(), lit(*strings::COLON), name()],
+    );
+
+    // hypotheses ::= <empty> | hypothesis hypotheses
+    // hypothesis ::= "(" fact ")"
+    // fact ::= sentence | "assume" sentence "|-" sentence
+    insert(*HYPOTHESES_CAT, *HYPOTHESES_EMPTY_RULE, vec![]);
+    insert(
+        *HYPOTHESES_CAT,
+        *HYPOTHESES_MORE_RULE,
+        vec![cat(*HYPOTHESIS_CAT), cat(*HYPOTHESES_CAT)],
+    );
+
+    insert(
+        *HYPOTHESIS_CAT,
+        *HYPOTHESIS_RULE,
+        vec![
+            lit(*strings::LEFT_PAREN),
+            cat(*FACT_CAT),
+            lit(*strings::RIGHT_PAREN),
+        ],
+    );
+    insert(
+        *FACT_CAT,
+        *FACT_SENTENCE_RULE,
+        vec![cat(SyntaxCategoryId::FormalLang(
+            FormalSyntaxCatId::sentence(),
+        ))],
+    );
+    insert(
+        *FACT_CAT,
+        *FACT_ASSUME_RULE,
+        vec![
+            kw(*strings::ASSUME),
+            cat(SyntaxCategoryId::FormalLang(FormalSyntaxCatId::sentence())),
+            lit(*strings::TURNSTILE),
+            cat(SyntaxCategoryId::FormalLang(FormalSyntaxCatId::sentence())),
+        ],
+    );
+
+    // <formal_cat> ::= name maybe_template_args
+    // maybe_template_args = <empty> | "(" template_args ")"
+    // template_args ::= template_arg | template_arg "," template_args
+    // template_arg ::= <formal_cat> ":" "formal_cat_name"
+
     insert(
         *MAYBE_TEMPLATE_ARGS_CAT,
         *MAYBE_TEMPLATE_ARGS_EMPTY_RULE,
@@ -762,31 +1055,6 @@ pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
             cat(*TEMPLATE_ARG_CAT),
             lit(*strings::COMMA),
             cat(*TEMPLATE_ARGS_CAT),
-        ],
-    );
-
-    insert(
-        *TEMPLATE_ARG_CAT,
-        *TEMPLATE_ARG_RULE,
-        vec![name(), lit(*strings::COLON), name()],
-    );
-
-    // hypotheses ::= <empty> | hypothesis hypotheses
-    // hypothesis ::= "(" sentence ")"
-    insert(*HYPOTHESES_CAT, *HYPOTHESES_EMPTY_RULE, vec![]);
-    insert(
-        *HYPOTHESES_CAT,
-        *HYPOTHESES_MORE_RULE,
-        vec![cat(*HYPOTHESIS_CAT), cat(*HYPOTHESES_CAT)],
-    );
-
-    insert(
-        *HYPOTHESIS_CAT,
-        *HYPOTHESIS_RULE,
-        vec![
-            lit(*strings::LEFT_PAREN),
-            cat(SyntaxCategoryId::FormalLang(FormalSyntaxCatId::sentence())),
-            lit(*strings::RIGHT_PAREN),
         ],
     );
 }
@@ -817,6 +1085,45 @@ fn formal_syntax_rule_to_rule(rule: &FormalSyntaxRule) -> ParseRule {
     }
 }
 
+fn formal_syntax_cat_template(formal_cat: FormalSyntaxCatId, progress: &mut SourceParseProgress) {
+    // for every formal syntax category we also allow names as templates and
+    // arguments to those names.
+
+    let mut insert = |cat, rule, pattern| {
+        progress.add_rule(ParseRule {
+            id: rule,
+            cat,
+            pattern,
+        })
+    };
+
+    use AtomPattern as AP;
+    use PatternPart as PP;
+
+    let cat = |c| PP::Category(c);
+    let kw = |s| PP::Atom(AP::Kw(s));
+    let lit = |s| PP::Atom(AP::Lit(s));
+    let name = || PP::Atom(AP::Name);
+
+    // <formal_cat> ::= name maybe_template_args
+    // maybe_template_args = <empty> | "(" template_args ")"
+    // template_args ::= template_arg | template_arg "," template_args
+    // template_arg ::= name ":" name
+
+    let syntax_cat = SyntaxCategoryId::FormalLang(formal_cat);
+    insert(
+        syntax_cat,
+        ParseRuleId::Pattern(*strings::FORMAL_TEMPLATE_RULE, syntax_cat),
+        vec![name(), cat(*MAYBE_TEMPLATE_ARGS_CAT)],
+    );
+
+    insert(
+        *TEMPLATE_ARG_CAT,
+        ParseRuleId::Pattern(*strings::FORMAL_TEMPLATE_ARG_RULE, syntax_cat),
+        vec![name(), lit(*strings::COLON), kw(formal_cat.name())],
+    );
+}
+
 pub fn add_formal_lang_syntax(progress: &mut SourceParseProgress) {
     let rules: Vec<_> = progress
         .formal_syntax
@@ -826,6 +1133,10 @@ pub fn add_formal_lang_syntax(progress: &mut SourceParseProgress) {
 
     for rule in rules {
         progress.add_rule(rule);
+    }
+
+    for cat in progress.formal_syntax.cats().cloned().collect_vec() {
+        formal_syntax_cat_template(cat, progress);
     }
 }
 

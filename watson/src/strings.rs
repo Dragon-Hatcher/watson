@@ -16,6 +16,7 @@ str_const! {
     MACRO = "macro";
     MACRO_RULE = "macro_rule";
     AXIOM = "axiom";
+    ASSUME = "assume";
 }
 
 // Symbols:
@@ -40,6 +41,8 @@ str_const! {
     KW = "kw";
     NAME = "name";
     TEMPLATE = "template";
+    FORMAL_TEMPLATE_RULE = "formal_template";
+    FORMAL_TEMPLATE_ARG_RULE = "formal_template_arg";
 }
 
 str_const! {

@@ -10,15 +10,14 @@ use crate::{
     diagnostics::DiagManager,
     parse::{
         builtin::{
-            COMMAND_CAT, add_builtin_syntax, add_formal_lang_syntax, add_macro_match_syntax,
-            add_macro_syntax, elaborate_command,
+            add_builtin_syntax, add_formal_lang_syntax, add_macro_match_syntax, add_macro_syntax, elaborate_command, COMMAND_CAT
         },
         earley::{find_start_keywords, parse_category, parse_name},
         location::SourceOffset,
         macros::Macros,
         parse_tree::{ParseRule, ParseRuleId, ParseTree, SyntaxCategoryId},
     },
-    semant::formal_syntax::{FormalSyntax, FormalSyntaxCatId},
+    semant::{formal_syntax::{FormalSyntax, FormalSyntaxCatId}, theorem::Theorems},
     strings,
 };
 pub use location::{Location, SourceId, Span};
@@ -33,6 +32,7 @@ pub fn parse(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager)
         command_starters: HashSet::new(),
         formal_syntax: FormalSyntax::new(),
         macros: Macros::new(),
+        theorems: Theorems::new(),
         commands: Vec::new(),
         next_sources: VecDeque::new(),
     };
@@ -64,6 +64,9 @@ struct SourceParseProgress {
 
     /// The macros we have found so far.
     macros: Macros,
+
+    /// The theorems we have seen
+    theorems: Theorems,
 
     /// The commands that have been recovered from the source so far. Note that
     /// these have already been elaborated so nothing more needs to be done with

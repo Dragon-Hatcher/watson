@@ -104,6 +104,14 @@ impl ParseTree {
         }
     }
 
+    pub fn as_node(&self) -> Option<&ParseNode> {
+        if let Self::Node(node) = self {
+            Some(node)
+        } else {
+            None
+        }
+    }
+
     pub fn has_unchecked_bindings(&self) -> bool {
         match self {
             ParseTree::Atom(_) => false,

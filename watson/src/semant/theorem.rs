@@ -1,4 +1,9 @@
-use crate::semant::formal_syntax::FormalSyntaxCatId;
+use crate::{
+    parse::{
+        parse_tree::{ParseRuleId, SyntaxCategoryId}, Span
+    },
+    semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRule, FormalSyntaxRuleId},
+};
 use std::{collections::HashMap, hash::Hash};
 use ustr::Ustr;
 
@@ -98,4 +103,30 @@ impl Template {
     pub fn params(&self) -> &[FormalSyntaxCatId] {
         &self.params
     }
+}
+
+pub struct UnresolvedFragment {
+    pub syntax_rule: ParseRuleId,
+    pub span: Span,
+    pub data: UnresolvedFragmentData,
+}
+
+pub enum UnresolvedFragmentData {
+    Binding(Ustr),
+    Lit(Ustr),
+    FormalRule {
+        formal_cat: FormalSyntaxCatId,
+        formal_rule: FormalSyntaxRuleId,
+        children: Vec<UnresolvedFragment>,
+    },
+    VarOrTemplate {
+        formal_cat: FormalSyntaxCatId,
+        name: Ustr,
+        params: Vec<UnresolvedFragment>,
+    },
+}
+
+pub struct UnresolvedFact {
+    pub assumption: Option<UnresolvedFragment>,
+    pub statement: UnresolvedFragment,
 }

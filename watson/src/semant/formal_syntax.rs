@@ -36,6 +36,10 @@ impl FormalSyntax {
         self.rules.insert(rule.id(), rule);
     }
 
+    pub fn get_rule(&self, rule: FormalSyntaxRuleId) -> &FormalSyntaxRule {
+        &self.rules[&rule]
+    }
+
     pub fn rules(&self) -> impl Iterator<Item = &FormalSyntaxRule> {
         self.rules.values()
     }

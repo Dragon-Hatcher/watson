@@ -17,7 +17,10 @@ use crate::{
             FormalSyntaxCatId, FormalSyntaxPattern, FormalSyntaxPatternPart, FormalSyntaxRule,
             FormalSyntaxRuleId,
         },
-        theorem::{Proof, Sentence, Template, Theorem, TheoremId},
+        theorem::{
+            Proof, Sentence, Template, Theorem, TheoremId, UnresolvedFact, UnresolvedFragment,
+            UnresolvedFragmentData,
+        },
     },
     strings::{self, MACRO_RULE},
 };
@@ -573,9 +576,9 @@ fn elaborate_axiom(
 
     let _ = assert!(axiom_kw.is_kw(*strings::AXIOM));
     let name_str = name.as_name().unwrap();
-    let templates = elaborate_templates(templates.clone(), &progress, diags)?;
+    let templates = elaborate_templates(templates.clone(), progress, diags)?;
     let _ = assert!(colon.is_lit(*strings::COLON));
-    let hypotheses = elaborate_hypotheses(hypotheses, diags)?;
+    let hypotheses = elaborate_hypotheses(hypotheses.clone(), progress, diags)?;
     let _ = assert!(turnstile.is_lit(*strings::TURNSTILE));
     let _ = assert!(end_kw.is_kw(*strings::END));
 
@@ -585,7 +588,13 @@ fn elaborate_axiom(
         return diags.err_duplicate_theorem(name_str, name.span());
     }
 
-    let axiom = Theorem::new(id, templates, hypotheses, Sentence, Proof::Axiom);
+    let axiom = Theorem::new(
+        id,
+        templates,
+        hypotheses.into_iter().map(|_h| Sentence).collect(),
+        Sentence,
+        Proof::Axiom,
+    );
     progress.theorems.add(axiom);
 
     Ok(())
@@ -751,16 +760,136 @@ category_id!(HYPOTHESES_CAT = "hypotheses");
 rule_id!(HYPOTHESES_EMPTY_RULE = "hypotheses_empty");
 rule_id!(HYPOTHESES_MORE_RULE = "hypotheses_more");
 
-fn elaborate_hypotheses(hypotheses: &ParseTree, diags: &mut DiagManager) -> WResult<Vec<Sentence>> {
-    todo!()
+fn elaborate_hypotheses(
+    mut hypotheses: ParseTree,
+    progress: &SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<Vec<UnresolvedFact>> {
+    let mut facts = Vec::new();
+
+    loop {
+        let hypotheses_builtin = reduce_to_builtin(hypotheses, &progress.macros, diags)?;
+
+        // hypotheses ::= <empty> | hypothesis hypotheses
+        if let Some([]) = hypotheses_builtin.as_rule(*HYPOTHESES_EMPTY_RULE) {
+            break;
+        } else if let Some([hypothesis, rest]) = hypotheses_builtin.as_rule(*HYPOTHESES_MORE_RULE) {
+            let fact = elaborate_hypothesis(hypothesis.clone(), progress, diags)?;
+            facts.push(fact);
+            hypotheses = rest.clone();
+        } else {
+            panic!("Failed to match builtin rule.");
+        }
+    }
+
+    Ok(facts)
 }
 
 category_id!(HYPOTHESIS_CAT = "hypothesis");
 rule_id!(HYPOTHESIS_RULE = "hypothesis");
 
+fn elaborate_hypothesis(
+    hypothesis: ParseTree,
+    progress: &SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<UnresolvedFact> {
+    let hypothesis = reduce_to_builtin(hypothesis, &progress.macros, diags)?;
+
+    // hypothesis ::= "(" fact ")"
+    let Some([left_paren, fact, right_paren]) = hypothesis.as_rule(*HYPOTHESIS_RULE) else {
+        panic!("Failed to match builtin rule.");
+    };
+
+    let _ = assert!(left_paren.is_lit(*strings::LEFT_PAREN));
+    let fact = elaborate_fact(fact.clone(), progress, diags)?;
+    let _ = assert!(right_paren.is_lit(*strings::RIGHT_PAREN));
+
+    Ok(fact)
+}
+
 category_id!(FACT_CAT = "fact");
 rule_id!(FACT_SENTENCE_RULE = "fact_sentence");
 rule_id!(FACT_ASSUME_RULE = "fact_assume");
+
+fn elaborate_fact(
+    fact: ParseTree,
+    progress: &SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<UnresolvedFact> {
+    let fact = reduce_to_builtin(fact, &progress.macros, diags)?;
+
+    // fact ::= sentence | "assume" sentence "|-" sentence
+    if let Some([sentence]) = fact.as_rule(*FACT_SENTENCE_RULE) {
+        let sentence = elaborate_formal_fragment(sentence.clone(), progress, diags)?;
+        return Ok(UnresolvedFact {
+            assumption: None,
+            statement: sentence,
+        });
+    } else if let Some([assume_kw, sentence, turnstile, statement]) =
+        fact.as_rule(*FACT_ASSUME_RULE)
+    {
+        let _ = assert!(assume_kw.is_kw(*strings::ASSUME));
+        let sentence = elaborate_formal_fragment(sentence.clone(), progress, diags)?;
+        let _ = assert!(turnstile.is_lit(*strings::TURNSTILE));
+        let statement = elaborate_formal_fragment(statement.clone(), progress, diags)?;
+        return Ok(UnresolvedFact {
+            assumption: Some(sentence),
+            statement,
+        });
+    } else {
+        panic!("Failed to match builtin rule.");
+    }
+}
+
+fn elaborate_formal_fragment(
+    frag: ParseTree,
+    progress: &SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<UnresolvedFragment> {
+    let syntax_rule = frag.as_node().unwrap().rule;
+    let span = frag.span();
+    let frag = reduce_to_builtin(frag, &progress.macros, diags)?;
+
+    let ParseTree::Node(node) = frag else {
+        panic!("Expected a node for formal fragment, got: {:?}", frag);
+    };
+
+    let SyntaxCategoryId::FormalLang(formal_cat) = node.category else {
+        panic!(
+            "Expected a formal language category, got: {:?}",
+            node.category
+        );
+    };
+    let ParseRuleId::FormalLang(formal_rule) = node.rule else {
+        dbg!(&node);
+        panic!("Expected a formal rule, got: {:?}", node.rule);
+    };
+
+
+    let formal_pattern = progress.formal_syntax.get_rule(formal_rule).pat();
+    let mut children = Vec::new();
+    for (child, pat) in node.children.iter().zip(formal_pattern.parts()) {
+        let child_frag = match pat {
+            FormalSyntaxPatternPart::Cat(_) => elaborate_formal_fragment(child.clone(), progress, diags)?,
+            FormalSyntaxPatternPart::Lit(_) => todo!(),
+            FormalSyntaxPatternPart::Binding => todo!(),
+            FormalSyntaxPatternPart::Variable => todo!(),
+        };
+        children.push(child_frag);
+    }
+
+    dbg!(node);
+
+    Ok(UnresolvedFragment {
+        syntax_rule,
+        span,
+        data: UnresolvedFragmentData::FormalRule {
+            formal_cat,
+            formal_rule,
+            children,
+        },
+    })
+}
 
 // <formal_cat> ::= name maybe_template_args
 // maybe_template_args = <empty> | "(" template_args ")"

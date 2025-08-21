@@ -115,6 +115,6 @@ impl FormalSyntaxPattern {
 pub enum FormalSyntaxPatternPart {
     Cat(FormalSyntaxCatId),
     Lit(Ustr),
-    Binding,
-    Variable,
+    Binding(FormalSyntaxCatId),
+    Variable(FormalSyntaxCatId),
 }

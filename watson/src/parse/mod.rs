@@ -17,7 +17,7 @@ use crate::{
         macros::Macros,
         parse_tree::{ParseRule, ParseRuleId, ParseTree, SyntaxCategoryId},
     },
-    semant::{formal_syntax::{FormalSyntax, FormalSyntaxCatId}, theorem::Theorems},
+    semant::{formal_syntax::{FormalSyntax, FormalSyntaxCatId}, theorem::{TheoremId, UnresolvedTheorem}},
     strings,
 };
 pub use location::{Location, SourceId, Span};
@@ -32,7 +32,7 @@ pub fn parse(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager)
         command_starters: HashSet::new(),
         formal_syntax: FormalSyntax::new(),
         macros: Macros::new(),
-        theorems: Theorems::new(),
+        theorems: HashMap::new(),
         commands: Vec::new(),
         next_sources: VecDeque::new(),
     };
@@ -47,6 +47,8 @@ pub fn parse(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager)
     while let Some(next) = progress.next_sources.pop_front() {
         parse_source(next, &mut progress, sources, diags);
     }
+
+    dbg!(progress.theorems);
 }
 
 struct SourceParseProgress {
@@ -65,8 +67,8 @@ struct SourceParseProgress {
     /// The macros we have found so far.
     macros: Macros,
 
-    /// The theorems we have seen
-    theorems: Theorems,
+    /// The theorems we have seen so far.
+    theorems: HashMap<TheoremId, UnresolvedTheorem>,
 
     /// The commands that have been recovered from the source so far. Note that
     /// these have already been elaborated so nothing more needs to be done with

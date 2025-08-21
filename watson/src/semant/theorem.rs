@@ -1,39 +1,8 @@
 use crate::{
-    parse::{
-        parse_tree::{ParseRuleId, SyntaxCategoryId}, Span
-    },
-    semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRule, FormalSyntaxRuleId},
+    parse::{Span, parse_tree::ParseRuleId},
+    semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
 };
-use std::{collections::HashMap, hash::Hash};
 use ustr::Ustr;
-
-pub struct Theorems {
-    theorems: HashMap<TheoremId, Theorem>,
-}
-
-impl Theorems {
-    pub fn new() -> Self {
-        Self {
-            theorems: HashMap::new(),
-        }
-    }
-
-    pub fn has(&self, id: TheoremId) -> bool {
-        self.theorems.contains_key(&id)
-    }
-
-    pub fn add(&mut self, theorem: Theorem) {
-        self.theorems.insert(theorem.id.clone(), theorem);
-    }
-
-    pub fn get(&self, id: &TheoremId) -> Option<&Theorem> {
-        self.theorems.get(id)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &Theorem> {
-        self.theorems.values()
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TheoremId(Ustr);
@@ -45,20 +14,20 @@ impl TheoremId {
 }
 
 #[derive(Debug, Clone)]
-pub struct Theorem {
+pub struct UnresolvedTheorem {
     id: TheoremId,
     templates: Vec<Template>,
-    hypotheses: Vec<Sentence>,
-    conclusion: Sentence,
+    hypotheses: Vec<UnresolvedFact>,
+    conclusion: UnresolvedFragment,
     proof: Proof,
 }
 
-impl Theorem {
+impl UnresolvedTheorem {
     pub fn new(
         id: TheoremId,
         templates: Vec<Template>,
-        hypotheses: Vec<Sentence>,
-        conclusion: Sentence,
+        hypotheses: Vec<UnresolvedFact>,
+        conclusion: UnresolvedFragment,
         proof: Proof,
     ) -> Self {
         Self {
@@ -76,9 +45,6 @@ pub enum Proof {
     Axiom,
     Theorem,
 }
-
-#[derive(Debug, Clone)]
-pub struct Sentence;
 
 #[derive(Debug, Clone)]
 pub struct Template {
@@ -105,16 +71,18 @@ impl Template {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct UnresolvedFragment {
-    pub syntax_rule: ParseRuleId,
     pub span: Span,
     pub data: UnresolvedFragmentData,
 }
 
+#[derive(Debug, Clone)]
 pub enum UnresolvedFragmentData {
     Binding(Ustr),
     Lit(Ustr),
     FormalRule {
+        syntax_rule: ParseRuleId,
         formal_cat: FormalSyntaxCatId,
         formal_rule: FormalSyntaxRuleId,
         children: Vec<UnresolvedFragment>,
@@ -122,10 +90,11 @@ pub enum UnresolvedFragmentData {
     VarOrTemplate {
         formal_cat: FormalSyntaxCatId,
         name: Ustr,
-        params: Vec<UnresolvedFragment>,
+        args: Vec<UnresolvedFragment>,
     },
 }
 
+#[derive(Debug, Clone)]
 pub struct UnresolvedFact {
     pub assumption: Option<UnresolvedFragment>,
     pub statement: UnresolvedFragment,

@@ -16,7 +16,7 @@ syntax syntax.implication
 end
 
 syntax syntax.existence
-    sentence ::= "∃" @binding "," sentence
+    sentence ::= "∃" @binding(term) "," sentence
 end
 
 syntax syntax.false
@@ -24,11 +24,11 @@ syntax syntax.false
 end
 
 syntax syntax.variable
-    term ::= @variable
+    term ::= @variable(term)
 end
 
 syntax syntax.epsilon
-    term ::= "ε" @binding "," sentence
+    term ::= "ε" @binding(term) "," sentence
 end
 
 macro command.notation
@@ -82,7 +82,7 @@ macro template.param_shorthand
 end
 
 macro template.arg_shorthand
-    template_arg ::= $n:@name => $n : term
+    template_arg ::= $t:term => $t : term
 end
 
 axiom fol.equality.intro [x] :

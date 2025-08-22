@@ -96,3 +96,7 @@ end
 axiom imp.intro [schema 'p] [schema 'q] : (assume 'p |- 'q)
     |- 'p → 'q
 end
+
+axiom exists.intro [schema 'p(_)] [y] : ('p(y))
+    |- ∃x, 'p(x)
+end

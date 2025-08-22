@@ -1,6 +1,8 @@
-use crate::{
-    parse::{Span, parse_tree::ParseRuleId},
-    semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
+use std::collections::HashMap;
+
+use crate::semant::{
+    formal_syntax::FormalSyntaxCatId,
+    fragments::{Frag, FragId},
 };
 use ustr::Ustr;
 
@@ -11,39 +13,6 @@ impl TheoremId {
     pub fn new(name: Ustr) -> Self {
         Self(name)
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct UnresolvedTheorem {
-    id: TheoremId,
-    templates: Vec<Template>,
-    hypotheses: Vec<UnresolvedFact>,
-    conclusion: UnresolvedFragment,
-    proof: Proof,
-}
-
-impl UnresolvedTheorem {
-    pub fn new(
-        id: TheoremId,
-        templates: Vec<Template>,
-        hypotheses: Vec<UnresolvedFact>,
-        conclusion: UnresolvedFragment,
-        proof: Proof,
-    ) -> Self {
-        Self {
-            id,
-            templates,
-            hypotheses,
-            conclusion,
-            proof,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Proof {
-    Axiom,
-    Theorem,
 }
 
 #[derive(Debug, Clone)]
@@ -72,30 +41,57 @@ impl Template {
 }
 
 #[derive(Debug, Clone)]
-pub struct UnresolvedFragment {
-    pub span: Span,
-    pub data: UnresolvedFragmentData,
+pub struct TheoremStatements {
+    theorems: HashMap<TheoremId, TheoremStatement>,
+}
+
+impl TheoremStatements {
+    pub fn new() -> Self {
+        Self {
+            theorems: HashMap::new(),
+        }
+    }
+
+    pub fn add(&mut self, theorem: TheoremStatement) {
+        self.theorems.insert(theorem.id, theorem);
+    }
 }
 
 #[derive(Debug, Clone)]
-pub enum UnresolvedFragmentData {
-    Binding(Ustr),
-    Lit(Ustr),
-    FormalRule {
-        syntax_rule: ParseRuleId,
-        formal_cat: FormalSyntaxCatId,
-        formal_rule: FormalSyntaxRuleId,
-        children: Vec<UnresolvedFragment>,
-    },
-    VarOrTemplate {
-        formal_cat: FormalSyntaxCatId,
-        name: Ustr,
-        args: Vec<UnresolvedFragment>,
-    },
+pub struct TheoremStatement {
+    id: TheoremId,
+    templates: Vec<Template>,
+    hypotheses: Vec<Fact>,
+    conclusion: FragId,
+}
+
+impl TheoremStatement {
+    pub fn new(
+        id: TheoremId,
+        templates: Vec<Template>,
+        hypotheses: Vec<Fact>,
+        conclusion: FragId,
+    ) -> Self {
+        Self {
+            id,
+            templates,
+            hypotheses,
+            conclusion,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
-pub struct UnresolvedFact {
-    pub assumption: Option<UnresolvedFragment>,
-    pub statement: UnresolvedFragment,
+pub struct Fact {
+    assumption: Option<FragId>,
+    sentence: FragId,
+}
+
+impl Fact {
+    pub fn new(assumption: Option<FragId>, sentence: FragId) -> Self {
+        Self {
+            assumption,
+            sentence,
+        }
+    }
 }

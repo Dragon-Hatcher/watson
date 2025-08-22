@@ -10,14 +10,19 @@ use crate::{
     diagnostics::DiagManager,
     parse::{
         builtin::{
-            add_builtin_syntax, add_formal_lang_syntax, add_macro_match_syntax, add_macro_syntax, elaborate_command, COMMAND_CAT
+            COMMAND_CAT, add_builtin_syntax, add_formal_lang_syntax, add_macro_match_syntax,
+            add_macro_syntax, elaborate_command,
         },
         earley::{find_start_keywords, parse_category, parse_name},
         location::SourceOffset,
         macros::Macros,
         parse_tree::{ParseRule, ParseRuleId, ParseTree, SyntaxCategoryId},
     },
-    semant::{formal_syntax::{FormalSyntax, FormalSyntaxCatId}, theorem::{TheoremId, UnresolvedTheorem}},
+    semant::{
+        formal_syntax::{FormalSyntax, FormalSyntaxCatId},
+        theorem::TheoremId,
+        unresolved::UnresolvedTheorem,
+    },
     strings,
 };
 pub use location::{Location, SourceId, Span};
@@ -25,7 +30,11 @@ pub use source_cache::SourceCache;
 use std::collections::{HashMap, HashSet, VecDeque};
 use ustr::Ustr;
 
-pub fn parse(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager) {
+pub fn parse(
+    root: SourceId,
+    sources: &mut SourceCache,
+    diags: &mut DiagManager,
+) -> (HashMap<TheoremId, UnresolvedTheorem>, FormalSyntax) {
     let mut progress = SourceParseProgress {
         categories: HashMap::new(),
         rules: HashMap::new(),
@@ -48,7 +57,7 @@ pub fn parse(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager)
         parse_source(next, &mut progress, sources, diags);
     }
 
-    dbg!(progress.theorems);
+    (progress.theorems, progress.formal_syntax)
 }
 
 struct SourceParseProgress {

@@ -6,6 +6,7 @@ use ustr::Ustr;
 pub struct FormalSyntax {
     categories: HashMap<FormalSyntaxCatId, ()>,
     rules: HashMap<FormalSyntaxRuleId, FormalSyntaxRule>,
+    solo_var_rules: HashMap<FormalSyntaxCatId, FormalSyntaxRuleId>,
 }
 
 impl FormalSyntax {
@@ -13,6 +14,7 @@ impl FormalSyntax {
         Self {
             categories: HashMap::new(),
             rules: HashMap::new(),
+            solo_var_rules: HashMap::new(),
         }
     }
 
@@ -33,6 +35,17 @@ impl FormalSyntax {
     }
 
     pub fn add_rule(&mut self, rule: FormalSyntaxRule) {
+        if let [var] = rule.pat().parts()
+            && var == &FormalSyntaxPatternPart::Variable(rule.cat)
+        {
+            // This category admits a simple variable as a pattern
+            let old = self.solo_var_rules.insert(rule.cat, rule.id());
+
+            if !old.is_none_or(|old| old == rule.id()) {
+                todo!("err: multiple solo var rules")
+            }
+        }
+
         self.rules.insert(rule.id(), rule);
     }
 
@@ -42,6 +55,10 @@ impl FormalSyntax {
 
     pub fn rules(&self) -> impl Iterator<Item = &FormalSyntaxRule> {
         self.rules.values()
+    }
+
+    pub fn solo_var_rule(&self, cat: FormalSyntaxCatId) -> Option<FormalSyntaxRuleId> {
+        self.solo_var_rules.get(&cat).copied()
     }
 }
 

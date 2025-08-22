@@ -1,6 +1,7 @@
 use crate::{
     diagnostics::{DiagManager, WResult},
     parse::{SourceCache, SourceId, parse},
+    semant::check_proofs,
 };
 use std::{fs, path::Path, process::exit};
 use ustr::Ustr;
@@ -43,5 +44,6 @@ fn make_source_cache(root_file: &Path) -> WResult<(SourceCache, SourceId)> {
 }
 
 fn compile(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager) {
-    parse(root, sources, diags);
+    let (theorems, formal_syntax) = parse(root, sources, diags);
+    check_proofs(theorems, &formal_syntax);
 }

@@ -20,8 +20,9 @@ use crate::{
             FormalSyntaxCatId, FormalSyntaxPattern, FormalSyntaxPatternPart, FormalSyntaxRule,
             FormalSyntaxRuleId,
         },
-        theorem::{
-            Proof, Template, TheoremId, UnresolvedFact, UnresolvedFragment, UnresolvedFragmentData,
+        theorem::{Template, TheoremId},
+        unresolved::{
+            UnresolvedFact, UnresolvedFragment, UnresolvedFragmentData, UnresolvedProof,
             UnresolvedTheorem,
         },
     },
@@ -601,7 +602,13 @@ fn elaborate_axiom(
         return diags.err_duplicate_theorem(name_str, name.span());
     }
 
-    let axiom = UnresolvedTheorem::new(id, templates, hypotheses, conclusion, Proof::Axiom);
+    let axiom = UnresolvedTheorem::new(
+        id,
+        templates,
+        hypotheses,
+        conclusion,
+        UnresolvedProof::Axiom,
+    );
     progress.theorems.insert(id, axiom);
 
     Ok(())
@@ -896,7 +903,7 @@ fn elaborate_formal_rule(
                 elaborate_formal_fragment(child.clone(), progress, diags)?
             }
             FormalSyntaxPatternPart::Lit(expected) => elaborate_formal_lit(child, *expected),
-            FormalSyntaxPatternPart::Binding(_) => elaborate_formal_binding(child),
+            FormalSyntaxPatternPart::Binding(cat) => elaborate_formal_binding(child, *cat),
             FormalSyntaxPatternPart::Variable(cat) => elaborate_formal_var(child, *cat),
         };
         children.push(child_frag);
@@ -926,11 +933,11 @@ fn elaborate_formal_lit(lit: &ParseTree, expected: Ustr) -> UnresolvedFragment {
     }
 }
 
-fn elaborate_formal_binding(binding: &ParseTree) -> UnresolvedFragment {
+fn elaborate_formal_binding(binding: &ParseTree, cat: FormalSyntaxCatId) -> UnresolvedFragment {
     let name = binding.as_name().unwrap();
     UnresolvedFragment {
         span: binding.span(),
-        data: UnresolvedFragmentData::Binding(name),
+        data: UnresolvedFragmentData::Binding { name, cat },
     }
 }
 

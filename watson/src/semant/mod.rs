@@ -14,7 +14,6 @@ pub mod unresolved;
 pub fn check_proofs(theorems: HashMap<TheoremId, UnresolvedTheorem>, formal: &FormalSyntax) {
     let mut ctx = FragCtx::new();
     let statements = collect_theorem_statements(&theorems, formal, &mut ctx);
-    dbg!(statements);
 }
 
 fn collect_theorem_statements(

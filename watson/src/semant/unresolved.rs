@@ -1,5 +1,8 @@
 use crate::{
-    parse::{Span, parse_tree::ParseRuleId},
+    parse::{
+        Span,
+        parse_tree::{ParseRuleId, ParseTree},
+    },
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
         fragments::{FragCtx, FragId},
@@ -38,7 +41,7 @@ impl UnresolvedTheorem {
 #[derive(Debug, Clone)]
 pub enum UnresolvedProof {
     Axiom,
-    Theorem,
+    Theorem(ParseTree),
 }
 
 #[derive(Debug, Clone)]

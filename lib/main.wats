@@ -85,6 +85,14 @@ macro template.arg_shorthand
     template_arg ::= $t:term => $t : term
 end
 
+macro tactic_template.term_shorthand
+    tactic_template ::= "[" $t:term "]" => [$t:term]
+end
+
+macro tactic_template.sentence_shorthand
+    tactic_template ::= "[" "schema" $s:sentence "]" => [$s:sentence]
+end
+
 axiom fol.equality.intro [x] :
     |- x = x
 end
@@ -97,6 +105,24 @@ axiom imp.intro [schema 'p] [schema 'q] : (assume 'p |- 'q)
     |- 'p → 'q
 end
 
+axiom modus_ponens [schema 'p] [schema 'q] : ('p) ('p → 'q)
+    |- 'q
+end
+
 axiom exists.intro [schema 'p(_)] [y] : ('p(y))
     |- ∃x, 'p(x)
 end
+
+theorem eq.comm [x] [y] : (x = y)
+    |- y = x
+proof
+    have x = x by fol.equality.intro;
+    have y = x by fol.equality.elim [x] [y] [schema _ = x];
+qed
+
+theorem eq.trans [x] [y] [z] : (x = y) (y = z)
+    |- x = z
+proof
+    have y = x by eq.comm;
+    have x = z by fol.equality.elim [y] [x] [schema _ = z];
+qed

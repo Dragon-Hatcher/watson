@@ -16,7 +16,13 @@ str_const! {
     MACRO = "macro";
     MACRO_RULE = "macro_rule";
     AXIOM = "axiom";
+    THEOREM = "theorem";
+    PROOF = "proof";
+    QED = "qed";
     ASSUME = "assume";
+    BY = "by";
+    HAVE = "have";
+    TODO = "todo";
 }
 
 // Symbols:
@@ -32,6 +38,7 @@ str_const! {
     LEFT_BRACKET = "[";
     RIGHT_BRACKET = "]";
     COMMA = ",";
+    SEMICOLON = ";";
 }
 
 str_const! {
@@ -43,6 +50,7 @@ str_const! {
     TEMPLATE = "template";
     FORMAL_TEMPLATE_RULE = "formal_template";
     FORMAL_TEMPLATE_ARG_RULE = "formal_template_arg";
+    TACTIC_TEMPLATE_RULE = "tactic_template";
 }
 
 str_const! {

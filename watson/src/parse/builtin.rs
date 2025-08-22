@@ -62,6 +62,9 @@ pub fn elaborate_command(
     } else if command.as_rule(*AXIOM_RULE).is_some() {
         elaborate_axiom(command, progress, diags)?;
         Ok(())
+    } else if command.as_rule(*THEOREM_RULE).is_some() {
+        elaborate_theorem(command, progress, diags)?;
+        Ok(())
     } else {
         unreachable!("No elaborator for parse tree {:?}.", dbg!(command));
     }
@@ -1055,6 +1058,82 @@ fn elaborate_template_arg(
     }
 }
 
+rule_id!(THEOREM_RULE = "theorem");
+
+fn elaborate_theorem(
+    theorem: ParseTree,
+    progress: &mut SourceParseProgress,
+    diags: &mut DiagManager,
+) -> WResult<()> {
+    let theorem = reduce_to_builtin(theorem, &progress.macros, diags)?;
+
+    // command ::= "theorem" name templates ":" hypotheses "|-" sentence "proof" tactics "qed"
+    let Some(
+        [
+            theorem_kw,
+            name,
+            templates,
+            colon,
+            hypotheses,
+            turnstile,
+            conclusion,
+            proof_kw,
+            tactics,
+            qed_kw,
+        ],
+    ) = theorem.as_rule(*THEOREM_RULE)
+    else {
+        panic!("Failed to match builtin rule.");
+    };
+
+    let _ = assert!(theorem_kw.is_kw(*strings::THEOREM));
+    let name_str = name.as_name().unwrap();
+    let templates = elaborate_templates(templates.clone(), progress, diags)?;
+    let _ = assert!(colon.is_lit(*strings::COLON));
+    let hypotheses = elaborate_hypotheses(hypotheses.clone(), progress, diags)?;
+    let _ = assert!(turnstile.is_lit(*strings::TURNSTILE));
+    let conclusion = elaborate_formal_fragment(conclusion.clone(), progress, diags)?;
+    let _ = assert!(proof_kw.is_kw(*strings::PROOF));
+    let _ = assert!(qed_kw.is_kw(*strings::QED));
+
+    let id = TheoremId::new(name_str);
+
+    if progress.theorems.contains_key(&id) {
+        return diags.err_duplicate_theorem(name_str, name.span());
+    }
+
+    let axiom = UnresolvedTheorem::new(
+        id,
+        templates,
+        hypotheses,
+        conclusion,
+        UnresolvedProof::Theorem(tactics.clone()),
+    );
+    progress.theorems.insert(id, axiom);
+
+    Ok(())
+}
+
+// tactics ::= <empty> | tactic tactics
+// tactic ::= "by" name
+//          | "have" sentence tactics ";"
+//          | "todo"
+
+category_id!(TACTICS_CAT = "tactics");
+rule_id!(TACTICS_EMPTY_RULE = "tactics_empty");
+rule_id!(TACTICS_MORE_RULE = "tactics_more");
+
+category_id!(TACTIC_CAT = "tactic");
+rule_id!(TACTIC_BY_RULE = "tactic_by");
+rule_id!(TACTIC_HAVE_RULE = "tactic_have");
+rule_id!(TACTIC_TODO_RULE = "tactic_todo");
+
+category_id!(TACTIC_TEMPLATES_CAT = "tactic_templates");
+rule_id!(TACTIC_TEMPLATES_EMPTY_RULE = "tactic_templates_empty");
+rule_id!(TACTIC_TEMPLATES_MORE_RULE = "tactic_templates_more");
+
+category_id!(TACTIC_TEMPLATE_CAT = "tactic_template");
+
 pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
     let mut insert = |cat, rule, pattern| {
         progress.add_rule(ParseRule {
@@ -1350,6 +1429,61 @@ pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
             cat(*TEMPLATE_ARGS_CAT),
         ],
     );
+
+    // command ::= "theorem" name templates ":" hypotheses "|-" sentence "proof" tactics "qed"
+    insert(
+        *COMMAND_CAT,
+        *THEOREM_RULE,
+        vec![
+            kw(*strings::THEOREM),
+            name(),
+            cat(*TEMPLATES_CAT),
+            lit(*strings::COLON),
+            cat(*HYPOTHESES_CAT),
+            lit(*strings::TURNSTILE),
+            cat(SyntaxCategoryId::FormalLang(FormalSyntaxCatId::sentence())),
+            kw(*strings::PROOF),
+            cat(*TACTICS_CAT),
+            kw(*strings::QED),
+        ],
+    );
+
+    // tactics ::= <empty> | tactic tactics
+    // tactic ::= "by" name tactic_templates
+    //          | "have" sentence tactics ";"
+    //          | "todo"
+
+    insert(*TACTICS_CAT, *TACTICS_EMPTY_RULE, vec![]);
+    insert(
+        *TACTICS_CAT,
+        *TACTICS_MORE_RULE,
+        vec![cat(*TACTIC_CAT), cat(*TACTICS_CAT)],
+    );
+
+    insert(
+        *TACTIC_CAT,
+        *TACTIC_BY_RULE,
+        vec![kw(*strings::BY), name(), cat(*TACTIC_TEMPLATES_CAT)],
+    );
+    insert(
+        *TACTIC_CAT,
+        *TACTIC_HAVE_RULE,
+        vec![
+            kw(*strings::HAVE),
+            cat(SyntaxCategoryId::FormalLang(FormalSyntaxCatId::sentence())),
+            cat(*TACTICS_CAT),
+            lit(*strings::SEMICOLON),
+        ],
+    );
+    insert(*TACTIC_CAT, *TACTIC_TODO_RULE, vec![kw(*strings::TODO)]);
+
+    // tactic_templates ::= <empty> | tactic_template tactic_templates
+    insert(*TACTIC_TEMPLATES_CAT, *TACTIC_TEMPLATES_EMPTY_RULE, vec![]);
+    insert(
+        *TACTIC_TEMPLATES_CAT,
+        *TACTIC_TEMPLATES_MORE_RULE,
+        vec![cat(*TACTIC_TEMPLATE_CAT), cat(*TACTIC_TEMPLATES_CAT)],
+    );
 }
 
 fn formal_syntax_rule_to_rule(rule: &FormalSyntaxRule) -> Option<ParseRule> {
@@ -1424,6 +1558,18 @@ fn formal_syntax_cat_template(formal_cat: FormalSyntaxCatId, progress: &mut Sour
             cat(SyntaxCategoryId::FormalLang(formal_cat)),
             lit(*strings::COLON),
             kw(formal_cat.name()),
+        ],
+    );
+
+    insert(
+        *TACTIC_TEMPLATE_CAT,
+        ParseRuleId::Pattern(*strings::TACTIC_TEMPLATE_RULE, syntax_cat),
+        vec![
+            lit(*strings::LEFT_BRACKET),
+            cat(SyntaxCategoryId::FormalLang(formal_cat)),
+            lit(*strings::COLON),
+            kw(formal_cat.name()),
+            lit(*strings::RIGHT_BRACKET),
         ],
     );
 }

@@ -55,6 +55,10 @@ impl TheoremStatements {
     pub fn add(&mut self, theorem: TheoremStatement) {
         self.theorems.insert(theorem.id, theorem);
     }
+
+    pub fn get(&self, id: TheoremId) -> &TheoremStatement {
+        &self.theorems[&id]
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -79,9 +83,25 @@ impl TheoremStatement {
             conclusion,
         }
     }
+
+    pub fn id(&self) -> TheoremId {
+        self.id
+    }
+
+    pub fn templates(&self) -> &[Template] {
+        &self.templates
+    }
+
+    pub fn hypotheses(&self) -> &[Fact] {
+        &self.hypotheses
+    }
+
+    pub fn conclusion(&self) -> FragId {
+        self.conclusion
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Fact {
     assumption: Option<FragId>,
     sentence: FragId,
@@ -93,5 +113,13 @@ impl Fact {
             assumption,
             sentence,
         }
+    }
+
+    pub fn assumption(&self) -> Option<FragId> {
+        self.assumption
+    }
+
+    pub fn sentence(&self) -> FragId {
+        self.sentence
     }
 }

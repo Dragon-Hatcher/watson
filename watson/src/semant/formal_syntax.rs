@@ -86,6 +86,10 @@ impl FormalSyntaxRuleId {
     pub fn new(name: Ustr) -> Self {
         Self(name)
     }
+
+    pub fn name(&self) -> Ustr {
+        self.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -8,7 +8,7 @@ use crate::{
         SourceCache, SourceId, SourceParseProgress, Span,
         earley::parse_category,
         elaborator::reduce_to_builtin,
-        macros::{MacroId, MacroInfo, MacroPat},
+        macros::{MacroId, MacroInfo, MacroPat, Macros},
         parse_tree::{
             AtomPattern, ParseAtomKind, ParseNode, ParseRule, ParseRuleId, ParseTree, PatternPart,
             SyntaxCategoryId,
@@ -17,8 +17,8 @@ use crate::{
     rule_id,
     semant::{
         formal_syntax::{
-            FormalSyntaxCatId, FormalSyntaxPattern, FormalSyntaxPatternPart, FormalSyntaxRule,
-            FormalSyntaxRuleId,
+            self, FormalSyntax, FormalSyntaxCatId, FormalSyntaxPattern, FormalSyntaxPatternPart,
+            FormalSyntaxRule, FormalSyntaxRuleId,
         },
         theorem::{Template, TheoremId},
         unresolved::{
@@ -596,7 +596,12 @@ fn elaborate_axiom(
     let _ = assert!(colon.is_lit(*strings::COLON));
     let hypotheses = elaborate_hypotheses(hypotheses.clone(), progress, diags)?;
     let _ = assert!(turnstile.is_lit(*strings::TURNSTILE));
-    let conclusion = elaborate_formal_fragment(conclusion.clone(), progress, diags)?;
+    let conclusion = elaborate_formal_fragment(
+        conclusion.clone(),
+        &progress.formal_syntax,
+        &progress.macros,
+        diags,
+    )?;
     let _ = assert!(end_kw.is_kw(*strings::END));
 
     let id = TheoremId::new(name_str);
@@ -818,7 +823,12 @@ fn elaborate_hypothesis(
     };
 
     let _ = assert!(left_paren.is_lit(*strings::LEFT_PAREN));
-    let fact = elaborate_fact(fact.clone(), progress, diags)?;
+    let fact = elaborate_fact(
+        fact.clone(),
+        &progress.formal_syntax,
+        &progress.macros,
+        diags,
+    )?;
     let _ = assert!(right_paren.is_lit(*strings::RIGHT_PAREN));
 
     Ok(fact)
@@ -828,16 +838,17 @@ category_id!(FACT_CAT = "fact");
 rule_id!(FACT_SENTENCE_RULE = "fact_sentence");
 rule_id!(FACT_ASSUME_RULE = "fact_assume");
 
-fn elaborate_fact(
+pub fn elaborate_fact(
     fact: ParseTree,
-    progress: &SourceParseProgress,
+    formal_syntax: &FormalSyntax,
+    macros: &Macros,
     diags: &mut DiagManager,
 ) -> WResult<UnresolvedFact> {
-    let fact = reduce_to_builtin(fact, &progress.macros, diags)?;
+    let fact = reduce_to_builtin(fact, &macros, diags)?;
 
     // fact ::= sentence | "assume" sentence "|-" sentence
     if let Some([sentence]) = fact.as_rule(*FACT_SENTENCE_RULE) {
-        let sentence = elaborate_formal_fragment(sentence.clone(), progress, diags)?;
+        let sentence = elaborate_formal_fragment(sentence.clone(), formal_syntax, macros, diags)?;
         Ok(UnresolvedFact {
             assumption: None,
             statement: sentence,
@@ -846,9 +857,9 @@ fn elaborate_fact(
         fact.as_rule(*FACT_ASSUME_RULE)
     {
         let _ = assert!(assume_kw.is_kw(*strings::ASSUME));
-        let sentence = elaborate_formal_fragment(sentence.clone(), progress, diags)?;
+        let sentence = elaborate_formal_fragment(sentence.clone(), formal_syntax, macros, diags)?;
         let _ = assert!(turnstile.is_lit(*strings::TURNSTILE));
-        let statement = elaborate_formal_fragment(statement.clone(), progress, diags)?;
+        let statement = elaborate_formal_fragment(statement.clone(), formal_syntax, macros, diags)?;
         return Ok(UnresolvedFact {
             assumption: Some(sentence),
             statement,
@@ -860,22 +871,23 @@ fn elaborate_fact(
 
 fn elaborate_formal_fragment(
     frag: ParseTree,
-    progress: &SourceParseProgress,
+    formal_syntax: &FormalSyntax,
+    macros: &Macros,
     diags: &mut DiagManager,
 ) -> WResult<UnresolvedFragment> {
     let og_span = frag.span();
     let og_rule = frag.as_node().unwrap().rule;
-    let frag = reduce_to_builtin(frag, &progress.macros, diags)?;
+    let frag = reduce_to_builtin(frag, &macros, diags)?;
 
     if let ParseTree::Node(node) = &frag
         && let ParseRuleId::FormalLang(_) = node.rule
     {
-        elaborate_formal_rule(frag, og_span, og_rule, progress, diags)
+        elaborate_formal_rule(frag, og_span, og_rule, macros, formal_syntax, diags)
     } else if let ParseTree::Node(node) = &frag
         && let ParseRuleId::Pattern(kind, _) = node.rule
         && kind == *strings::FORMAL_TEMPLATE_RULE
     {
-        elaborate_formal_template(frag, progress, diags)
+        elaborate_formal_template(frag, formal_syntax, macros, diags)
     } else {
         panic!("failed to match builtin rule");
     }
@@ -885,7 +897,8 @@ fn elaborate_formal_rule(
     frag: ParseTree,
     og_span: Span,
     og_rule: ParseRuleId,
-    progress: &SourceParseProgress,
+    macros: &Macros,
+    formal_syntax: &FormalSyntax,
     diags: &mut DiagManager,
 ) -> WResult<UnresolvedFragment> {
     let node = frag.as_node().unwrap();
@@ -898,12 +911,12 @@ fn elaborate_formal_rule(
         panic!("Failed to match builtin rule");
     };
 
-    let formal_pattern = progress.formal_syntax.get_rule(*formal_rule).pat();
+    let formal_pattern = formal_syntax.get_rule(*formal_rule).pat();
     let mut children = Vec::new();
     for (child, pat) in node.children.iter().zip(formal_pattern.parts()) {
         let child_frag = match pat {
             FormalSyntaxPatternPart::Cat(_) => {
-                elaborate_formal_fragment(child.clone(), progress, diags)?
+                elaborate_formal_fragment(child.clone(), formal_syntax, macros, diags)?
             }
             FormalSyntaxPatternPart::Lit(expected) => elaborate_formal_lit(child, *expected),
             FormalSyntaxPatternPart::Binding(cat) => elaborate_formal_binding(child, *cat),
@@ -958,7 +971,8 @@ fn elaborate_formal_var(var: &ParseTree, formal_cat: FormalSyntaxCatId) -> Unres
 
 fn elaborate_formal_template(
     template: ParseTree,
-    progress: &SourceParseProgress,
+    formal_syntax: &FormalSyntax,
+    macros: &Macros,
     diags: &mut DiagManager,
 ) -> WResult<UnresolvedFragment> {
     // <formal_cat> ::= name maybe_template_args
@@ -973,7 +987,7 @@ fn elaborate_formal_template(
     };
 
     let name_str = name.as_name().unwrap();
-    let args = elaborate_maybe_template_args(args.clone(), progress, diags)?;
+    let args = elaborate_maybe_template_args(args.clone(), formal_syntax, macros, diags)?;
 
     Ok(UnresolvedFragment {
         span: template.span(),
@@ -991,18 +1005,19 @@ rule_id!(MAYBE_TEMPLATE_ARGS_ARGS_RULE = "maybe_template_args_args");
 
 fn elaborate_maybe_template_args(
     args: ParseTree,
-    progress: &SourceParseProgress,
+    formal_syntax: &FormalSyntax,
+    macros: &Macros,
     diags: &mut DiagManager,
 ) -> WResult<Vec<UnresolvedFragment>> {
     // maybe_template_args = <empty> | "(" template_args ")"
-    let args = reduce_to_builtin(args, &progress.macros, diags)?;
+    let args = reduce_to_builtin(args, &macros, diags)?;
 
     if let Some([]) = args.as_rule(*MAYBE_TEMPLATE_ARGS_EMPTY_RULE) {
         Ok(Vec::new())
     } else if let Some([l_paren, args, r_paren]) = args.as_rule(*MAYBE_TEMPLATE_ARGS_ARGS_RULE) {
         let _ = assert!(l_paren.is_lit(*strings::LEFT_PAREN));
         let _ = assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
-        elaborate_template_args(args.clone(), progress, diags)
+        elaborate_template_args(args.clone(), formal_syntax, macros, diags)
     } else {
         panic!("Failed to match builtin rule.");
     }
@@ -1014,7 +1029,8 @@ rule_id!(TEMPLATE_ARGS_MORE_RULE = "template_args_more");
 
 fn elaborate_template_args(
     mut args: ParseTree,
-    progress: &SourceParseProgress,
+    formal_syntax: &FormalSyntax,
+    macros: &Macros,
     diags: &mut DiagManager,
 ) -> WResult<Vec<UnresolvedFragment>> {
     // template_args ::= template_arg | template_arg "," template_args
@@ -1022,14 +1038,24 @@ fn elaborate_template_args(
     let mut result = Vec::new();
 
     loop {
-        let args_builtin = reduce_to_builtin(args, &progress.macros, diags)?;
+        let args_builtin = reduce_to_builtin(args, &macros, diags)?;
 
         if let Some([arg]) = args_builtin.as_rule(*TEMPLATE_ARGS_ONE_RULE) {
-            result.push(elaborate_template_arg(arg.clone(), progress, diags)?);
+            result.push(elaborate_template_arg(
+                arg.clone(),
+                formal_syntax,
+                macros,
+                diags,
+            )?);
             break;
         } else if let Some([arg, comma, more]) = args_builtin.as_rule(*TEMPLATE_ARGS_MORE_RULE) {
             let _ = assert!(comma.is_lit(*strings::COMMA));
-            result.push(elaborate_template_arg(arg.clone(), progress, diags)?);
+            result.push(elaborate_template_arg(
+                arg.clone(),
+                formal_syntax,
+                macros,
+                diags,
+            )?);
             args = more.clone();
         } else {
             panic!("Failed to match builtin rule.");
@@ -1043,16 +1069,17 @@ category_id!(TEMPLATE_ARG_CAT = "template_arg");
 
 fn elaborate_template_arg(
     arg: ParseTree,
-    progress: &SourceParseProgress,
+    formal_syntax: &FormalSyntax,
+    macros: &Macros,
     diags: &mut DiagManager,
 ) -> WResult<UnresolvedFragment> {
     // template_arg ::= <formal_cat> ":" "formal_cat_name"
 
-    let arg = reduce_to_builtin(arg, &progress.macros, diags)?;
+    let arg = reduce_to_builtin(arg, &macros, diags)?;
 
     if let Some([arg, colon, _cat]) = arg.as_rule_pat(*strings::FORMAL_TEMPLATE_ARG_RULE) {
         let _ = assert!(colon.is_lit(*strings::COLON));
-        elaborate_formal_fragment(arg.clone(), progress, diags)
+        elaborate_formal_fragment(arg.clone(), formal_syntax, macros, diags)
     } else {
         panic!("Failed to match builtin rule.")
     }
@@ -1092,7 +1119,12 @@ fn elaborate_theorem(
     let _ = assert!(colon.is_lit(*strings::COLON));
     let hypotheses = elaborate_hypotheses(hypotheses.clone(), progress, diags)?;
     let _ = assert!(turnstile.is_lit(*strings::TURNSTILE));
-    let conclusion = elaborate_formal_fragment(conclusion.clone(), progress, diags)?;
+    let conclusion = elaborate_formal_fragment(
+        conclusion.clone(),
+        &progress.formal_syntax,
+        &progress.macros,
+        diags,
+    )?;
     let _ = assert!(proof_kw.is_kw(*strings::PROOF));
     let _ = assert!(qed_kw.is_kw(*strings::QED));
 
@@ -1115,26 +1147,70 @@ fn elaborate_theorem(
 }
 
 // tactics ::= <empty> | tactic tactics
-// tactic ::= "by" name
-//          | "have" sentence tactics ";"
+// tactic ::= "by" name tactic_templates
+//          | "have" fact tactics ";"
 //          | "todo"
 
 category_id!(TACTICS_CAT = "tactics");
 rule_id!(TACTICS_EMPTY_RULE = "tactics_empty");
-rule_id!(TACTICS_MORE_RULE = "tactics_more");
-
-category_id!(TACTIC_CAT = "tactic");
-rule_id!(TACTIC_BY_RULE = "tactic_by");
-rule_id!(TACTIC_HAVE_RULE = "tactic_have");
-rule_id!(TACTIC_TODO_RULE = "tactic_todo");
+rule_id!(TACTICS_BY_RULE = "tactics_by");
+rule_id!(TACTICS_HAVE_RULE = "tactics_have");
+rule_id!(TACTICS_TODO_RULE = "tactics_todo");
 
 category_id!(TACTIC_TEMPLATES_CAT = "tactic_templates");
 rule_id!(TACTIC_TEMPLATES_EMPTY_RULE = "tactic_templates_empty");
 rule_id!(TACTIC_TEMPLATES_MORE_RULE = "tactic_templates_more");
 
+pub fn elaborate_tactic_templates(
+    mut tactic_templates: ParseTree,
+    formal_syntax: &FormalSyntax,
+    macros: &Macros,
+    diags: &mut DiagManager,
+) -> WResult<Vec<UnresolvedFragment>> {
+    let mut result = Vec::new();
+
+    loop {
+        let builtin = reduce_to_builtin(tactic_templates, macros, diags)?;
+
+        if let Some([]) = builtin.as_rule(*TACTIC_TEMPLATES_EMPTY_RULE) {
+            break;
+        } else if let Some([template, rest]) = builtin.as_rule(*TACTIC_TEMPLATES_MORE_RULE) {
+            let template =
+                elaborate_tactic_template(template.clone(), formal_syntax, macros, diags)?;
+            result.push(template);
+            tactic_templates = rest.clone();
+        } else {
+            panic!("Failed to match builtin rule.");
+        }
+    }
+
+    Ok(result)
+}
+
 category_id!(TACTIC_TEMPLATE_CAT = "tactic_template");
 
-pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
+fn elaborate_tactic_template(
+    tactic_template: ParseTree,
+    formal_syntax: &FormalSyntax,
+    macros: &Macros,
+    diags: &mut DiagManager,
+) -> WResult<UnresolvedFragment> {
+    // tactic_template ::= "[" <formal_cat> ":" "formal_cat_name" "]"
+
+    let tactic_template = reduce_to_builtin(tactic_template, macros, diags)?;
+    if let Some([left_bracket, arg, colon, _cat, right_bracket]) =
+        tactic_template.as_rule_pat(*strings::TACTIC_TEMPLATE_RULE)
+    {
+        let _ = assert!(left_bracket.is_lit(*strings::LEFT_BRACKET));
+        let _ = assert!(colon.is_lit(*strings::COLON));
+        let _ = assert!(right_bracket.is_lit(*strings::RIGHT_BRACKET));
+        elaborate_formal_fragment(arg.clone(), formal_syntax, macros, diags)
+    } else {
+        panic!("Failed to match builtin rule.")
+    }
+}
+
+pub(super) fn add_builtin_syntax(progress: &mut SourceParseProgress) {
     let mut insert = |cat, rule, pattern| {
         progress.add_rule(ParseRule {
             id: rule,
@@ -1448,34 +1524,38 @@ pub fn add_builtin_syntax(progress: &mut SourceParseProgress) {
         ],
     );
 
-    // tactics ::= <empty> | tactic tactics
-    // tactic ::= "by" name tactic_templates
-    //          | "have" sentence tactics ";"
-    //          | "todo"
+    // tactics ::= <empty>
+    //          | "by" name tactic_templates tactics
+    //          | "have" fact tactics ";" tactics
+    //          | "todo" tactics
 
     insert(*TACTICS_CAT, *TACTICS_EMPTY_RULE, vec![]);
     insert(
         *TACTICS_CAT,
-        *TACTICS_MORE_RULE,
-        vec![cat(*TACTIC_CAT), cat(*TACTICS_CAT)],
-    );
-
-    insert(
-        *TACTIC_CAT,
-        *TACTIC_BY_RULE,
-        vec![kw(*strings::BY), name(), cat(*TACTIC_TEMPLATES_CAT)],
-    );
-    insert(
-        *TACTIC_CAT,
-        *TACTIC_HAVE_RULE,
+        *TACTICS_BY_RULE,
         vec![
-            kw(*strings::HAVE),
-            cat(SyntaxCategoryId::FormalLang(FormalSyntaxCatId::sentence())),
+            kw(*strings::BY),
+            name(),
+            cat(*TACTIC_TEMPLATES_CAT),
             cat(*TACTICS_CAT),
-            lit(*strings::SEMICOLON),
         ],
     );
-    insert(*TACTIC_CAT, *TACTIC_TODO_RULE, vec![kw(*strings::TODO)]);
+    insert(
+        *TACTICS_CAT,
+        *TACTICS_HAVE_RULE,
+        vec![
+            kw(*strings::HAVE),
+            cat(*FACT_CAT),
+            cat(*TACTICS_CAT),
+            lit(*strings::SEMICOLON),
+            cat(*TACTICS_CAT),
+        ],
+    );
+    insert(
+        *TACTICS_CAT,
+        *TACTICS_TODO_RULE,
+        vec![kw(*strings::TODO), cat(*TACTICS_CAT)],
+    );
 
     // tactic_templates ::= <empty> | tactic_template tactic_templates
     insert(*TACTIC_TEMPLATES_CAT, *TACTIC_TEMPLATES_EMPTY_RULE, vec![]);

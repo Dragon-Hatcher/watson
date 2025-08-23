@@ -1,8 +1,8 @@
-mod builtin;
+pub mod builtin;
 mod earley;
-mod elaborator;
+pub mod elaborator;
 pub mod location;
-mod macros;
+pub mod macros;
 pub mod parse_tree;
 pub mod source_cache;
 
@@ -34,7 +34,7 @@ pub fn parse(
     root: SourceId,
     sources: &mut SourceCache,
     diags: &mut DiagManager,
-) -> (HashMap<TheoremId, UnresolvedTheorem>, FormalSyntax) {
+) -> (HashMap<TheoremId, UnresolvedTheorem>, FormalSyntax, Macros) {
     let mut progress = SourceParseProgress {
         categories: HashMap::new(),
         rules: HashMap::new(),
@@ -57,7 +57,7 @@ pub fn parse(
         parse_source(next, &mut progress, sources, diags);
     }
 
-    (progress.theorems, progress.formal_syntax)
+    (progress.theorems, progress.formal_syntax, progress.macros)
 }
 
 struct SourceParseProgress {

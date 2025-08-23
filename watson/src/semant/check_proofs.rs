@@ -13,7 +13,7 @@ use crate::{
         formal_syntax::FormalSyntax,
         fragments::{Frag, FragCtx, FragData, FragId, FragPart, resolve_fact, resolve_frag},
         theorem::{Fact, Template, TheoremId, TheoremStatements},
-        unresolved::{UnresolvedFact, UnresolvedFragment, UnresolvedFragmentData, UnresolvedProof},
+        unresolved::{UnresolvedFact, UnresolvedFragment, UnresolvedProof},
     },
     strings,
 };
@@ -137,15 +137,7 @@ fn check_proof(
                 let mut template_replacements = HashMap::new();
 
                 for (template, frag) in theorem_statement.templates().iter().zip(by.templates) {
-                    let formal_cat = match frag.data {
-                        UnresolvedFragmentData::Binding { .. } | UnresolvedFragmentData::Lit(_) => {
-                            unreachable!()
-                        }
-                        UnresolvedFragmentData::FormalRule { formal_cat, .. }
-                        | UnresolvedFragmentData::VarOrTemplate { formal_cat, .. } => formal_cat,
-                    };
-
-                    if template.cat() != formal_cat {
+                    if template.cat() != frag.formal_cat {
                         todo!("err: template formal category mismatch");
                     }
 

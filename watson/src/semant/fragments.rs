@@ -1,7 +1,7 @@
 use crate::semant::{
-    formal_syntax::{FormalSyntax, FormalSyntaxCatId, FormalSyntaxPatternPart, FormalSyntaxRuleId},
+    formal_syntax::{FormalSyntax, FormalSyntaxCatId, FormalSyntaxRuleId},
     theorem::{Fact, Template},
-    unresolved::{UnresolvedFact, UnresolvedFragment, UnresolvedFragmentData},
+    unresolved::{UnresolvedFact, UnresolvedFragPart, UnresolvedFragment, UnresolvedFragmentData},
 };
 use itertools::Itertools;
 use slotmap::SlotMap;
@@ -87,29 +87,28 @@ pub fn resolve_frag(
 ) -> FragId {
     use UnresolvedFragmentData as UnFragDat;
 
+    let formal_cat = unresolved.formal_cat;
     let frag = match unresolved.data {
         UnFragDat::FormalRule {
-            formal_cat,
             formal_rule,
             children,
             ..
         } => {
             let mut bindings_added = 0;
             for child in &children {
-                if let UnFragDat::Binding { name, cat } = child.data {
+                if let &UnresolvedFragPart::Binding { name, cat } = child {
                     bindings.push((name, cat));
                     bindings_added += 1;
                 }
             }
 
             let mut parts = Vec::new();
-            let pat_parts = formal.get_rule(formal_rule).pat().parts();
 
-            for (child, pat) in children.into_iter().zip(pat_parts) {
-                let part = match child.data {
-                    UnFragDat::Binding { .. } | UnFragDat::Lit(_) => continue,
-                    UnFragDat::FormalRule { .. } => FragPart::Frag(resolve_frag(
-                        child,
+            for child in children {
+                let part = match child {
+                    UnresolvedFragPart::Binding { .. } | UnresolvedFragPart::Lit => continue,
+                    UnresolvedFragPart::Frag(frag) => FragPart::Frag(resolve_frag(
+                        frag,
                         templates,
                         shorthands,
                         bindings,
@@ -117,33 +116,6 @@ pub fn resolve_frag(
                         formal,
                         ctx,
                     )),
-                    UnFragDat::VarOrTemplate { name, .. } => match pat {
-                        FormalSyntaxPatternPart::Cat(_) => FragPart::Frag(resolve_frag(
-                            child,
-                            templates,
-                            shorthands,
-                            bindings,
-                            allow_holes,
-                            formal,
-                            ctx,
-                        )),
-                        FormalSyntaxPatternPart::Variable(var_cat) => {
-                            if let Some((idx, (_, b_cat))) = bindings
-                                .iter()
-                                .rev()
-                                .find_position(|(b_name, _)| *b_name == name)
-                            {
-                                if b_cat != var_cat {
-                                    todo!("err");
-                                }
-
-                                FragPart::Var(idx)
-                            } else {
-                                todo!("err")
-                            }
-                        }
-                        _ => unreachable!(),
-                    },
                 };
                 parts.push(part);
             }
@@ -162,7 +134,6 @@ pub fn resolve_frag(
             }
         }
         UnFragDat::VarOrTemplate {
-            formal_cat,
             name,
             args,
         } => {
@@ -223,26 +194,20 @@ pub fn resolve_frag(
 
                 let mut arg_frags = Vec::new();
                 for (param, arg) in template.params().iter().zip(args.into_iter()) {
-                    match arg.data {
-                        UnFragDat::FormalRule { formal_cat, .. }
-                        | UnFragDat::VarOrTemplate { formal_cat, .. } => {
-                            if formal_cat != *param {
-                                todo!("err: mismatched cat");
-                            }
-
-                            let arg_frag_id = resolve_frag(
-                                arg,
-                                templates,
-                                shorthands,
-                                bindings,
-                                allow_holes,
-                                formal,
-                                ctx,
-                            );
-                            arg_frags.push(arg_frag_id);
-                        }
-                        UnFragDat::Binding { .. } | UnFragDat::Lit(_) => unreachable!(),
+                    if arg.formal_cat != *param {
+                        todo!("err: mismatched cat");
                     }
+
+                    let arg_frag_id = resolve_frag(
+                        arg,
+                        templates,
+                        shorthands,
+                        bindings,
+                        allow_holes,
+                        formal,
+                        ctx,
+                    );
+                    arg_frags.push(arg_frag_id);
                 }
 
                 Frag {
@@ -257,9 +222,6 @@ pub fn resolve_frag(
                 todo!("err: no match for name")
             }
         }
-        // We are assuming this node is actually a syntax category in the formal
-        // language, not just an atom.
-        UnFragDat::Binding { .. } | UnFragDat::Lit(_) => unreachable!(),
     };
     ctx.get_or_insert(frag)
 }
@@ -318,7 +280,7 @@ pub fn _debug_fragment(frag: FragId, ctx: &FragCtx) -> String {
             parts,
         } => format!(
             "Rule({}, {}, [{}])",
-            rule.name(),
+            rule._name(),
             bindings,
             parts
                 .iter()
@@ -331,9 +293,7 @@ pub fn _debug_fragment(frag: FragId, ctx: &FragCtx) -> String {
         FragData::Template { name, args } => format!(
             "Template({}, [{}])",
             name,
-            args.iter()
-                .map(|arg| _debug_fragment(*arg, ctx))
-                .join(", ")
+            args.iter().map(|arg| _debug_fragment(*arg, ctx)).join(", ")
         ),
         FragData::TemplateArgHole(idx) => format!("TemplateArgHole({idx})"),
     }

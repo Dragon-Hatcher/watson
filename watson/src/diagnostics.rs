@@ -123,7 +123,7 @@ impl DiagManager {
     }
 
     pub fn err_non_existent_file<T>(&mut self, path: &Path, decl: &ParseTree) -> WResult<T> {
-        let diag = Diagnostic::new(&format!("source file `{:?}` does not exist", path))
+        let diag = Diagnostic::new(&format!("source file `{}` does not exist", path.display()))
             .with_error("", decl.span());
 
         self.add_diag(diag);
@@ -144,15 +144,15 @@ impl DiagManager {
     ) -> WResult<T> {
         fn format_atom(atom: &AtomPattern) -> String {
             match atom {
-                AtomPattern::Lit(lit) => format!("\"{}\"", lit),
-                AtomPattern::Kw(kw) => format!("\"{}\"", kw),
-                AtomPattern::Name => format!("a name"),
-                AtomPattern::Str => format!("a string literal"),
+                AtomPattern::Lit(lit) => format!("\"{lit}\""),
+                AtomPattern::Kw(kw) => format!("\"{kw}\""),
+                AtomPattern::Name => "a name".to_string(),
+                AtomPattern::Str => "a string literal".to_string(),
             }
         }
 
-        let expected = if let [] = possible_atoms {
-            format!("what")
+        let expected = if possible_atoms.is_empty() {
+            "what".to_string()
         } else if let [atom] = possible_atoms {
             format!("expected {}", format_atom(atom))
         } else if let [atom1, atom2] = possible_atoms {
@@ -191,7 +191,7 @@ impl DiagManager {
 
     pub fn err_duplicate_theorem<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
         let diag = Diagnostic::new("err_duplicate_theorem")
-            .with_error(&format!("theorem `{}` declared again here", name), span);
+            .with_error(&format!("theorem `{name}` declared again here"), span);
 
         self.add_diag(diag);
         Err(())
@@ -206,7 +206,7 @@ impl DiagManager {
 
     pub fn err_undefined_macro_binding<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
         let diag =
-            Diagnostic::new(&format!("undefined macro binding `${}`", name)).with_error("", span);
+            Diagnostic::new(&format!("undefined macro binding `${name}`")).with_error("", span);
 
         self.add_diag(diag);
         Err(())
@@ -214,7 +214,7 @@ impl DiagManager {
 
     pub fn err_non_existent_syntax_category<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
         let diag =
-            Diagnostic::new(&format!("unknown syntax category `{}`", name)).with_error("", span);
+            Diagnostic::new(&format!("unknown syntax category `{name}`")).with_error("", span);
 
         self.add_diag(diag);
         Err(())

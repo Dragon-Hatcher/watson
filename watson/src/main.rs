@@ -1,16 +1,16 @@
 use crate::{
     diagnostics::{DiagManager, WResult},
-    parse::{macros, parse, SourceCache, SourceId},
-    semant::{check_proofs, ProofReport},
+    parse::{SourceCache, SourceId, parse},
+    semant::{ProofReport, check_proofs},
 };
 use std::{fs, path::Path, process::exit};
 use ustr::Ustr;
 
 mod diagnostics;
 mod parse;
+mod report;
 mod semant;
 mod strings;
-mod report;
 
 fn main() {
     let root_file = std::env::args_os().nth(1).unwrap();

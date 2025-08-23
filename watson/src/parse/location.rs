@@ -52,7 +52,7 @@ impl Location {
         self.source
     }
 
-    pub fn offset(&self) -> SourceOffset {
+    pub fn _offset(&self) -> SourceOffset {
         self.offset
     }
 

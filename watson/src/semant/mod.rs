@@ -2,13 +2,17 @@ use crate::{
     diagnostics::DiagManager,
     parse::macros::Macros,
     semant::{
-        check_proofs::ProofStatus, formal_syntax::FormalSyntax, fragments::{resolve_frag, FragCtx}, theorem::{Fact, TheoremId, TheoremStatement, TheoremStatements}, unresolved::{UnresolvedFragment, UnresolvedProof, UnresolvedTheorem}
+        check_proofs::ProofStatus,
+        formal_syntax::FormalSyntax,
+        fragments::{FragCtx, resolve_frag},
+        theorem::{Fact, TheoremId, TheoremStatement, TheoremStatements},
+        unresolved::{UnresolvedFragment, UnresolvedProof, UnresolvedTheorem},
     },
 };
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
-mod check_proofs;
 mod check_circularity;
+mod check_proofs;
 pub mod formal_syntax;
 mod fragments;
 pub mod theorem;
@@ -22,7 +26,8 @@ pub fn check_proofs(
 ) -> ProofReport {
     let mut ctx = FragCtx::new();
     let (statements, proofs) = collect_theorem_statements(&theorems, formal, &mut ctx);
-    let proof_statuses = check_proofs::check_proofs(&statements, proofs, formal, macros, diags, &mut ctx);
+    let proof_statuses =
+        check_proofs::check_proofs(&statements, proofs, formal, macros, diags, &mut ctx);
     let circular_groups = check_circularity::find_circular_dependency_groups(&proof_statuses);
 
     ProofReport {

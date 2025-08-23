@@ -5,7 +5,6 @@ use crate::{
     },
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
-        fragments::{FragCtx, FragId},
         theorem::{Template, TheoremId},
     },
 };
@@ -46,27 +45,31 @@ pub enum UnresolvedProof {
 
 #[derive(Debug, Clone)]
 pub struct UnresolvedFragment {
-    pub span: Span,
+    pub _span: Span,
+    pub formal_cat: FormalSyntaxCatId,
     pub data: UnresolvedFragmentData,
 }
 
 #[derive(Debug, Clone)]
 pub enum UnresolvedFragmentData {
+    FormalRule {
+        _syntax_rule: ParseRuleId,
+        formal_rule: FormalSyntaxRuleId,
+        children: Vec<UnresolvedFragPart>,
+    },
+    VarOrTemplate {
+        name: Ustr,
+        args: Vec<UnresolvedFragment>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub enum UnresolvedFragPart {
+    Frag(UnresolvedFragment),
+    Lit,
     Binding {
         name: Ustr,
         cat: FormalSyntaxCatId,
-    },
-    Lit(Ustr),
-    FormalRule {
-        syntax_rule: ParseRuleId,
-        formal_cat: FormalSyntaxCatId,
-        formal_rule: FormalSyntaxRuleId,
-        children: Vec<UnresolvedFragment>,
-    },
-    VarOrTemplate {
-        formal_cat: FormalSyntaxCatId,
-        name: Ustr,
-        args: Vec<UnresolvedFragment>,
     },
 }
 

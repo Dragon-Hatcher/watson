@@ -42,7 +42,7 @@ pub fn parse(
         formal_syntax: FormalSyntax::new(),
         macros: Macros::new(),
         theorems: HashMap::new(),
-        commands: Vec::new(),
+        _commands: Vec::new(),
         next_sources: VecDeque::new(),
     };
 
@@ -82,7 +82,7 @@ struct SourceParseProgress {
     /// The commands that have been recovered from the source so far. Note that
     /// these have already been elaborated so nothing more needs to be done with
     /// them. But we keep them for reference.
-    commands: Vec<ParseTree>,
+    _commands: Vec<ParseTree>,
 
     /// The sources that we are going to parse and elaborate next.
     next_sources: VecDeque<SourceId>,

@@ -7,9 +7,9 @@ use ustr::Ustr;
 #[macro_export]
 macro_rules! category_id {
     ($name:ident = $str:literal) => {
-        pub static $name: std::sync::LazyLock<crate::parse::parse_tree::SyntaxCategoryId> =
+        pub static $name: std::sync::LazyLock<$crate::parse::parse_tree::SyntaxCategoryId> =
             std::sync::LazyLock::new(|| {
-                crate::parse::parse_tree::SyntaxCategoryId::Builtin(ustr::Ustr::from($str))
+                $crate::parse::parse_tree::SyntaxCategoryId::Builtin(ustr::Ustr::from($str))
             });
     };
 }
@@ -17,9 +17,9 @@ macro_rules! category_id {
 #[macro_export]
 macro_rules! rule_id {
     ($name:ident = $str:literal) => {
-        pub static $name: std::sync::LazyLock<crate::parse::parse_tree::ParseRuleId> =
+        pub static $name: std::sync::LazyLock<$crate::parse::parse_tree::ParseRuleId> =
             std::sync::LazyLock::new(|| {
-                crate::parse::parse_tree::ParseRuleId::Builtin(ustr::Ustr::from($str))
+                $crate::parse::parse_tree::ParseRuleId::Builtin(ustr::Ustr::from($str))
             });
     };
 }

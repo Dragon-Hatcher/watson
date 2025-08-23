@@ -41,7 +41,7 @@ impl FormalSyntax {
             // This category admits a simple variable as a pattern
             let old = self.solo_var_rules.insert(rule.cat, rule.id());
 
-            if !old.is_none_or(|old| old == rule.id()) {
+            if old.is_some_and(|old| old != rule.id()) {
                 todo!("err: multiple solo var rules")
             }
         }
@@ -87,7 +87,7 @@ impl FormalSyntaxRuleId {
         Self(name)
     }
 
-    pub fn name(&self) -> Ustr {
+    pub fn _name(&self) -> Ustr {
         self.0
     }
 }

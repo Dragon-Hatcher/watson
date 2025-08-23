@@ -17,13 +17,13 @@ use crate::{
     rule_id,
     semant::{
         formal_syntax::{
-            self, FormalSyntax, FormalSyntaxCatId, FormalSyntaxPattern, FormalSyntaxPatternPart,
+            FormalSyntax, FormalSyntaxCatId, FormalSyntaxPattern, FormalSyntaxPatternPart,
             FormalSyntaxRule, FormalSyntaxRuleId,
         },
         theorem::{Template, TheoremId},
         unresolved::{
-            UnresolvedFact, UnresolvedFragment, UnresolvedFragmentData, UnresolvedProof,
-            UnresolvedTheorem,
+            UnresolvedFact, UnresolvedFragPart, UnresolvedFragment, UnresolvedFragmentData,
+            UnresolvedProof, UnresolvedTheorem,
         },
     },
     strings::{self, MACRO_RULE},
@@ -37,7 +37,7 @@ use ustr::Ustr;
 
 category_id!(COMMAND_CAT = "command");
 
-pub fn elaborate_command(
+pub(super) fn elaborate_command(
     command: ParseTree,
     progress: &mut SourceParseProgress,
     sources: &mut SourceCache,
@@ -320,7 +320,7 @@ fn elaborate_macro(
         panic!("Failed to match builtin rule.");
     };
 
-    let replacement = reparse_replacement(replacement, &pattern, sources, &progress, diags)?;
+    let replacement = reparse_replacement(replacement, &pattern, sources, progress, diags)?;
 
     progress.macros.add_macro(MacroInfo::new(
         MacroId::new(name_str),
@@ -703,7 +703,7 @@ fn elaborate_maybe_template_params(
 
     // maybe_template_params = <empty> | "(" template_params ")"
     if let Some([]) = params.as_rule(*MAYBE_TEMPLATE_PARAMS_EMPTY_RULE) {
-        return Ok(Vec::new());
+        Ok(Vec::new())
     } else if let Some([left_paren, template_params, right_paren]) =
         params.as_rule(*MAYBE_TEMPLATE_PARAMS_PARAMS_RULE)
     {
@@ -844,7 +844,7 @@ pub fn elaborate_fact(
     macros: &Macros,
     diags: &mut DiagManager,
 ) -> WResult<UnresolvedFact> {
-    let fact = reduce_to_builtin(fact, &macros, diags)?;
+    let fact = reduce_to_builtin(fact, macros, diags)?;
 
     // fact ::= sentence | "assume" sentence "|-" sentence
     if let Some([sentence]) = fact.as_rule(*FACT_SENTENCE_RULE) {
@@ -877,7 +877,7 @@ fn elaborate_formal_fragment(
 ) -> WResult<UnresolvedFragment> {
     let og_span = frag.span();
     let og_rule = frag.as_node().unwrap().rule;
-    let frag = reduce_to_builtin(frag, &macros, diags)?;
+    let frag = reduce_to_builtin(frag, macros, diags)?;
 
     if let ParseTree::Node(node) = &frag
         && let ParseRuleId::FormalLang(_) = node.rule
@@ -914,55 +914,52 @@ fn elaborate_formal_rule(
     let formal_pattern = formal_syntax.get_rule(*formal_rule).pat();
     let mut children = Vec::new();
     for (child, pat) in node.children.iter().zip(formal_pattern.parts()) {
-        let child_frag = match pat {
-            FormalSyntaxPatternPart::Cat(_) => {
-                elaborate_formal_fragment(child.clone(), formal_syntax, macros, diags)?
-            }
-            FormalSyntaxPatternPart::Lit(expected) => elaborate_formal_lit(child, *expected),
-            FormalSyntaxPatternPart::Binding(cat) => elaborate_formal_binding(child, *cat),
-            FormalSyntaxPatternPart::Variable(cat) => elaborate_formal_var(child, *cat),
-        };
+        let child_frag =
+            match pat {
+                FormalSyntaxPatternPart::Cat(_) => UnresolvedFragPart::Frag(
+                    elaborate_formal_fragment(child.clone(), formal_syntax, macros, diags)?,
+                ),
+                FormalSyntaxPatternPart::Lit(expected) => elaborate_formal_lit(child, *expected),
+                FormalSyntaxPatternPart::Binding(cat) => elaborate_formal_binding(child, *cat),
+                FormalSyntaxPatternPart::Variable(cat) => {
+                    UnresolvedFragPart::Frag(elaborate_formal_var(child, *cat))
+                }
+            };
         children.push(child_frag);
     }
 
     Ok(UnresolvedFragment {
-        span: og_span,
+        _span: og_span,
+        formal_cat: *formal_cat,
         data: UnresolvedFragmentData::FormalRule {
-            syntax_rule: og_rule,
-            formal_cat: *formal_cat,
+            _syntax_rule: og_rule,
             formal_rule: *formal_rule,
             children,
         },
     })
 }
 
-fn elaborate_formal_lit(lit: &ParseTree, expected: Ustr) -> UnresolvedFragment {
+fn elaborate_formal_lit(lit: &ParseTree, expected: Ustr) -> UnresolvedFragPart {
     let atom = lit.as_atom().unwrap();
     let ParseAtomKind::Lit(got) = atom.kind else {
         panic!("failed to match builtin rule");
     };
 
     assert!(got == expected);
-    UnresolvedFragment {
-        span: lit.span(),
-        data: UnresolvedFragmentData::Lit(got),
-    }
+    UnresolvedFragPart::Lit
 }
 
-fn elaborate_formal_binding(binding: &ParseTree, cat: FormalSyntaxCatId) -> UnresolvedFragment {
+fn elaborate_formal_binding(binding: &ParseTree, cat: FormalSyntaxCatId) -> UnresolvedFragPart {
     let name = binding.as_name().unwrap();
-    UnresolvedFragment {
-        span: binding.span(),
-        data: UnresolvedFragmentData::Binding { name, cat },
-    }
+    UnresolvedFragPart::Binding { name, cat }
 }
 
 fn elaborate_formal_var(var: &ParseTree, formal_cat: FormalSyntaxCatId) -> UnresolvedFragment {
     let name = var.as_name().unwrap();
     UnresolvedFragment {
-        span: var.span(),
+        _span: var.span(),
+        formal_cat,
         data: UnresolvedFragmentData::VarOrTemplate {
-            formal_cat,
             name,
             args: Vec::new(),
         },
@@ -990,9 +987,9 @@ fn elaborate_formal_template(
     let args = elaborate_maybe_template_args(args.clone(), formal_syntax, macros, diags)?;
 
     Ok(UnresolvedFragment {
-        span: template.span(),
+        _span: template.span(),
+        formal_cat,
         data: UnresolvedFragmentData::VarOrTemplate {
-            formal_cat,
             name: name_str,
             args,
         },
@@ -1010,7 +1007,7 @@ fn elaborate_maybe_template_args(
     diags: &mut DiagManager,
 ) -> WResult<Vec<UnresolvedFragment>> {
     // maybe_template_args = <empty> | "(" template_args ")"
-    let args = reduce_to_builtin(args, &macros, diags)?;
+    let args = reduce_to_builtin(args, macros, diags)?;
 
     if let Some([]) = args.as_rule(*MAYBE_TEMPLATE_ARGS_EMPTY_RULE) {
         Ok(Vec::new())
@@ -1038,7 +1035,7 @@ fn elaborate_template_args(
     let mut result = Vec::new();
 
     loop {
-        let args_builtin = reduce_to_builtin(args, &macros, diags)?;
+        let args_builtin = reduce_to_builtin(args, macros, diags)?;
 
         if let Some([arg]) = args_builtin.as_rule(*TEMPLATE_ARGS_ONE_RULE) {
             result.push(elaborate_template_arg(
@@ -1075,7 +1072,7 @@ fn elaborate_template_arg(
 ) -> WResult<UnresolvedFragment> {
     // template_arg ::= <formal_cat> ":" "formal_cat_name"
 
-    let arg = reduce_to_builtin(arg, &macros, diags)?;
+    let arg = reduce_to_builtin(arg, macros, diags)?;
 
     if let Some([arg, colon, _cat]) = arg.as_rule_pat(*strings::FORMAL_TEMPLATE_ARG_RULE) {
         let _ = assert!(colon.is_lit(*strings::COLON));
@@ -1654,7 +1651,7 @@ fn formal_syntax_cat_template(formal_cat: FormalSyntaxCatId, progress: &mut Sour
     );
 }
 
-pub fn add_formal_lang_syntax(progress: &mut SourceParseProgress) {
+pub(super) fn add_formal_lang_syntax(progress: &mut SourceParseProgress) {
     let rules: Vec<_> = progress
         .formal_syntax
         .rules()
@@ -1694,7 +1691,7 @@ fn macro_to_rule(mac: &MacroInfo) -> ParseRule {
     }
 }
 
-pub fn add_macro_syntax(progress: &mut SourceParseProgress) {
+pub(super) fn add_macro_syntax(progress: &mut SourceParseProgress) {
     let rules: Vec<_> = progress.macros.macros().map(macro_to_rule).collect();
 
     for rule in rules {
@@ -1702,7 +1699,10 @@ pub fn add_macro_syntax(progress: &mut SourceParseProgress) {
     }
 }
 
-pub fn add_macro_match_syntax(match_cat: SyntaxCategoryId, progress: &mut SourceParseProgress) {
+pub(super) fn add_macro_match_syntax(
+    match_cat: SyntaxCategoryId,
+    progress: &mut SourceParseProgress,
+) {
     let mut insert = |cat, rule, pattern| {
         progress.add_rule(ParseRule {
             id: rule,

@@ -1,9 +1,5 @@
+use crate::semant::{formal_syntax::FormalSyntaxCatId, fragments::FragId};
 use std::collections::HashMap;
-
-use crate::semant::{
-    formal_syntax::FormalSyntaxCatId,
-    fragments::{Frag, FragId},
-};
 use ustr::Ustr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -92,7 +88,7 @@ impl TheoremStatement {
         }
     }
 
-    pub fn id(&self) -> TheoremId {
+    pub fn _id(&self) -> TheoremId {
         self.id
     }
 

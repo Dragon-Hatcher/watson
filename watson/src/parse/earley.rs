@@ -41,6 +41,7 @@ impl EarleyItem {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn parse_category(
     text: &str,
     start_offset: Location,
@@ -106,7 +107,7 @@ fn build_chart(
             pat.parts()[pos]
         });
 
-        if expected_part.map_or(true, |e| e.matches_pat(PatternPart::TemplateCat(category))) {
+        if expected_part.is_none_or(|e| e.matches_pat(PatternPart::TemplateCat(category))) {
             full_template = true;
         }
     }
@@ -119,7 +120,7 @@ fn build_chart(
     let mut current_position = start_offset;
 
     while current_position.byte_offset() <= last_position.byte_offset()
-        && end_offset.map_or(true, |e| current_position.byte_offset() <= e.byte_offset())
+        && end_offset.is_none_or(|e| current_position.byte_offset() <= e.byte_offset())
     {
         let Some(items) = chart.get(&current_position) else {
             // There were no items starting at this position so we move on.
@@ -145,7 +146,7 @@ fn build_chart(
                 });
 
                 if let Some(pat) = rules[&item.rule].pattern.get(item.pattern_pos)
-                    && expected_part.map_or(true, |e| e.matches_pat(*pat))
+                    && expected_part.is_none_or(|e| e.matches_pat(*pat))
                 {
                     // Advance past this section.
                     let end_pos = full_span.end();
@@ -282,6 +283,7 @@ fn _debug_chart(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn trim_chart(
     start_offset: Location,
     target_cat: SyntaxCategoryId,
@@ -356,7 +358,7 @@ fn read_chart(
         });
     };
 
-    let best_choice_rule = &rules[&best_choice_rule_id];
+    let best_choice_rule = &rules[best_choice_rule_id];
 
     fn find_path(
         text: &str,
@@ -459,8 +461,7 @@ fn read_chart(
                 }
             }
             PatternPart::Category(cat) | PatternPart::TemplateCat(cat) => {
-                let child = read_chart(text, span, *cat, rules, chart, bindings_unchecked);
-                child
+                read_chart(text, span, *cat, rules, chart, bindings_unchecked)
             }
         };
         children.push(child);
@@ -574,7 +575,7 @@ fn parse_atom_at_offset(text: &str, start: Location, atom: AtomPattern) -> Optio
 fn parse_macro_binding_at_offset(text: &str, start: Location) -> Option<(Ustr, Span)> {
     let content_offset = skip_ws_and_comments(text, start);
 
-    if text[content_offset.byte_offset()..].chars().next() != Some('$') {
+    if !text[content_offset.byte_offset()..].starts_with('$') {
         return None;
     }
 
@@ -645,9 +646,9 @@ pub fn find_start_keywords(
     root: SyntaxCategoryId,
     rules: &HashMap<ParseRuleId, ParseRule>,
 ) -> HashSet<Ustr> {
-    fn search<'a>(
+    fn search(
         cat: SyntaxCategoryId,
-        start_keywords: &'a mut HashMap<SyntaxCategoryId, HashSet<Ustr>>,
+        start_keywords: &mut HashMap<SyntaxCategoryId, HashSet<Ustr>>,
         rules: &HashMap<ParseRuleId, ParseRule>,
         by_category: &HashMap<SyntaxCategoryId, Vec<ParseRuleId>>,
     ) {
@@ -670,7 +671,7 @@ pub fn find_start_keywords(
                 },
                 PatternPart::Category(cat) | PatternPart::TemplateCat(cat) => {
                     search(*cat, start_keywords, rules, by_category);
-                    set.extend(&start_keywords[&cat]);
+                    set.extend(&start_keywords[cat]);
                 }
             }
         }

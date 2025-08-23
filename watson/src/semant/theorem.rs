@@ -13,6 +13,10 @@ impl TheoremId {
     pub fn new(name: Ustr) -> Self {
         Self(name)
     }
+
+    pub fn name(&self) -> Ustr {
+        self.0
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -58,6 +62,10 @@ impl TheoremStatements {
 
     pub fn get(&self, id: TheoremId) -> &TheoremStatement {
         &self.theorems[&id]
+    }
+
+    pub fn has(&self, id: TheoremId) -> bool {
+        self.theorems.contains_key(&id)
     }
 }
 

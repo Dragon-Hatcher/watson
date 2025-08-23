@@ -1,7 +1,7 @@
 use crate::{
     diagnostics::{DiagManager, WResult},
-    parse::{SourceCache, SourceId, macros, parse},
-    semant::check_proofs,
+    parse::{macros, parse, SourceCache, SourceId},
+    semant::{check_proofs, ProofReport},
 };
 use std::{fs, path::Path, process::exit};
 use ustr::Ustr;
@@ -10,6 +10,7 @@ mod diagnostics;
 mod parse;
 mod semant;
 mod strings;
+mod report;
 
 fn main() {
     let root_file = std::env::args_os().nth(1).unwrap();
@@ -18,10 +19,15 @@ fn main() {
     let mut diags = DiagManager::new();
     let (mut sources, root_source) = make_source_cache(root_file).unwrap();
 
-    compile(root_source, &mut sources, &mut diags);
+    let report = compile(root_source, &mut sources, &mut diags);
 
     if diags.has_errors() {
         diags.print_errors(&sources);
+        exit(1);
+    }
+
+    let all_ok = report::display_report(&report);
+    if !all_ok {
         exit(1);
     }
 }
@@ -43,7 +49,7 @@ fn make_source_cache(root_file: &Path) -> WResult<(SourceCache, SourceId)> {
     Ok((sources, source_id))
 }
 
-fn compile(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager) {
+fn compile(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager) -> ProofReport {
     let (theorems, formal_syntax, macros) = parse(root, sources, diags);
-    check_proofs(theorems, &formal_syntax, &macros, diags);
+    check_proofs(theorems, &formal_syntax, &macros, diags)
 }

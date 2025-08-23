@@ -1,5 +1,3 @@
-use ustr::Ustr;
-
 use crate::{
     diagnostics::{DiagManager, WResult},
     parse::{
@@ -13,9 +11,7 @@ use crate::{
     },
     semant::{
         formal_syntax::FormalSyntax,
-        fragments::{
-            _debug_fragment, Frag, FragCtx, FragData, FragId, FragPart, resolve_fact, resolve_frag,
-        },
+        fragments::{Frag, FragCtx, FragData, FragId, FragPart, resolve_fact, resolve_frag},
         theorem::{Fact, Template, TheoremId, TheoremStatements},
         unresolved::{UnresolvedFact, UnresolvedFragment, UnresolvedFragmentData, UnresolvedProof},
     },
@@ -25,6 +21,7 @@ use std::{
     collections::{HashMap, HashSet},
     vec,
 };
+use ustr::Ustr;
 
 pub fn check_proofs(
     statements: &TheoremStatements,
@@ -33,9 +30,39 @@ pub fn check_proofs(
     macros: &Macros,
     diags: &mut DiagManager,
     ctx: &mut FragCtx,
-) {
+) -> HashMap<TheoremId, ProofStatus> {
+    let mut proof_statuses = HashMap::new();
+
     for (id, proof) in proofs {
-        check_proof(id, proof, statements, formal, macros, diags, ctx);
+        let status = check_proof(id, proof, statements, formal, macros, diags, ctx);
+        proof_statuses.insert(id, status);
+    }
+
+    proof_statuses
+}
+
+pub struct ProofStatus {
+    proof_correct: bool,
+    todo_used: bool,
+    is_axiom: bool,
+    theorems_used: HashSet<TheoremId>,
+}
+
+impl ProofStatus {
+    pub fn proof_correct(&self) -> bool {
+        self.proof_correct
+    }
+
+    pub fn todo_used(&self) -> bool {
+        self.todo_used
+    }
+
+    pub fn theorems_used(&self) -> &HashSet<TheoremId> {
+        &self.theorems_used
+    }
+
+    pub fn is_axiom(&self) -> bool {
+        self.is_axiom
     }
 }
 
@@ -47,9 +74,16 @@ fn check_proof(
     macros: &Macros,
     diags: &mut DiagManager,
     ctx: &mut FragCtx,
-) {
+) -> ProofStatus {
     let tactics = match proof {
-        UnresolvedProof::Axiom => return,
+        UnresolvedProof::Axiom => {
+            return ProofStatus {
+                proof_correct: true,
+                todo_used: false,
+                is_axiom: true,
+                theorems_used: HashSet::new(),
+            };
+        }
         UnresolvedProof::Theorem(tactics) => tactics,
     };
     let statement = statements.get(id);
@@ -66,10 +100,14 @@ fn check_proof(
     };
     let mut state_stack = vec![(start_state, tactics)];
 
+    let mut proof_correct = true;
+    let mut todo_used = false;
+    let mut theorems_used = HashSet::new();
+
     while let Some((state, tactics)) = state_stack.pop() {
         let Ok(tactics) = partially_elaborate_tactics(tactics, formal, macros, diags) else {
             // Some sort of failure with elaboration.
-            continue;
+            todo!("err: failed to elaborate tactics");
         };
         let Some((tactic, rest)) = tactics else {
             // Proof is supposed to be done.
@@ -78,13 +116,19 @@ fn check_proof(
                 continue;
             } else {
                 // Proof failed. We never actually proved the goal.
-                todo!()
+                proof_correct = false;
+                continue;
             }
         };
 
         match tactic {
             PartialTactic::By(by) => {
+                if !statements.has(by.theorem) {
+                    todo!("err: unknown theorem");
+                }
+
                 let theorem_statement = statements.get(by.theorem);
+                theorems_used.insert(by.theorem);
 
                 if theorem_statement.templates().len() != by.templates.len() {
                     todo!("err: wrong number of templates");
@@ -163,9 +207,16 @@ fn check_proof(
                 next_state.knows.insert(Fact::new(None, next_state.goal));
                 state_stack.push((next_state, rest));
 
-                // TODO: add warning.
+                todo_used = true;
             }
         }
+    }
+
+    ProofStatus {
+        proof_correct,
+        todo_used,
+        theorems_used,
+        is_axiom: false,
     }
 }
 

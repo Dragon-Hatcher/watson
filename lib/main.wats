@@ -126,3 +126,21 @@ proof
     have y = x by eq.comm [x] [y];
     have x = z by fol.equality.elim [y] [x] [schema _ = z];
 qed
+
+-- theorem false1 :
+    |- ⊥
+proof
+    by false2
+qed
+
+-- theorem false2 :
+    |- ⊥
+proof
+    
+qed
+
+-- theorem false3 :
+    |- ⊥
+proof
+    by false3
+qed

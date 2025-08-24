@@ -45,7 +45,7 @@ pub enum UnresolvedProof {
 
 #[derive(Debug, Clone)]
 pub struct UnresolvedFragment {
-    pub _span: Span,
+    pub span: Span,
     pub formal_cat: FormalSyntaxCatId,
     pub data: UnresolvedFragmentData,
 }
@@ -67,10 +67,7 @@ pub enum UnresolvedFragmentData {
 pub enum UnresolvedFragPart {
     Frag(UnresolvedFragment),
     Lit,
-    Binding {
-        name: Ustr,
-        cat: FormalSyntaxCatId,
-    },
+    Binding { name: Ustr, cat: FormalSyntaxCatId },
 }
 
 #[derive(Debug, Clone)]

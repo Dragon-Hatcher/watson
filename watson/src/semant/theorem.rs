@@ -105,7 +105,7 @@ impl TheoremStatement {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Fact {
     assumption: Option<FragId>,
     sentence: FragId,

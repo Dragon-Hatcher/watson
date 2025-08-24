@@ -114,6 +114,11 @@ impl Span {
     pub fn bytes(&self) -> Range<usize> {
         self.start().byte_offset()..self.end().byte_offset()
     }
+
+    pub fn union(&self, end: Span) -> Span {
+        assert_eq!(self.source(), end.source());
+        Span::new(self.start(), end.end())
+    }
 }
 
 impl Debug for Span {

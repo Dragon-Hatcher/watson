@@ -1,7 +1,10 @@
 use crate::{
     diagnostics::{DiagManager, WResult},
     parse::{SourceCache, SourceId, parse},
-    semant::{ProofReport, check_proofs},
+    semant::{
+        ProofReport, check_proofs, formal_syntax::FormalSyntax, fragments::FragCtx,
+        theorem::TheoremStatements,
+    },
 };
 use std::{fs, path::Path, process::exit};
 use ustr::Ustr;
@@ -11,22 +14,45 @@ mod parse;
 mod report;
 mod semant;
 mod strings;
+mod util;
 
 fn main() {
     let root_file = std::env::args_os().nth(1).unwrap();
     let root_file = Path::new(&root_file);
 
     let mut diags = DiagManager::new();
+    let mut frag_ctx = FragCtx::new();
+    let mut formal_syntax = None;
     let (mut sources, root_source) = make_source_cache(root_file).unwrap();
 
-    let report = compile(root_source, &mut sources, &mut diags);
+    let report = compile(
+        root_source,
+        &mut sources,
+        &mut diags,
+        &mut frag_ctx,
+        &mut formal_syntax,
+    );
 
-    if diags.has_errors() {
-        diags.print_errors(&sources);
+    if diags.has_fatal_errors() {
+        diags.print_errors(&sources, None, &frag_ctx, formal_syntax.as_ref());
         exit(1);
     }
 
-    let all_ok = report::display_report(&report);
+    let (all_ok, statements) = match report {
+        Ok((report, statements)) => (report::display_report(&report), Some(statements)),
+        Err(_) => (false, None),
+    };
+
+    if diags.has_errors() {
+        println!();
+        diags.print_errors(
+            &sources,
+            statements.as_ref(),
+            &frag_ctx,
+            formal_syntax.as_ref(),
+        );
+    }
+
     if !all_ok {
         exit(1);
     }
@@ -49,7 +75,19 @@ fn make_source_cache(root_file: &Path) -> WResult<(SourceCache, SourceId)> {
     Ok((sources, source_id))
 }
 
-fn compile(root: SourceId, sources: &mut SourceCache, diags: &mut DiagManager) -> ProofReport {
+fn compile(
+    root: SourceId,
+    sources: &mut SourceCache,
+    diags: &mut DiagManager,
+    frag_ctx: &mut FragCtx,
+    formal: &mut Option<FormalSyntax>,
+) -> WResult<(ProofReport, TheoremStatements)> {
     let (theorems, formal_syntax, macros) = parse(root, sources, diags);
-    check_proofs(theorems, &formal_syntax, &macros, diags)
+    *formal = Some(formal_syntax);
+
+    if diags.has_errors() {
+        return Err(());
+    }
+
+    check_proofs(theorems, formal.as_ref().unwrap(), &macros, diags, frag_ctx)
 }

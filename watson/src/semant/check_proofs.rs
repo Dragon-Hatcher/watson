@@ -1,6 +1,7 @@
 use crate::{
     diagnostics::{DiagManager, WResult},
     parse::{
+        Span,
         builtin::{
             TACTICS_BY_RULE, TACTICS_EMPTY_RULE, TACTICS_HAVE_RULE, TACTICS_TODO_RULE,
             elaborate_fact, elaborate_tactic_templates,
@@ -95,7 +96,7 @@ fn check_proof(
 
     let start_state = ProofState {
         goal: statement.conclusion(),
-        knows: statement.hypotheses().iter().cloned().collect(),
+        knowns: statement.hypotheses().iter().cloned().collect(),
         shorthands: HashMap::new(),
     };
     let mut state_stack = vec![(start_state, tactics)];
@@ -104,14 +105,14 @@ fn check_proof(
     let mut todo_used = false;
     let mut theorems_used = HashSet::new();
 
-    while let Some((state, tactics)) = state_stack.pop() {
+    'state: while let Some((state, tactics)) = state_stack.pop() {
         let Ok(tactics) = partially_elaborate_tactics(tactics, formal, macros, diags) else {
             // Some sort of failure with elaboration.
             todo!("err: failed to elaborate tactics");
         };
         let Some((tactic, rest)) = tactics else {
             // Proof is supposed to be done.
-            if state.knows.contains(&Fact::new(None, state.goal)) {
+            if state.knowns.contains(&Fact::new(None, state.goal)) {
                 // Proof complete!
                 continue;
             } else {
@@ -124,14 +125,33 @@ fn check_proof(
         match tactic {
             PartialTactic::By(by) => {
                 if !statements.has(by.theorem) {
-                    todo!("err: unknown theorem");
+                    diags.err_unknown_theorem(id, by.theorem.name(), by.theorem_span);
+                    proof_correct = false;
+                    continue;
                 }
 
                 let theorem_statement = statements.get(by.theorem);
                 theorems_used.insert(by.theorem);
 
                 if theorem_statement.templates().len() != by.templates.len() {
-                    todo!("err: wrong number of templates");
+                    let diff =
+                        theorem_statement.templates().len() as isize - by.templates.len() as isize;
+                    if diff > 0 {
+                        let last_template = if by.templates.is_empty() {
+                            by.theorem_span
+                        } else {
+                            by.templates[by.templates.len() - 1].span
+                        };
+                        let last_template = Span::new(last_template.end(), last_template.end());
+                        diags.err_missing_tactic_templates(id, last_template, diff as usize);
+                    } else {
+                        let start = by.templates[theorem_statement.templates().len()].span;
+                        let end = by.templates[by.templates.len() - 1].span;
+                        let span = start.union(end);
+                        diags.err_extra_tactic_templates(id, span, -diff as usize);
+                    }
+                    proof_correct = false;
+                    continue;
                 }
 
                 let mut template_replacements = HashMap::new();
@@ -141,7 +161,7 @@ fn check_proof(
                         todo!("err: template formal category mismatch");
                     }
 
-                    let resolved_frag = resolve_frag(
+                    let Ok(resolved_frag) = resolve_frag(
                         frag,
                         &templates_map,
                         &state.shorthands,
@@ -149,14 +169,20 @@ fn check_proof(
                         true,
                         formal,
                         ctx,
-                    );
+                        diags,
+                        id,
+                        Some(&state),
+                    ) else {
+                        proof_correct = false;
+                        continue 'state;
+                    };
                     template_replacements.insert(template.name(), resolved_frag);
                 }
 
                 for hypothesis in theorem_statement.hypotheses() {
                     let hypothesis_instantiated =
                         replace_templates_fact(hypothesis, &template_replacements, ctx);
-                    if !state.knows.contains(&hypothesis_instantiated) {
+                    if !state.knowns.contains(&hypothesis_instantiated) {
                         todo!("err: missing hypothesis");
                     }
                 }
@@ -169,11 +195,11 @@ fn check_proof(
                 }
 
                 let mut new_state = state;
-                new_state.knows.insert(Fact::new(None, conclusion));
+                new_state.knowns.insert(Fact::new(None, conclusion));
                 state_stack.push((new_state, rest));
             }
             PartialTactic::Have(have) => {
-                let goal = resolve_fact(
+                let Ok(goal) = resolve_fact(
                     *have.goal,
                     &templates_map,
                     &state.shorthands,
@@ -181,22 +207,28 @@ fn check_proof(
                     false,
                     formal,
                     ctx,
-                );
+                    diags,
+                    id,
+                    Some(&state),
+                ) else {
+                    proof_correct = false;
+                    continue;
+                };
 
                 let mut with_fact = state.clone();
-                with_fact.knows.insert(goal);
+                with_fact.knowns.insert(goal);
                 state_stack.push((with_fact, rest));
 
                 let mut prove_goal = state;
                 if let Some(assume) = goal.assumption() {
-                    prove_goal.knows.insert(Fact::new(None, assume));
+                    prove_goal.knowns.insert(Fact::new(None, assume));
                 }
                 prove_goal.goal = goal.sentence();
                 state_stack.push((prove_goal, have.proof));
             }
             PartialTactic::Todo => {
                 let mut next_state = state;
-                next_state.knows.insert(Fact::new(None, next_state.goal));
+                next_state.knowns.insert(Fact::new(None, next_state.goal));
                 state_stack.push((next_state, rest));
 
                 todo_used = true;
@@ -372,10 +404,24 @@ fn fix_debruijn_indices(frag_id: FragId, shift: usize, ctx: &mut FragCtx) -> Fra
 }
 
 #[derive(Debug, Clone)]
-struct ProofState {
+pub struct ProofState {
     goal: FragId,
-    knows: HashSet<Fact>,
+    knowns: HashSet<Fact>,
     shorthands: HashMap<Ustr, FragId>,
+}
+
+impl ProofState {
+    pub fn goal(&self) -> FragId {
+        self.goal
+    }
+
+    pub fn knowns(&self) -> &HashSet<Fact> {
+        &self.knowns
+    }
+
+    pub fn shorthands(&self) -> &HashMap<Ustr, FragId> {
+        &self.shorthands
+    }
 }
 
 #[derive(Debug)]
@@ -388,6 +434,7 @@ enum PartialTactic {
 #[derive(Debug)]
 struct ByTactic {
     theorem: TheoremId,
+    theorem_span: Span,
     templates: Vec<UnresolvedFragment>,
 }
 
@@ -417,6 +464,7 @@ fn partially_elaborate_tactics(
         let theorem_id = TheoremId::new(name.as_name().unwrap());
         let partial_tactic = PartialTactic::By(ByTactic {
             theorem: theorem_id,
+            theorem_span: name.span(),
             templates: elaborate_tactic_templates(templates.clone(), formal_syntax, macros, diags)?,
         });
         Ok(Some((partial_tactic, rest.clone())))

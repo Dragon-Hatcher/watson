@@ -929,7 +929,7 @@ fn elaborate_formal_rule(
     }
 
     Ok(UnresolvedFragment {
-        _span: og_span,
+        span: og_span,
         formal_cat: *formal_cat,
         data: UnresolvedFragmentData::FormalRule {
             _syntax_rule: og_rule,
@@ -957,7 +957,7 @@ fn elaborate_formal_binding(binding: &ParseTree, cat: FormalSyntaxCatId) -> Unre
 fn elaborate_formal_var(var: &ParseTree, formal_cat: FormalSyntaxCatId) -> UnresolvedFragment {
     let name = var.as_name().unwrap();
     UnresolvedFragment {
-        _span: var.span(),
+        span: var.span(),
         formal_cat,
         data: UnresolvedFragmentData::VarOrTemplate {
             name,
@@ -987,7 +987,7 @@ fn elaborate_formal_template(
     let args = elaborate_maybe_template_args(args.clone(), formal_syntax, macros, diags)?;
 
     Ok(UnresolvedFragment {
-        _span: template.span(),
+        span: template.span(),
         formal_cat,
         data: UnresolvedFragmentData::VarOrTemplate {
             name: name_str,

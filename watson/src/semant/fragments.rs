@@ -1,7 +1,13 @@
-use crate::semant::{
-    formal_syntax::{FormalSyntax, FormalSyntaxCatId, FormalSyntaxRuleId},
-    theorem::{Fact, Template},
-    unresolved::{UnresolvedFact, UnresolvedFragPart, UnresolvedFragment, UnresolvedFragmentData},
+use crate::{
+    diagnostics::{DiagManager, WResult},
+    semant::{
+        check_proofs::ProofState,
+        formal_syntax::{FormalSyntax, FormalSyntaxCatId, FormalSyntaxRuleId},
+        theorem::{Fact, Template, TheoremId},
+        unresolved::{
+            UnresolvedFact, UnresolvedFragPart, UnresolvedFragment, UnresolvedFragmentData,
+        },
+    },
 };
 use itertools::Itertools;
 use slotmap::SlotMap;
@@ -76,6 +82,7 @@ pub enum FragPart {
     Frag(FragId),
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn resolve_frag(
     unresolved: UnresolvedFragment,
     templates: &HashMap<Ustr, &Template>,
@@ -84,7 +91,10 @@ pub fn resolve_frag(
     allow_holes: bool,
     formal: &FormalSyntax,
     ctx: &mut FragCtx,
-) -> FragId {
+    diags: &mut DiagManager,
+    in_theorem: TheoremId,
+    proof_state: Option<&ProofState>,
+) -> WResult<FragId> {
     use UnresolvedFragmentData as UnFragDat;
 
     let formal_cat = unresolved.formal_cat;
@@ -115,7 +125,10 @@ pub fn resolve_frag(
                         allow_holes,
                         formal,
                         ctx,
-                    )),
+                        diags,
+                        in_theorem,
+                        proof_state,
+                    )?),
                 };
                 parts.push(part);
             }
@@ -133,10 +146,7 @@ pub fn resolve_frag(
                 },
             }
         }
-        UnFragDat::VarOrTemplate {
-            name,
-            args,
-        } => {
+        UnFragDat::VarOrTemplate { name, args } => {
             if let Some(idx) = is_template_arg_hole_name(name) {
                 if !args.is_empty() {
                     todo!("err: template arg hole with args");
@@ -146,10 +156,10 @@ pub fn resolve_frag(
                     todo!("err: template arg hole not allowed");
                 }
 
-                return ctx.get_or_insert(Frag {
+                return Ok(ctx.get_or_insert(Frag {
                     cat: formal_cat,
                     data: FragData::TemplateArgHole(idx),
-                });
+                }));
             // Check if this is really a variable.
             } else if args.is_empty()
                 && let Some(solo_rule) = formal.solo_var_rule(formal_cat)
@@ -180,7 +190,7 @@ pub fn resolve_frag(
                     todo!("err: mismatched cat");
                 }
 
-                return *replacement;
+                return Ok(*replacement);
 
             // Ok, it really is a template.
             } else if let Some(template) = templates.get(&name) {
@@ -206,7 +216,10 @@ pub fn resolve_frag(
                         allow_holes,
                         formal,
                         ctx,
-                    );
+                        diags,
+                        in_theorem,
+                        proof_state,
+                    )?;
                     arg_frags.push(arg_frag_id);
                 }
 
@@ -218,12 +231,13 @@ pub fn resolve_frag(
                     },
                 }
             } else {
-                dbg!(name);
-                todo!("err: no match for name")
+                diags.err_unknown_name(in_theorem, proof_state.cloned(), name, unresolved.span);
+
+                return Err(());
             }
         }
     };
-    ctx.get_or_insert(frag)
+    Ok(ctx.get_or_insert(frag))
 }
 
 pub fn is_template_arg_hole_name(name: Ustr) -> Option<usize> {
@@ -238,6 +252,7 @@ pub fn is_template_arg_hole_name(name: Ustr) -> Option<usize> {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn resolve_fact(
     fact: UnresolvedFact,
     templates: &HashMap<Ustr, &Template>,
@@ -246,19 +261,27 @@ pub fn resolve_fact(
     allow_holes: bool,
     formal: &FormalSyntax,
     ctx: &mut FragCtx,
-) -> Fact {
-    Fact::new(
-        fact.assumption.map(|u_frag| {
-            resolve_frag(
-                u_frag,
-                templates,
-                shorthands,
-                bindings,
-                allow_holes,
-                formal,
-                ctx,
-            )
-        }),
+    diags: &mut DiagManager,
+    in_theorem: TheoremId,
+    proof_state: Option<&ProofState>,
+) -> WResult<Fact> {
+    Ok(Fact::new(
+        fact.assumption
+            .map(|u_frag| {
+                resolve_frag(
+                    u_frag,
+                    templates,
+                    shorthands,
+                    bindings,
+                    allow_holes,
+                    formal,
+                    ctx,
+                    diags,
+                    in_theorem,
+                    proof_state,
+                )
+            })
+            .transpose()?,
         resolve_frag(
             fact.statement,
             templates,
@@ -267,8 +290,11 @@ pub fn resolve_fact(
             allow_holes,
             formal,
             ctx,
-        ),
-    )
+            diags,
+            in_theorem,
+            proof_state,
+        )?,
+    ))
 }
 
 pub fn _debug_fragment(frag: FragId, ctx: &FragCtx) -> String {

@@ -54,11 +54,11 @@ notation notation.neg
 end
 
 notation notation.or
-    $p:sentence "∨" $q:sentence => ¬$p → $q
+    $p:sentence "∨" $q:sentence => (¬$p) → $q
 end
 
 notation notation.and
-    $p:sentence "∧" $q:sentence => ¬(¬$p ∨ ¬$q)
+    $p:sentence "∧" $q:sentence => ¬((¬$p) ∨ (¬$q))
 end
 
 notation notation.iff
@@ -125,4 +125,24 @@ theorem eq.trans [x] [y] [z] : (x = y) (y = z)
 proof
     have y = x by eq.comm [x] [y];
     have x = z by fol.equality.elim [y] [x] [schema _ = z];
+qed
+
+axiom and.intro [schema 'p] [schema 'q] : ('p) ('q)
+    |- 'p ∧ 'q
+end
+
+axiom and.elim_left [schema 'p] [schema 'q] : ('p ∧ 'q)
+    |- 'p
+end
+
+axiom and.elim_right [schema 'p] [schema 'q] : ('p ∧ 'q)
+    |- 'q
+end
+
+theorem and.comm [schema 'p] [schema 'q] : ('p ∧ 'q)
+    |- 'q ∧ 'p
+proof
+    have 'p by and.elim_left [schema 'p] [schema 'q];
+    have 'q by and.elim_right [schema 'p] [schema 'q];
+    --by and.intro [schema 'q] [schema 'p]
 qed

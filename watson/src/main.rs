@@ -9,6 +9,7 @@ use crate::{
 use std::{fs, path::Path, process::exit};
 use ustr::Ustr;
 
+mod context;
 mod diagnostics;
 mod parse;
 mod report;

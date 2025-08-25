@@ -1,66 +1,70 @@
-use crate::parse::parse_tree::{AtomPattern, ParseTree, PatternPart, SyntaxCategoryId};
-use std::collections::HashMap;
+use crate::parse::parse_tree::{CategoryId, ParseTree};
+use rustc_hash::FxHashMap;
+use slotmap::{SlotMap, new_key_type};
+use std::{collections::HashMap, ops::Index};
 use ustr::Ustr;
 
 pub struct Macros {
-    macros: HashMap<MacroId, MacroInfo>,
+    macros: SlotMap<MacroId, MacroInfo>,
+    by_name: FxHashMap<Ustr, MacroId>,
 }
+
+new_key_type! { pub struct MacroId; }
 
 impl Macros {
     pub fn new() -> Self {
         Self {
-            macros: HashMap::new(),
+            macros: SlotMap::default(),
+            by_name: FxHashMap::default(),
         }
     }
 
-    pub fn has_id(&self, id: MacroId) -> bool {
-        self.macros.contains_key(&id)
+    pub fn get_id_by_name(&self, name: Ustr) -> Option<MacroId> {
+        self.by_name.get(&name).cloned()
     }
 
-    pub fn add_macro(&mut self, info: MacroInfo) {
-        self.macros.insert(info.id, info);
+    pub fn add_macro(&mut self, info: MacroInfo) -> MacroId {
+        let name = info.name;
+        let id = self.macros.insert(info);
+        self.by_name.insert(name, id);
+        id
     }
 
     pub fn macros(&self) -> impl Iterator<Item = &MacroInfo> {
         self.macros.values()
     }
-
-    pub fn get(&self, id: MacroId) -> Option<&MacroInfo> {
-        self.macros.get(&id)
-    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct MacroId(Ustr);
+impl Index<MacroId> for Macros {
+    type Output = MacroInfo;
 
-impl MacroId {
-    pub fn new(name: Ustr) -> Self {
-        Self(name)
+    fn index(&self, index: MacroId) -> &Self::Output {
+        &self.macros[index]
     }
 }
 
 pub struct MacroInfo {
-    id: MacroId,
-    cat: SyntaxCategoryId,
+    name: Ustr,
+    cat: CategoryId,
     pat: MacroPat,
     replacement: ParseTree,
 }
 
 impl MacroInfo {
-    pub fn new(id: MacroId, cat: SyntaxCategoryId, pat: MacroPat, replacement: ParseTree) -> Self {
+    pub fn new(name: Ustr, cat: CategoryId, pat: MacroPat, replacement: ParseTree) -> Self {
         Self {
-            id,
+            name,
             cat,
             pat,
             replacement,
         }
     }
 
-    pub fn id(&self) -> MacroId {
-        self.id
+    pub fn name(&self) -> Ustr {
+        self.name
     }
 
-    pub fn cat(&self) -> SyntaxCategoryId {
+    pub fn cat(&self) -> CategoryId {
         self.cat
     }
 
@@ -93,28 +97,29 @@ impl MacroPat {
     }
 }
 
+// TODO
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum MacroPatPart {
-    Cat(SyntaxCategoryId),
-    TempCat(SyntaxCategoryId),
+    Cat(CategoryId),
+    TempCat(CategoryId),
     Lit(Ustr),
     Kw(Ustr),
     Name,
 }
 
-impl MacroPatPart {
-    pub fn matches_pat(self, pat: PatternPart) -> bool {
-        use PatternPart as PP;
+// impl MacroPatPart {
+//     pub fn matches_pat(self, pat: PatternPart) -> bool {
+//         use PatternPart as PP;
 
-        match (self, pat) {
-            (
-                MacroPatPart::Cat(cat) | MacroPatPart::TempCat(cat),
-                PP::Category(pat_cat) | PP::TemplateCat(pat_cat),
-            ) => cat == pat_cat,
-            (MacroPatPart::Lit(lit), PP::Atom(AtomPattern::Lit(atom_lit))) => lit == atom_lit,
-            (MacroPatPart::Kw(kw), PP::Atom(AtomPattern::Kw(atom_kw))) => kw == atom_kw,
-            (MacroPatPart::Name, PP::Atom(AtomPattern::Name)) => true,
-            _ => false,
-        }
-    }
-}
+//         match (self, pat) {
+//             (
+//                 MacroPatPart::Cat(cat) | MacroPatPart::TempCat(cat),
+//                 PP::Category(pat_cat) | PP::TemplateCat(pat_cat),
+//             ) => cat == pat_cat,
+//             (MacroPatPart::Lit(lit), PP::Atom(AtomPattern::Lit(atom_lit))) => lit == atom_lit,
+//             (MacroPatPart::Kw(kw), PP::Atom(AtomPattern::Kw(atom_kw))) => kw == atom_kw,
+//             (MacroPatPart::Name, PP::Atom(AtomPattern::Name)) => true,
+//             _ => false,
+//         }
+//     }
+// }

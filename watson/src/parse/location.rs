@@ -15,6 +15,10 @@ impl SourceId {
     pub fn path(&self) -> Ustr {
         self.0
     }
+
+    pub fn start_loc(&self) -> Location {
+        Location::new(*self, SourceOffset::new(0))
+    }
 }
 
 /// A location in an unknown source. Identified by its byte offset in that source.

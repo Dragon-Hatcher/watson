@@ -4,8 +4,8 @@ use crate::{
         Location, Span,
         macros::MacroPat,
         parse_tree::{
-            AtomPattern, MacroBindingKind, MacroBindingNode, ParseAtom, ParseAtomKind, ParseNode,
-            ParseRule, ParseRuleId, ParseTree, PatternPart, SyntaxCategoryId,
+            AtomPattern, CategoryId, MacroBindingKind, MacroBindingNode, ParseAtom, ParseAtomKind,
+            ParseNode, ParseTree, PatternPart, Rule, RuleId,
         },
     },
 };
@@ -18,13 +18,13 @@ use ustr::Ustr;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct EarleyItem {
     start_offset: Location,
-    rule: ParseRuleId,
+    rule: RuleId,
     pattern_pos: usize,
     can_template: bool,
 }
 
 impl EarleyItem {
-    fn new(start_offset: Location, rule: ParseRuleId) -> Self {
+    fn new(start_offset: Location, rule: RuleId) -> Self {
         Self {
             start_offset,
             rule,
@@ -46,8 +46,8 @@ pub fn parse_category(
     text: &str,
     start_offset: Location,
     end_offset: Option<Location>,
-    category: SyntaxCategoryId,
-    rules: &HashMap<ParseRuleId, ParseRule>,
+    category: CategoryId,
+    rules: &HashMap<RuleId, Rule>,
     macro_pat: Option<&MacroPat>,
     can_template: bool,
     diags: &mut DiagManager,
@@ -83,15 +83,15 @@ fn build_chart(
     text: &str,
     start_offset: Location,
     end_offset: Option<Location>,
-    category: SyntaxCategoryId,
-    rules: &HashMap<ParseRuleId, ParseRule>,
+    category: CategoryId,
+    rules: &HashMap<RuleId, Rule>,
     macro_pat: Option<&MacroPat>,
     can_template: bool,
 ) -> (HashMap<Location, HashSet<EarleyItem>>, bool) {
     let by_category = group_by_category(rules);
 
     let mut chart: HashMap<Location, HashSet<EarleyItem>> = HashMap::new();
-    let mut creators: HashMap<(Location, SyntaxCategoryId), HashSet<EarleyItem>> = HashMap::new();
+    let mut creators: HashMap<(Location, CategoryId), HashSet<EarleyItem>> = HashMap::new();
 
     // First we initialize the chart with all rules for the starting symbol.
     for rule in by_category[&category].iter().copied() {
@@ -218,7 +218,7 @@ fn build_chart(
 
 fn create_error(
     chart: &HashMap<Location, HashSet<EarleyItem>>,
-    rules: &HashMap<ParseRuleId, ParseRule>,
+    rules: &HashMap<RuleId, Rule>,
     text: &str,
     diags: &mut DiagManager,
 ) {
@@ -244,10 +244,7 @@ fn create_error(
     let _: WResult<()> = diags.err_parse_failure(post_ws_pos, &possible_atoms);
 }
 
-fn _debug_chart(
-    chart: &HashMap<Location, HashSet<EarleyItem>>,
-    rules: &HashMap<ParseRuleId, ParseRule>,
-) {
+fn _debug_chart(chart: &HashMap<Location, HashSet<EarleyItem>>, rules: &HashMap<RuleId, Rule>) {
     let mut locations: Vec<Location> = chart.keys().copied().collect();
     locations.sort_by_key(|l| l.byte_offset());
 
@@ -286,16 +283,12 @@ fn _debug_chart(
 #[allow(clippy::type_complexity)]
 fn trim_chart(
     start_offset: Location,
-    target_cat: SyntaxCategoryId,
-    rules: &HashMap<ParseRuleId, ParseRule>,
+    target_cat: CategoryId,
+    rules: &HashMap<RuleId, Rule>,
     chart: &HashMap<Location, HashSet<EarleyItem>>,
-) -> (
-    Span,
-    HashMap<(Location, SyntaxCategoryId), Vec<(ParseRuleId, Span)>>,
-) {
+) -> (Span, HashMap<(Location, CategoryId), Vec<(RuleId, Span)>>) {
     let mut best_span = Span::new(start_offset, start_offset);
-    let mut trimmed: HashMap<(Location, SyntaxCategoryId), Vec<(ParseRuleId, Span)>> =
-        HashMap::new();
+    let mut trimmed: HashMap<(Location, CategoryId), Vec<(RuleId, Span)>> = HashMap::new();
 
     for (&end_loc, items) in chart {
         for item in items {
@@ -329,9 +322,9 @@ fn trim_chart(
 fn read_chart(
     text: &str,
     span: Span,
-    category: SyntaxCategoryId,
-    rules: &HashMap<ParseRuleId, ParseRule>,
-    chart: &HashMap<(Location, SyntaxCategoryId), Vec<(ParseRuleId, Span)>>,
+    category: CategoryId,
+    rules: &HashMap<RuleId, Rule>,
+    chart: &HashMap<(Location, CategoryId), Vec<(RuleId, Span)>>,
     bindings_unchecked: bool,
 ) -> ParseTree {
     // Find all the matches that span the full given range and have the right
@@ -365,7 +358,7 @@ fn read_chart(
         full_span: Span,
         search_stack: &mut Vec<Span>,
         pattern: &[PatternPart],
-        chart: &HashMap<(Location, SyntaxCategoryId), Vec<(ParseRuleId, Span)>>,
+        chart: &HashMap<(Location, CategoryId), Vec<(RuleId, Span)>>,
     ) -> Option<Vec<Span>> {
         if let Some(last) = search_stack.last()
             && last.end().byte_offset() > full_span.end().byte_offset()
@@ -476,10 +469,8 @@ fn read_chart(
     })
 }
 
-fn group_by_category(
-    rules: &HashMap<ParseRuleId, ParseRule>,
-) -> HashMap<SyntaxCategoryId, Vec<ParseRuleId>> {
-    let mut map: HashMap<SyntaxCategoryId, Vec<ParseRuleId>> = HashMap::new();
+fn group_by_category(rules: &HashMap<RuleId, Rule>) -> HashMap<CategoryId, Vec<RuleId>> {
+    let mut map: HashMap<CategoryId, Vec<RuleId>> = HashMap::new();
 
     for (rule_id, rule) in rules {
         map.entry(rule.cat).or_default().push(*rule_id);
@@ -642,15 +633,12 @@ fn char_can_continue_name(char: char) -> bool {
     char_can_start_name(char) || char.is_numeric() || char == '\''
 }
 
-pub fn find_start_keywords(
-    root: SyntaxCategoryId,
-    rules: &HashMap<ParseRuleId, ParseRule>,
-) -> HashSet<Ustr> {
+pub fn find_start_keywords(root: CategoryId, rules: &HashMap<RuleId, Rule>) -> HashSet<Ustr> {
     fn search(
-        cat: SyntaxCategoryId,
-        start_keywords: &mut HashMap<SyntaxCategoryId, HashSet<Ustr>>,
-        rules: &HashMap<ParseRuleId, ParseRule>,
-        by_category: &HashMap<SyntaxCategoryId, Vec<ParseRuleId>>,
+        cat: CategoryId,
+        start_keywords: &mut HashMap<CategoryId, HashSet<Ustr>>,
+        rules: &HashMap<RuleId, Rule>,
+        by_category: &HashMap<CategoryId, Vec<RuleId>>,
     ) {
         if start_keywords.contains_key(&cat) {
             return;

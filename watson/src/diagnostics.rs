@@ -364,4 +364,13 @@ impl DiagManager {
 
         self.add_diag(diag);
     }
+
+    pub fn err_incomplete_proof(&mut self, theorem: TheoremId, at: Span, proof_state: ProofState) {
+        let diag = Diagnostic::new("unsolved goal")
+            .with_error("", at)
+            .for_theorem(theorem)
+            .with_proof_state(Some(proof_state));
+
+        self.add_diag(diag);
+    }
 }

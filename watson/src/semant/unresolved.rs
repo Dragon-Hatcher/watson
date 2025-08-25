@@ -1,7 +1,7 @@
 use crate::{
     parse::{
         Span,
-        parse_tree::{ParseRuleId, ParseTree},
+        parse_tree::{ParseTree, RuleId},
     },
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
@@ -53,7 +53,7 @@ pub struct UnresolvedFragment {
 #[derive(Debug, Clone)]
 pub enum UnresolvedFragmentData {
     FormalRule {
-        _syntax_rule: ParseRuleId,
+        _syntax_rule: RuleId,
         formal_rule: FormalSyntaxRuleId,
         children: Vec<UnresolvedFragPart>,
     },

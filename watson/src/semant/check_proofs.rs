@@ -12,7 +12,9 @@ use crate::{
     },
     semant::{
         formal_syntax::FormalSyntax,
-        fragments::{Frag, FragCtx, FragData, FragId, FragPart, resolve_fact, resolve_frag},
+        fragments::{
+            _debug_fragment, Frag, FragCtx, FragData, FragId, FragPart, resolve_fact, resolve_frag,
+        },
         theorem::{Fact, Template, TheoremId, TheoremStatements},
         unresolved::{UnresolvedFact, UnresolvedFragment, UnresolvedProof},
     },
@@ -106,6 +108,7 @@ fn check_proof(
     let mut theorems_used = HashSet::new();
 
     'state: while let Some((state, tactics)) = state_stack.pop() {
+        let full_span = tactics.span();
         let Ok(tactics) = partially_elaborate_tactics(tactics, formal, macros, diags) else {
             // Some sort of failure with elaboration.
             todo!("err: failed to elaborate tactics");
@@ -117,6 +120,7 @@ fn check_proof(
                 continue;
             } else {
                 // Proof failed. We never actually proved the goal.
+                diags.err_incomplete_proof(id, full_span, state.clone());
                 proof_correct = false;
                 continue;
             }
@@ -191,6 +195,10 @@ fn check_proof(
                     replace_templates(theorem_statement.conclusion(), &template_replacements, ctx);
 
                 if conclusion != state.goal {
+                    dbg!(
+                        _debug_fragment(conclusion, ctx),
+                        _debug_fragment(state.goal, ctx)
+                    );
                     todo!("err: theorem conclusion mismatch");
                 }
 

@@ -7,6 +7,7 @@ pub mod parse_tree;
 pub mod source_cache;
 
 use crate::{
+    context::Ctx,
     diagnostics::DiagManager,
     parse::{
         builtin::{
@@ -16,7 +17,7 @@ use crate::{
         earley::{find_start_keywords, parse_category, parse_name},
         location::SourceOffset,
         macros::Macros,
-        parse_tree::{ParseRule, ParseRuleId, ParseTree, SyntaxCategoryId},
+        parse_tree::{CategoryId, ParseTree, Rule, RuleId},
     },
     semant::{
         formal_syntax::{FormalSyntax, FormalSyntaxCatId},
@@ -27,98 +28,51 @@ use crate::{
 };
 pub use location::{Location, SourceId, Span};
 pub use source_cache::SourceCache;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    vec,
+};
 use ustr::Ustr;
 
-pub fn parse(
-    root: SourceId,
-    sources: &mut SourceCache,
-    diags: &mut DiagManager,
-) -> (HashMap<TheoremId, UnresolvedTheorem>, FormalSyntax, Macros) {
-    let mut progress = SourceParseProgress {
-        categories: HashMap::new(),
-        rules: HashMap::new(),
-        command_starters: HashSet::new(),
-        formal_syntax: FormalSyntax::new(),
-        macros: Macros::new(),
-        theorems: HashMap::new(),
-        _commands: Vec::new(),
-        next_sources: VecDeque::new(),
-    };
-
-    progress
-        .formal_syntax
+pub fn parse(root: SourceId, ctx: &mut Ctx) {
+    ctx.formal_syntax
         .add_cat(FormalSyntaxCatId::new(*strings::SENTENCE));
 
-    progress.build_parser_state();
-    progress.next_sources.push_back(root);
+    let mut sources_queue = VecDeque::new();
+    sources_queue.push_back(root);
 
-    while let Some(next) = progress.next_sources.pop_front() {
-        parse_source(next, &mut progress, sources, diags);
-    }
-
-    (progress.theorems, progress.formal_syntax, progress.macros)
-}
-
-struct SourceParseProgress {
-    /// The grammar categories from our grammar so far.
-    categories: HashMap<Ustr, SyntaxCategoryId>,
-
-    /// What parsing rules have been declared?
-    rules: HashMap<ParseRuleId, ParseRule>,
-
-    /// Given the current parsing rules, what keywords can start a command?
-    command_starters: HashSet<Ustr>,
-
-    /// The syntax of the formal language.
-    formal_syntax: FormalSyntax,
-
-    /// The macros we have found so far.
-    macros: Macros,
-
-    /// The theorems we have seen so far.
-    theorems: HashMap<TheoremId, UnresolvedTheorem>,
-
-    /// The commands that have been recovered from the source so far. Note that
-    /// these have already been elaborated so nothing more needs to be done with
-    /// them. But we keep them for reference.
-    _commands: Vec<ParseTree>,
-
-    /// The sources that we are going to parse and elaborate next.
-    next_sources: VecDeque<SourceId>,
-}
-
-impl SourceParseProgress {
-    fn add_rule(&mut self, rule: ParseRule) {
-        self.categories.insert(rule.cat.name(), rule.cat);
-        self.rules.insert(rule.id, rule);
-    }
-
-    fn build_parser_state(&mut self) {
-        add_builtin_syntax(self);
-        add_formal_lang_syntax(self);
-        add_macro_syntax(self);
-
-        for (_name, cat) in self.categories.clone() {
-            // self.categories.insert(k, v)
-            add_macro_match_syntax(cat, self);
-        }
-
-        self.command_starters = find_start_keywords(*COMMAND_CAT, &self.rules);
+    while let Some(next) = sources_queue.pop_front() {
+        parse_source(next, ctx);
     }
 }
+
+// impl SourceParseProgress {
+//     fn add_rule(&mut self, rule: ParseRule) {
+//         self.categories.insert(rule.cat.name(), rule.cat);
+//         self.rules.insert(rule.id, rule);
+//     }
+
+//     fn build_parser_state(&mut self) {
+//         add_builtin_syntax(self);
+//         add_formal_lang_syntax(self);
+//         add_macro_syntax(self);
+
+//         for (_name, cat) in self.categories.clone() {
+//             // self.categories.insert(k, v)
+//             add_macro_match_syntax(cat, self);
+//         }
+
+//         self.command_starters = find_start_keywords(*COMMAND_CAT, &self.rules);
+//     }
+// }
 
 #[allow(unused)]
-fn parse_source(
-    source: SourceId,
-    progress: &mut SourceParseProgress,
-    sources: &mut SourceCache,
-    diags: &mut DiagManager,
-) {
-    let mut loc = Location::new(source, SourceOffset::new(0));
+fn parse_source(source: SourceId, ctx: &mut Ctx) {
+    let mut loc = source.start_loc();
+    let source_length = ctx.sources.get_text(source).len();
 
-    while loc.byte_offset() < sources.get_text(source).len() {
-        let text = sources.get_text(source);
+    while loc.byte_offset() < source_length {
+        let text = ctx.sources.get_text(source);
 
         // Now we check if the line starts with one of the keywords that
         // signifies a command.
@@ -150,7 +104,7 @@ fn parse_source(
             }
         }
 
-        let text = sources.get_text(source);
+        let text = ctx.sources.get_text(source);
 
         // We didn't match any of our command starters so this was just prose.
         // We can skip past the rest of this line.

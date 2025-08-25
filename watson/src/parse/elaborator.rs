@@ -2,7 +2,7 @@ use crate::{
     diagnostics::{DiagManager, WResult},
     parse::{
         macros::Macros,
-        parse_tree::{ParseNode, ParseRuleId, ParseTree},
+        parse_tree::{ParseNode, ParseTree, RuleId},
     },
 };
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ pub fn reduce_to_builtin(
     let mut depth = 0;
 
     while let ParseTree::Node(node) = &tree
-        && let ParseRuleId::Macro(macro_id) = node.rule
+        && let RuleId::Macro(macro_id) = node.rule
     {
         let macro_info = macros.get(macro_id).unwrap();
         tree = replace_bindings(

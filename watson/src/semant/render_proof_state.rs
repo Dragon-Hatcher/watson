@@ -103,6 +103,7 @@ fn format_frag(
             parts,
         } => {
             let mut result = String::new();
+            result.push('(');
 
             for _ in 0..*bindings_count {
                 bindings.push(format!("v{}", bindings.len()));
@@ -114,13 +115,13 @@ fn format_frag(
             for part in rule_pat.pat().parts() {
                 match part {
                     FormalSyntaxPatternPart::Lit(lit) => {
-                        if !result.is_empty() {
+                        if result != "(" {
                             result.push(' ');
                         }
                         result.push_str(lit);
                     }
                     FormalSyntaxPatternPart::Binding(_) => {
-                        if !result.is_empty() {
+                        if result != "(" {
                             result.push(' ');
                         }
                         result.push_str(&format!(
@@ -136,7 +137,7 @@ fn format_frag(
                             FragPart::Var(idx) => bindings[bindings.len() - 1 - idx].clone(),
                             FragPart::Frag(frag_id) => format_frag(*frag_id, ctx, formal, bindings),
                         };
-                        if !result.is_empty() {
+                        if result != "(" {
                             result.push(' ');
                         }
                         result.push_str(&s);
@@ -144,6 +145,7 @@ fn format_frag(
                 }
             }
 
+            result.push(')');
             result
         }
         FragData::Template { name, args } => {

@@ -12,7 +12,7 @@ impl SourceId {
         Self(path)
     }
 
-    pub fn path(&self) -> Ustr {
+    pub fn name(&self) -> Ustr {
         self.0
     }
 
@@ -56,7 +56,7 @@ impl Location {
         self.source
     }
 
-    pub fn _offset(&self) -> SourceOffset {
+    pub fn offset(&self) -> SourceOffset {
         self.offset
     }
 

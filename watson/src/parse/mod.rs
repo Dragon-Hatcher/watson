@@ -1,115 +1,79 @@
-pub mod builtin;
 mod earley;
 pub mod elaborator;
+pub mod grammar;
 pub mod location;
 pub mod macros;
+pub mod parse_state;
 pub mod parse_tree;
 pub mod source_cache;
 
-use crate::{
-    context::Ctx,
-    diagnostics::DiagManager,
-    parse::{
-        builtin::{
-            COMMAND_CAT, add_builtin_syntax, add_formal_lang_syntax, add_macro_match_syntax,
-            add_macro_syntax, elaborate_command,
-        },
-        earley::{find_start_keywords, parse_category, parse_name},
-        location::SourceOffset,
-        macros::Macros,
-        parse_tree::{CategoryId, ParseTree, Rule, RuleId},
-    },
-    semant::{
-        formal_syntax::{FormalSyntax, FormalSyntaxCatId},
-        theorem::TheoremId,
-        unresolved::UnresolvedTheorem,
-    },
-    strings,
-};
 pub use location::{Location, SourceId, Span};
 pub use source_cache::SourceCache;
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    vec,
-};
-use ustr::Ustr;
+
+use crate::context::Ctx;
 
 pub fn parse(root: SourceId, ctx: &mut Ctx) {
-    ctx.formal_syntax
-        .add_cat(FormalSyntaxCatId::new(*strings::SENTENCE));
+    let mut sources_stack = Vec::new();
+    sources_stack.push(root.start_loc());
 
-    let mut sources_queue = VecDeque::new();
-    sources_queue.push_back(root);
-
-    while let Some(next) = sources_queue.pop_front() {
-        parse_source(next, ctx);
+    while let Some(next) = sources_stack.pop() {
+        parse_source(next, ctx, &mut sources_stack);
     }
 }
 
-// impl SourceParseProgress {
-//     fn add_rule(&mut self, rule: ParseRule) {
-//         self.categories.insert(rule.cat.name(), rule.cat);
-//         self.rules.insert(rule.id, rule);
-//     }
-
-//     fn build_parser_state(&mut self) {
-//         add_builtin_syntax(self);
-//         add_formal_lang_syntax(self);
-//         add_macro_syntax(self);
-
-//         for (_name, cat) in self.categories.clone() {
-//             // self.categories.insert(k, v)
-//             add_macro_match_syntax(cat, self);
-//         }
-
-//         self.command_starters = find_start_keywords(*COMMAND_CAT, &self.rules);
-//     }
-// }
-
 #[allow(unused)]
-fn parse_source(source: SourceId, ctx: &mut Ctx) {
-    let mut loc = source.start_loc();
-    let source_length = ctx.sources.get_text(source).len();
+fn parse_source(loc: Location, ctx: &mut Ctx, sources_stack: &mut Vec<Location>) {
+    let source = loc.source();
+    let text = ctx.sources.get_text(source);
 
-    while loc.byte_offset() < source_length {
-        let text = ctx.sources.get_text(source);
+    if loc.byte_offset() >= text.len() {
+        // This file is finished so we don't need to do anything more.
+        return;
+    }
 
-        // Now we check if the line starts with one of the keywords that
-        // signifies a command.
-        if let Some((kw, _)) = parse_name(text, loc)
-            && progress.command_starters.contains(&kw)
-        {
-            // Now we can force parsing of a command at this spot in the source.
-            let command = parse_category(
-                text,
-                loc,
-                None,
-                *COMMAND_CAT,
-                &progress.rules,
-                None,
-                false,
-                diags,
-            );
+    // Check if the current line could possible start a command.
+    if true {
+        // The current line could start a command so we will assume it does.
 
-            // Now we can skip the command we just parsed. If we didn't manage
-            // to parse anything then we skip to the next line below.
-            if let Some(command) = command {
-                loc = command.span().end();
+        let Ok(promise) = earley::parse(loc, ctx.builtin_cats.command, ctx) else {
+            // We weren't able to parse a command. The parse error has already
+            // been reported so we will simply move onto the next line.
+            let text = ctx.sources.get_text(source);
+            sources_stack.push(next_line(text, loc));
+            return;
+        };
 
-                // Elaborate the command in our current context.
-                elaborate_command(command, progress, sources, diags);
-                progress.build_parser_state();
+        // Push the location after this command onto the stack so we can
+        // continue parsing this source file later.
+        let after_command = promise.span().end();
+        sources_stack.push(after_command);
 
-                continue;
-            }
+        // Now let's elaborate the command.
+        let Ok(new_source) = elaborator::elaborate_command(promise, ctx) else {
+            // There was an error elaborating the command. We don't need to do
+            // anything more here as the error has already been reported.
+            return;
+        };
+
+        if let Some(new_source) = new_source {
+            // This command was a module declaration so we need to parse the
+            // newly loaded source file as well. Pushing to the stack now
+            // means we will parse it before continuing with the current file.
+            let start_loc = new_source.start_loc();
+            sources_stack.push(start_loc);
         }
-
+    } else {
+        // This line doesn't start a command so we can skip to the next line.
         let text = ctx.sources.get_text(source);
+        sources_stack.push(next_line(text, loc));
+    }
+}
 
-        // We didn't match any of our command starters so this was just prose.
-        // We can skip past the rest of this line.
-        let rest = &text[loc.byte_offset()..];
-        let line = rest.split_inclusive('\n').next().unwrap();
-        loc = loc.forward(line.len());
+fn next_line(text: &str, loc: Location) -> Location {
+    let rest = &text[loc.byte_offset()..];
+    if let Some(line) = rest.split_inclusive('\n').next() {
+        loc.forward(line.len())
+    } else {
+        loc.forward(rest.len())
     }
 }

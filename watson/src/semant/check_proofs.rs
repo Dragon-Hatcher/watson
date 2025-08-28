@@ -2,7 +2,7 @@ use crate::{
     diagnostics::{DiagManager, WResult},
     parse::{
         Span,
-        builtin::{
+        grammar::{
             TACTICS_BY_RULE, TACTICS_EMPTY_RULE, TACTICS_HAVE_RULE, TACTICS_TODO_RULE,
             elaborate_fact, elaborate_tactic_templates,
         },

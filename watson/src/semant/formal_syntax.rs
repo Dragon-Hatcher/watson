@@ -1,141 +1,91 @@
-use crate::strings;
-use std::collections::HashMap;
+use std::ops::Index;
+
+use rustc_hash::FxHashMap;
+use slotmap::{SlotMap, new_key_type};
 use ustr::Ustr;
+
+use crate::strings;
 
 #[derive(Debug, Clone)]
 pub struct FormalSyntax {
-    categories: HashMap<FormalSyntaxCatId, ()>,
-    rules: HashMap<FormalSyntaxRuleId, FormalSyntaxRule>,
-    solo_var_rules: HashMap<FormalSyntaxCatId, FormalSyntaxRuleId>,
+    cats: SlotMap<FormalSyntaxCatId, FormalSyntaxCat>,
+    cats_by_name: FxHashMap<Ustr, FormalSyntaxCatId>,
+    sentence_cat: FormalSyntaxCatId,
+
+    rules: SlotMap<FormalSyntaxRuleId, FormalSyntaxRule>,
 }
 
 impl FormalSyntax {
     pub fn new() -> Self {
+        let mut cats = SlotMap::default();
+        let sentence_cat = cats.insert(FormalSyntaxCat::new(*strings::SENTENCE));
+        let mut cats_by_name = FxHashMap::default();
+        cats_by_name.insert(*strings::SENTENCE, sentence_cat);
+
         Self {
-            categories: HashMap::new(),
-            rules: HashMap::new(),
-            solo_var_rules: HashMap::new(),
+            cats,
+            cats_by_name,
+            sentence_cat,
+            rules: SlotMap::default(),
         }
     }
 
-    pub fn has_cat(&self, id: FormalSyntaxCatId) -> bool {
-        self.categories.contains_key(&id)
+    pub fn add_cat(&mut self, cat: FormalSyntaxCat) -> FormalSyntaxCatId {
+        let name = cat.name;
+        assert!(!self.cats_by_name.contains_key(&name));
+        let id = self.cats.insert(cat);
+        self.cats_by_name.insert(name, id);
+        id
     }
 
-    pub fn add_cat(&mut self, id: FormalSyntaxCatId) {
-        self.categories.insert(id, ());
+    pub fn cat_by_name(&self, name: Ustr) -> Option<FormalSyntaxCatId> {
+        self.cats_by_name.get(&name).cloned()
     }
 
-    pub fn cats(&self) -> impl Iterator<Item = &FormalSyntaxCatId> {
-        self.categories.keys()
+    pub fn sentence_cat(&self) -> FormalSyntaxCatId {
+        self.sentence_cat
     }
 
-    pub fn has_rule(&self, id: FormalSyntaxRuleId) -> bool {
-        self.rules.contains_key(&id)
-    }
-
-    pub fn add_rule(&mut self, rule: FormalSyntaxRule) {
-        if let [var] = rule.pat().parts()
-            && var == &FormalSyntaxPatternPart::Variable(rule.cat)
-        {
-            // This category admits a simple variable as a pattern
-            let old = self.solo_var_rules.insert(rule.cat, rule.id());
-
-            if old.is_some_and(|old| old != rule.id()) {
-                todo!("err: multiple solo var rules")
-            }
-        }
-
-        self.rules.insert(rule.id(), rule);
-    }
-
-    pub fn get_rule(&self, rule: FormalSyntaxRuleId) -> &FormalSyntaxRule {
-        &self.rules[&rule]
-    }
-
-    pub fn rules(&self) -> impl Iterator<Item = &FormalSyntaxRule> {
-        self.rules.values()
-    }
-
-    pub fn solo_var_rule(&self, cat: FormalSyntaxCatId) -> Option<FormalSyntaxRuleId> {
-        self.solo_var_rules.get(&cat).copied()
+    pub fn add_rule(&mut self, cat: FormalSyntaxCatId) -> FormalSyntaxRuleId {
+        self.rules.insert(FormalSyntaxRule { cat })
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct FormalSyntaxCatId(Ustr);
+impl Index<FormalSyntaxCatId> for FormalSyntax {
+    type Output = FormalSyntaxCat;
 
-impl FormalSyntaxCatId {
-    pub fn new(name: Ustr) -> Self {
-        Self(name)
+    fn index(&self, index: FormalSyntaxCatId) -> &Self::Output {
+        &self.cats[index]
     }
+}
 
-    pub fn sentence() -> Self {
-        Self::new(*strings::SENTENCE)
+impl Index<FormalSyntaxRuleId> for FormalSyntax {
+    type Output = FormalSyntaxRule;
+
+    fn index(&self, index: FormalSyntaxRuleId) -> &Self::Output {
+        &self.rules[index]
+    }
+}
+
+new_key_type! { pub struct FormalSyntaxCatId; }
+new_key_type! { pub struct FormalSyntaxRuleId; }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FormalSyntaxCat {
+    name: Ustr,
+}
+
+impl FormalSyntaxCat {
+    pub fn new(name: Ustr) -> Self {
+        Self { name }
     }
 
     pub fn name(&self) -> Ustr {
-        self.0
+        self.name
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct FormalSyntaxRuleId(Ustr);
-
-impl FormalSyntaxRuleId {
-    pub fn new(name: Ustr) -> Self {
-        Self(name)
-    }
-
-    pub fn _name(&self) -> Ustr {
-        self.0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FormalSyntaxRule {
     cat: FormalSyntaxCatId,
-    rule: FormalSyntaxRuleId,
-    pat: FormalSyntaxPattern,
-}
-
-impl FormalSyntaxRule {
-    pub fn new(cat: FormalSyntaxCatId, rule: FormalSyntaxRuleId, pat: FormalSyntaxPattern) -> Self {
-        Self { cat, rule, pat }
-    }
-
-    pub fn cat(&self) -> FormalSyntaxCatId {
-        self.cat
-    }
-
-    pub fn id(&self) -> FormalSyntaxRuleId {
-        self.rule
-    }
-
-    pub fn pat(&self) -> &FormalSyntaxPattern {
-        &self.pat
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FormalSyntaxPattern {
-    parts: Vec<FormalSyntaxPatternPart>,
-}
-
-impl FormalSyntaxPattern {
-    pub fn new(parts: Vec<FormalSyntaxPatternPart>) -> Self {
-        Self { parts }
-    }
-
-    pub fn parts(&self) -> &[FormalSyntaxPatternPart] {
-        &self.parts
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FormalSyntaxPatternPart {
-    Cat(FormalSyntaxCatId),
-    Lit(Ustr),
-    Binding(FormalSyntaxCatId),
-    Variable(FormalSyntaxCatId),
 }

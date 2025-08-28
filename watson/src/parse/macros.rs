@@ -1,4 +1,4 @@
-use crate::parse::parse_tree::{CategoryId, ParseTree};
+use crate::parse::{parse_state::CategoryId, parse_tree::ParseTree};
 use rustc_hash::FxHashMap;
 use slotmap::{SlotMap, new_key_type};
 use std::{collections::HashMap, ops::Index};
@@ -106,20 +106,3 @@ pub enum MacroPatPart {
     Kw(Ustr),
     Name,
 }
-
-// impl MacroPatPart {
-//     pub fn matches_pat(self, pat: PatternPart) -> bool {
-//         use PatternPart as PP;
-
-//         match (self, pat) {
-//             (
-//                 MacroPatPart::Cat(cat) | MacroPatPart::TempCat(cat),
-//                 PP::Category(pat_cat) | PP::TemplateCat(pat_cat),
-//             ) => cat == pat_cat,
-//             (MacroPatPart::Lit(lit), PP::Atom(AtomPattern::Lit(atom_lit))) => lit == atom_lit,
-//             (MacroPatPart::Kw(kw), PP::Atom(AtomPattern::Kw(atom_kw))) => kw == atom_kw,
-//             (MacroPatPart::Name, PP::Atom(AtomPattern::Name)) => true,
-//             _ => false,
-//         }
-//     }
-// }

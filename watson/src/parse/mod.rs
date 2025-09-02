@@ -35,7 +35,7 @@ fn parse_source(loc: Location, ctx: &mut Ctx, sources_stack: &mut Vec<Location>)
     if true {
         // The current line could start a command so we will assume it does.
 
-        let Ok(promise) = earley::parse(loc, ctx.builtin_cats.command, ctx) else {
+        let Ok(tree) = earley::parse(loc, ctx.builtin_cats.command, ctx) else {
             // We weren't able to parse a command. The parse error has already
             // been reported so we will simply move onto the next line.
             let text = ctx.sources.get_text(source);
@@ -45,11 +45,11 @@ fn parse_source(loc: Location, ctx: &mut Ctx, sources_stack: &mut Vec<Location>)
 
         // Push the location after this command onto the stack so we can
         // continue parsing this source file later.
-        let after_command = promise.span().end();
+        let after_command = ctx.parse_forest[tree].span().end();
         sources_stack.push(after_command);
 
         // Now let's elaborate the command.
-        let Ok(new_source) = elaborator::elaborate_command(promise, ctx) else {
+        let Ok(new_source) = elaborator::elaborate_command(tree, ctx) else {
             // There was an error elaborating the command. We don't need to do
             // anything more here as the error has already been reported.
             return;

@@ -22,7 +22,7 @@ impl SourceId {
 }
 
 /// A location in an unknown source. Identified by its byte offset in that source.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SourceOffset(usize);
 
 impl SourceOffset {

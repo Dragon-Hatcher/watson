@@ -100,11 +100,29 @@ pub enum SyntaxCategorySource {
     FormalLang(FormalSyntaxCatId),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Precedence(usize);
+
+impl Precedence {
+    pub fn new(level: usize) -> Self {
+        Self(level)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Associativity {
+    Left,
+    Right,
+    NonAssoc,
+}
+
 pub struct Rule {
     name: Ustr,
     cat: CategoryId,
     source: ParseRuleSource,
     pattern: RulePattern,
+    precedence: Precedence,
+    associativity: Associativity,
 }
 
 impl Rule {
@@ -119,6 +137,8 @@ impl Rule {
             cat,
             source,
             pattern,
+            precedence: Precedence(0),
+            associativity: Associativity::NonAssoc,
         }
     }
 
@@ -137,6 +157,14 @@ impl Rule {
     pub fn pattern(&self) -> &RulePattern {
         &self.pattern
     }
+
+    pub fn precedence(&self) -> Precedence {
+        self.precedence
+    }
+
+    pub fn associativity(&self) -> Associativity {
+        self.associativity
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -146,6 +174,7 @@ pub enum ParseRuleSource {
     Macro(MacroId),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RulePattern {
     parts: Vec<RulePatternPart>,
 }
@@ -174,4 +203,3 @@ pub enum ParseAtomPattern {
     Name,
     Str,
 }
-

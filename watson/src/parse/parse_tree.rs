@@ -1,6 +1,9 @@
-use crate::parse::{
-    Span,
-    parse_state::{CategoryId, ParseAtomPattern, RuleId},
+use crate::{
+    context::Ctx,
+    parse::{
+        Span,
+        parse_state::{CategoryId, ParseAtomPattern, RuleId},
+    },
 };
 use rustc_hash::FxHashMap;
 use slotmap::{SlotMap, new_key_type};
@@ -9,28 +12,25 @@ use ustr::Ustr;
 
 pub struct ParseForest {
     trees: SlotMap<ParseTreeId, ParseTree>,
-    promises: FxHashMap<ParseTreePromise, Vec<RuleId>>,
+    ids_by_tree: FxHashMap<ParseTree, ParseTreeId>,
 }
 
 impl ParseForest {
     pub fn new() -> Self {
         Self {
             trees: SlotMap::default(),
-            promises: FxHashMap::default(),
+            ids_by_tree: FxHashMap::default(),
         }
     }
 
-    pub fn add_promise(&mut self, promise: ParseTreePromise, rule: RuleId) {
-        self.promises.entry(promise).or_default().push(rule);
-    }
-
-    pub fn rules_for_promise(&self, promise: ParseTreePromise) -> &[RuleId] {
-        self.promises.get(&promise).map(|v| &v[..]).unwrap_or(&[])
-    }
-
-    pub fn resolve_promise(&mut self, _promise: ParseTreePromise, _rule: RuleId) -> ParseTreeId {
-        dbg!(_promise);
-        todo!()
+    pub fn get_or_insert(&mut self, tree: ParseTree) -> ParseTreeId {
+        if let Some(&id) = self.ids_by_tree.get(&tree) {
+            id
+        } else {
+            let id = self.trees.insert(tree.clone());
+            self.ids_by_tree.insert(tree, id);
+            id
+        }
     }
 }
 
@@ -44,20 +44,40 @@ impl Index<ParseTreeId> for ParseForest {
 
 new_key_type! { pub struct ParseTreeId; }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParseTree {
     span: Span,
     cat: CategoryId,
-    rule: RuleId,
-    children: Vec<ParseTreePart>,
+    possibilities: Vec<ParseTreeChildren>,
 }
 
 impl ParseTree {
+    pub fn new(span: Span, cat: CategoryId, possibilities: Vec<ParseTreeChildren>) -> Self {
+        Self {
+            span,
+            cat,
+            possibilities,
+        }
+    }
+
     pub fn span(&self) -> Span {
         self.span
     }
 
     pub fn cat(&self) -> CategoryId {
         self.cat
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ParseTreeChildren {
+    rule: RuleId,
+    children: Vec<ParseTreePart>,
+}
+
+impl ParseTreeChildren {
+    pub fn new(rule: RuleId, children: Vec<ParseTreePart>) -> Self {
+        Self { rule, children }
     }
 
     pub fn rule(&self) -> RuleId {
@@ -73,7 +93,11 @@ impl ParseTree {
 pub enum ParseTreePart {
     Atom(ParseAtom),
     MacroBinding(ParseMacroBinding),
-    Node(ParseTreePromise),
+    Node {
+        id: ParseTreeId,
+        span: Span,
+        cat: CategoryId,
+    },
 }
 
 impl ParseTreePart {
@@ -81,7 +105,7 @@ impl ParseTreePart {
         match self {
             Self::Atom(atom) => atom.span,
             Self::MacroBinding(binding) => binding.span,
-            Self::Node(node) => node.span,
+            Self::Node { span, .. } => *span,
         }
     }
 
@@ -112,6 +136,20 @@ pub struct ParseAtom {
     kind: ParseAtomKind,
 }
 
+impl ParseAtom {
+    pub fn new(span: Span, kind: ParseAtomKind) -> Self {
+        Self { span, kind }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    pub fn kind(&self) -> ParseAtomKind {
+        self.kind
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ParseAtomKind {
     Lit(Ustr),
@@ -121,28 +159,52 @@ pub enum ParseAtomKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ParseTreePromise {
-    cat: CategoryId,
-    span: Span,
-}
-
-impl ParseTreePromise {
-    pub fn new(cat: CategoryId, span: Span) -> Self {
-        Self { cat, span }
-    }
-
-    pub fn cat(&self) -> CategoryId {
-        self.cat
-    }
-
-    pub fn span(&self) -> Span {
-        self.span
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ParseMacroBinding {
     name: Ustr,
     span: Span,
     pat: ParseAtomPattern,
+}
+
+pub fn _debug_parse_tree(tree: ParseTreeId, ctx: &Ctx) {
+    fn recurse(tree: ParseTreeId, ctx: &Ctx, indent: usize) {
+        let tree = &ctx.parse_forest[tree];
+        let indent_str = "  ".repeat(indent);
+        println!(
+            "{}ParseTree (cat: {:?}, span: {:?})",
+            indent_str,
+            ctx.parse_state[tree.cat()].name(),
+            tree.span()
+        );
+        for possibility in &tree.possibilities {
+            println!(
+                "{}  Possibility (rule: {:?})",
+                indent_str,
+                ctx.parse_state[possibility.rule()].name()
+            );
+            for child in possibility.children() {
+                match child {
+                    ParseTreePart::Atom(atom) => {
+                        println!(
+                            "{}    Atom (kind: {:?}, span: {:?})",
+                            indent_str,
+                            atom.kind(),
+                            atom.span()
+                        );
+                    }
+                    ParseTreePart::MacroBinding(binding) => {
+                        println!(
+                            "{}    MacroBinding (name: {:?}, pat: {:?}, span: {:?})",
+                            indent_str, binding.name, binding.pat, binding.span
+                        );
+                    }
+                    ParseTreePart::Node { id, cat, span } => {
+                        println!("{indent_str}    Node (cat: {cat:?}, span: {span:?})");
+                        recurse(*id, ctx, indent + 3);
+                    }
+                }
+            }
+        }
+    }
+
+    recurse(tree, ctx, 0);
 }

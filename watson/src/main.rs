@@ -1,12 +1,9 @@
-use ustr::Ustr;
 use crate::{
     context::Ctx,
-    parse::{
-        SourceCache, SourceId,
-        source_cache::{SourceDecl},
-    },
+    parse::{SourceCache, SourceId, source_cache::SourceDecl},
 };
 use std::path::Path;
+use ustr::Ustr;
 
 mod context;
 mod diagnostics;

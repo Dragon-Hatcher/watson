@@ -4,26 +4,18 @@ use crate::{
     parse::{
         Location, Span,
         location::SourceOffset,
-        parse_state::{CategoryId, ParseAtomPattern, RuleId, RulePatternPart},
-        parse_tree::ParseTreePromise,
+        parse_state::{Associativity, CategoryId, ParseAtomPattern, RuleId, RulePatternPart},
+        parse_tree::{
+            ParseAtom, ParseAtomKind, ParseTree, ParseTreeChildren, ParseTreeId, ParseTreePart,
+        },
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::collections::VecDeque;
+use std::{char, cmp::Reverse, collections::VecDeque};
 
-pub fn parse(start: Location, category: CategoryId, ctx: &mut Ctx) -> WResult<ParseTreePromise> {
+pub fn parse(start: Location, category: CategoryId, ctx: &mut Ctx) -> WResult<ParseTreeId> {
     let chart = build_chart(start, category, ctx);
-    let (promises, top_promise) = build_promises(start, category, &chart, ctx);
-
-    match top_promise {
-        Ok(top_promise) => {
-            add_promises(&promises, ctx);
-            Ok(top_promise)
-        }
-        Err(_) => {
-            todo!("parse error: no parse found");
-        }
-    }
+    read_chart(start, category, &chart, ctx)
 }
 
 fn build_chart(start: Location, category: CategoryId, ctx: &mut Ctx) -> Chart {
@@ -98,47 +90,51 @@ fn build_chart(start: Location, category: CategoryId, ctx: &mut Ctx) -> Chart {
     chart
 }
 
-fn build_promises(
-    start: Location,
-    top_cat: CategoryId,
-    chart: &Chart,
-    ctx: &mut Ctx,
-) -> (
-    FxHashMap<ParseTreePromise, Vec<RuleId>>,
-    WResult<ParseTreePromise>,
-) {
-    let mut promises: FxHashMap<ParseTreePromise, Vec<RuleId>> = FxHashMap::default();
-    let mut top_promise = Err(());
+fn _debug_chart(chart: &Chart, ctx: &Ctx) {
+    for (i, items) in chart.items_at_offset.iter().enumerate() {
+        if items.is_empty() {
+            continue;
+        }
 
-    for (offset, items) in chart.items_at_offset.iter().enumerate() {
+        let pos = chart.start_offset.forward(i);
+        println!("At {pos:?}:");
         for item in items {
             let rule = &ctx.parse_state[item.rule];
-            if item.dot < rule.pattern().parts().len() {
-                continue;
+            let mut pattern = String::new();
+            for (j, part) in rule.pattern().parts().iter().enumerate() {
+                if j == item.dot {
+                    pattern.push_str("• ");
+                }
+                match part {
+                    RulePatternPart::Atom(atom) => match atom {
+                        ParseAtomPattern::Kw(kw) => pattern.push_str(&format!("\"{kw}\" ")),
+                        ParseAtomPattern::Name => pattern.push_str("name "),
+                        ParseAtomPattern::Lit(lit) => pattern.push_str(&format!("'{lit}' ")),
+                        ParseAtomPattern::Str => pattern.push_str("str "),
+                    },
+                    RulePatternPart::Cat(cat) => {
+                        let cat_name = ctx.parse_state[*cat].name();
+                        pattern.push_str(&format!("<{cat_name}> "));
+                    }
+                    RulePatternPart::TempCat(cat) => {
+                        let cat_name = ctx.parse_state[*cat].name();
+                        pattern.push_str(&format!("{{{cat_name}}} "));
+                    }
+                }
             }
-
-            let span = Span::new(
-                Location::new(start.source(), item.origin),
-                start.forward(offset),
+            if item.dot == rule.pattern().parts().len() {
+                pattern.push('•');
+            }
+            let origin = item.origin;
+            println!(
+                "  {} -> {} (from {:?})",
+                ctx.parse_state[rule.cat()].name(),
+                pattern,
+                origin
             );
-            let promise = ParseTreePromise::new(rule.cat(), span);
-
-            if span.start() == start && rule.cat() == top_cat {
-                top_promise = Ok(promise);
-            }
-
-            promises.entry(promise).or_default().push(item.rule);
         }
-    }
 
-    (promises, top_promise)
-}
-
-fn add_promises(promises: &FxHashMap<ParseTreePromise, Vec<RuleId>>, ctx: &mut Ctx) {
-    for (promise, rules) in promises {
-        for &rule in rules {
-            ctx.parse_forest.add_promise(*promise, rule);
-        }
+        println!();
     }
 }
 
@@ -209,6 +205,295 @@ impl Chart {
 
     fn get_waiters(&self, at: SourceOffset, cat: CategoryId) -> Option<&FxHashSet<Item>> {
         self.waiting.get(&(at, cat))
+    }
+}
+
+fn read_chart(
+    start: Location,
+    cat: CategoryId,
+    chart: &Chart,
+    ctx: &mut Ctx,
+) -> WResult<ParseTreeId> {
+    let trimmed = trim_chart(chart, ctx);
+
+    // First we are going to find the length of the longest parse. Our recursive
+    // function needs to know the full span so we assume the longest span is the
+    // correct one.
+    let end = trimmed[&(start.offset(), cat)]
+        .iter()
+        .map(|(_, end)| end.byte_offset())
+        .max()
+        .unwrap();
+    let span = Span::new(start, Location::new(start.source(), SourceOffset::new(end)));
+
+    // Now we can recursively read the parse tree.
+    fn search(
+        span: Span,
+        cat: CategoryId,
+        chart: &TrimmedChart,
+        ctx: &mut Ctx,
+    ) -> WResult<ParseTreeId> {
+        // The idea here is to check which rules we have for the given span and
+        // category. We then choose which among those rules is best. If there
+        // is still a tie the parse is ambiguous.
+        let rules = chart[&(span.start().offset(), cat)]
+            .iter()
+            .filter(|(_, end)| *end == span.end().offset())
+            .map(|(rule, _end)| *rule);
+        let best_rules = choose_best_rule(rules, ctx);
+
+        // Each rule gives us a pattern which we can use to split the span
+        // into parts. We then recursively search for each part.
+        let mut possibilities = Vec::new();
+        for rule_id in &best_rules {
+            let rule = &ctx.parse_state[*rule_id];
+            let text = ctx.sources.get_text(span.source());
+            let split = split_with_pattern(
+                text,
+                span,
+                rule.pattern().parts(),
+                rule.associativity(),
+                &mut vec![],
+                chart,
+            );
+
+            match split {
+                Ok(split) => {
+                    let children = split_to_children(
+                        &rule.pattern().parts().to_owned(),
+                        &split,
+                        span.start(),
+                        chart,
+                        ctx,
+                    )?;
+                    possibilities.push(ParseTreeChildren::new(*rule_id, children));
+                }
+                // We don't allow any ambiguity within a single rule, only between
+                // rules. So this is an immediate error.
+                Err(SplitError::Ambiguous) => return ctx.diags.err_ambiguous_parse(span),
+                // The chart guaranteed that there is at least one match so
+                // this should never happen.
+                Err(SplitError::NoMatch) => unreachable!(),
+            }
+        }
+
+        let tree = ParseTree::new(span, cat, possibilities);
+        Ok(ctx.parse_forest.get_or_insert(tree))
+    }
+
+    fn split_to_children(
+        pattern: &[RulePatternPart],
+        offsets: &[SourceOffset],
+        start: Location,
+        chart: &TrimmedChart,
+        ctx: &mut Ctx,
+    ) -> WResult<Vec<ParseTreePart>> {
+        debug_assert_eq!(pattern.len(), offsets.len());
+
+        let mut start = start;
+        let mut parts = Vec::new();
+        for (pat, offset) in pattern.iter().zip(offsets.iter()) {
+            let text = ctx.sources.get_text(start.source());
+            let span = Span::new(start, Location::new(start.source(), *offset));
+
+            match pat {
+                RulePatternPart::Atom(atom_pat) => {
+                    let kind = match atom_pat {
+                        ParseAtomPattern::Kw(kw) => ParseAtomKind::Kw(*kw),
+                        ParseAtomPattern::Name => {
+                            let name = &text[span.start().byte_offset()..span.end().byte_offset()];
+                            ParseAtomKind::Name(name.into())
+                        }
+                        ParseAtomPattern::Lit(lit) => ParseAtomKind::Lit(*lit),
+                        ParseAtomPattern::Str => {
+                            let name =
+                                &text[span.start().byte_offset() + 1..span.end().byte_offset() - 1];
+                            ParseAtomKind::StrLit(name.into())
+                        }
+                    };
+                    let atom = ParseAtom::new(span, kind);
+                    parts.push(ParseTreePart::Atom(atom));
+                }
+                RulePatternPart::Cat(cat) | RulePatternPart::TempCat(cat) => {
+                    let tree_id = search(span, *cat, chart, ctx)?;
+                    parts.push(ParseTreePart::Node {
+                        id: tree_id,
+                        span,
+                        cat: *cat,
+                    });
+                }
+            }
+
+            start = Location::new(start.source(), *offset);
+        }
+
+        Ok(parts)
+    }
+
+    search(span, cat, &trimmed, ctx)
+}
+
+fn choose_best_rule(rules: impl Iterator<Item = RuleId>, ctx: &Ctx) -> Vec<RuleId> {
+    // We pick the rules with the lowest precedence value.
+    let mut best_rules = Vec::new();
+    let mut best_precedence = None;
+
+    for rule in rules {
+        let precedence = ctx.parse_state[rule].precedence();
+        if best_precedence.is_none_or(|bp| precedence < bp) {
+            best_precedence = Some(precedence);
+            best_rules = vec![rule];
+        } else if best_precedence == Some(precedence) {
+            best_rules.push(rule);
+        }
+    }
+
+    best_rules
+}
+
+enum SplitError {
+    NoMatch,
+    Ambiguous,
+}
+
+fn split_with_pattern(
+    text: &str,
+    span: Span,
+    pattern: &[RulePatternPart],
+    associativity: Associativity,
+    stack: &mut Vec<SourceOffset>,
+    chart: &TrimmedChart,
+) -> Result<Vec<SourceOffset>, SplitError> {
+    let at = stack.last().copied().unwrap_or(span.start().offset());
+
+    if stack.len() == pattern.len() && at == span.end().offset() {
+        // We have successfully matched the entire pattern.
+        return Ok(stack.clone());
+    }
+
+    if at.byte_offset() >= span.end().byte_offset() {
+        // We have reached the end of the span and not matched so this path is
+        // a failure.
+        return Err(SplitError::NoMatch);
+    }
+
+    match pattern[stack.len()] {
+        RulePatternPart::Atom(atom) => {
+            // Check if the text has the atom at the current position.
+            let Some(atom_end) = parse_atom(atom, text, at) else {
+                return Err(SplitError::NoMatch);
+            };
+            stack.push(atom_end);
+            let result = split_with_pattern(text, span, pattern, associativity, stack, chart);
+            stack.pop();
+
+            result
+        }
+        RulePatternPart::Cat(cat) | RulePatternPart::TempCat(cat) => {
+            let continuations = chart.get(&(at, cat)).ok_or(SplitError::NoMatch)?;
+            let mut continuations = continuations.clone();
+
+            // Now we need to decide in which order to try the continuations. This
+            // depends on the associativity of the rule. If it is left associative
+            // we try the longest continuations first. If it is right associative we
+            // try the shortest continuations first. If it is non-associative we
+            // try them in the order they appear.
+            match associativity {
+                Associativity::Left => continuations.sort_by_key(|c| c.1),
+                Associativity::Right => continuations.sort_by_key(|c| Reverse(c.1)),
+                Associativity::NonAssoc => {}
+            }
+
+            // Now we search through the continuations. If the pattern is
+            // associative we take the first match. If it is non-associative
+            // we need to ensure there is only one match.
+            let mut solution = None;
+            for continuation in continuations {
+                stack.push(continuation.1);
+                let result = split_with_pattern(text, span, pattern, associativity, stack, chart);
+                stack.pop();
+
+                match result {
+                    Ok(split) => {
+                        if matches!(associativity, Associativity::NonAssoc) {
+                            if solution.is_some() {
+                                // We have found more than one match so this
+                                // is ambiguous.
+                                return Err(SplitError::Ambiguous);
+                            }
+                            solution = Some(split);
+                        } else {
+                            return Ok(split);
+                        }
+                    }
+                    Err(SplitError::NoMatch) => continue,
+                    Err(SplitError::Ambiguous) => return Err(SplitError::Ambiguous),
+                }
+            }
+
+            solution.ok_or(SplitError::NoMatch)
+        }
+    }
+}
+
+type TrimmedChart = FxHashMap<(SourceOffset, CategoryId), Vec<(RuleId, SourceOffset)>>;
+
+fn trim_chart(chart: &Chart, ctx: &Ctx) -> TrimmedChart {
+    let mut trimmed: TrimmedChart = FxHashMap::default();
+
+    for (i, items) in chart.items_at_offset.iter().enumerate() {
+        let pos = chart.start_offset.forward(i);
+        for item in items {
+            if item.dot != ctx.parse_state[item.rule].pattern().parts().len() {
+                // We only care about completed items.
+                continue;
+            }
+
+            let rule = item.rule;
+            let cat = ctx.parse_state[rule].cat();
+            let origin = item.origin;
+            trimmed.entry((origin, cat)).or_default().push((rule, pos));
+        }
+    }
+
+    trimmed
+}
+
+fn _debug_trimmed_chart(trimmed: &TrimmedChart, ctx: &Ctx) {
+    for ((offset, cat), completions) in trimmed {
+        println!(
+            "At {offset:?}, completed <{}>:",
+            ctx.parse_state[*cat].name()
+        );
+        for (rule, end) in completions {
+            let rule = &ctx.parse_state[*rule];
+            let mut pattern = String::new();
+            for part in rule.pattern().parts() {
+                match part {
+                    RulePatternPart::Atom(atom) => match atom {
+                        ParseAtomPattern::Kw(kw) => pattern.push_str(&format!("\"{kw}\" ")),
+                        ParseAtomPattern::Name => pattern.push_str("name "),
+                        ParseAtomPattern::Lit(lit) => pattern.push_str(&format!("'{lit}' ")),
+                        ParseAtomPattern::Str => pattern.push_str("str "),
+                    },
+                    RulePatternPart::Cat(cat) => {
+                        let cat_name = ctx.parse_state[*cat].name();
+                        pattern.push_str(&format!("<{cat_name}> "));
+                    }
+                    RulePatternPart::TempCat(cat) => {
+                        let cat_name = ctx.parse_state[*cat].name();
+                        pattern.push_str(&format!("{{{cat_name}}} "));
+                    }
+                }
+            }
+            println!(
+                "  {} -> {} (to {:?})",
+                ctx.parse_state[rule.cat()].name(),
+                pattern,
+                end
+            );
+        }
+        println!();
     }
 }
 

@@ -20,7 +20,12 @@ fn main() {
     let (source_cache, root_id) = make_source_cache(root_file);
     let mut ctx = Ctx::new(source_cache);
 
-    parse::parse(root_id, &mut ctx);
+    compile(root_id, &mut ctx);
+
+    if ctx.diags.has_errors() {
+        ctx.diags.print_errors(&ctx);
+        std::process::exit(1);
+    }
 }
 
 fn make_source_cache(root_file: &Path) -> (SourceCache, SourceId) {
@@ -34,4 +39,8 @@ fn make_source_cache(root_file: &Path) -> (SourceCache, SourceId) {
     source_cache.add(root_id, text, SourceDecl::Root);
 
     (source_cache, root_id)
+}
+
+fn compile(root: SourceId, ctx: &mut Ctx) {
+    parse::parse(root, ctx)
 }

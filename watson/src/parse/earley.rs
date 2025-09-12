@@ -2,7 +2,7 @@ use crate::{
     context::Ctx,
     diagnostics::WResult,
     parse::{
-        Location, Span,
+        Location, SourceId, Span,
         location::SourceOffset,
         parse_state::{Associativity, CategoryId, ParseAtomPattern, RuleId, RulePatternPart},
         parse_tree::{
@@ -15,7 +15,13 @@ use std::{char, cmp::Reverse, collections::VecDeque};
 
 pub fn parse(start: Location, category: CategoryId, ctx: &mut Ctx) -> WResult<ParseTreeId> {
     let chart = build_chart(start, category, ctx);
-    read_chart(start, category, &chart, ctx)
+    let trimmed = trim_chart(&chart, ctx);
+
+    if !trimmed.contains_key(&(start.offset(), category)) {
+        return make_parse_error(&chart, start.source(), ctx);
+    }
+
+    read_chart(start, category, &trimmed, ctx)
 }
 
 fn build_chart(start: Location, category: CategoryId, ctx: &mut Ctx) -> Chart {
@@ -208,18 +214,39 @@ impl Chart {
     }
 }
 
+fn make_parse_error<T>(chart: &Chart, source: SourceId, ctx: &mut Ctx) -> WResult<T> {
+    let latest_pos = chart.start_offset.forward(chart.items_at_offset.len() - 1);
+    let latest_items = chart.items_at_offset.last().unwrap();
+
+    let mut possible_next_atoms = FxHashSet::default();
+
+    for item in latest_items {
+        let rule = &ctx.parse_state[item.rule];
+        let pat = rule.pattern();
+        if let Some(RulePatternPart::Atom(atom)) = pat.parts().get(item.dot) {
+            possible_next_atoms.insert(*atom);
+        }
+    }
+
+    let location = skip_ws_and_comments(ctx.sources.get_text(source), latest_pos);
+    let location = Location::new(source, location);
+
+    let mut possible_atoms = possible_next_atoms.into_iter().collect::<Vec<_>>();
+    possible_atoms.sort();
+
+    ctx.diags.err_parse_failure(location, &possible_atoms)
+}
+
 fn read_chart(
     start: Location,
     cat: CategoryId,
-    chart: &Chart,
+    chart: &TrimmedChart,
     ctx: &mut Ctx,
 ) -> WResult<ParseTreeId> {
-    let trimmed = trim_chart(chart, ctx);
-
     // First we are going to find the length of the longest parse. Our recursive
     // function needs to know the full span so we assume the longest span is the
     // correct one.
-    let end = trimmed[&(start.offset(), cat)]
+    let end = chart[&(start.offset(), cat)]
         .iter()
         .map(|(_, end)| end.byte_offset())
         .max()
@@ -301,13 +328,14 @@ fn read_chart(
                     let kind = match atom_pat {
                         ParseAtomPattern::Kw(kw) => ParseAtomKind::Kw(*kw),
                         ParseAtomPattern::Name => {
-                            let name = &text[span.start().byte_offset()..span.end().byte_offset()];
+                            let start = skip_ws_and_comments(text, span.start().offset());
+                            let name = &text[start.byte_offset()..span.end().byte_offset()];
                             ParseAtomKind::Name(name.into())
                         }
                         ParseAtomPattern::Lit(lit) => ParseAtomKind::Lit(*lit),
                         ParseAtomPattern::Str => {
-                            let name =
-                                &text[span.start().byte_offset() + 1..span.end().byte_offset() - 1];
+                            let start = skip_ws_and_comments(text, span.start().offset());
+                            let name = &text[start.byte_offset() + 1..span.end().byte_offset() - 1];
                             ParseAtomKind::StrLit(name.into())
                         }
                     };
@@ -330,7 +358,7 @@ fn read_chart(
         Ok(parts)
     }
 
-    search(span, cat, &trimmed, ctx)
+    search(span, cat, chart, ctx)
 }
 
 fn choose_best_rule(rules: impl Iterator<Item = RuleId>, ctx: &Ctx) -> Vec<RuleId> {
@@ -374,6 +402,12 @@ fn split_with_pattern(
     if at.byte_offset() >= span.end().byte_offset() {
         // We have reached the end of the span and not matched so this path is
         // a failure.
+        return Err(SplitError::NoMatch);
+    }
+
+    if stack.len() == pattern.len() {
+        // We have matched the entire pattern but not reached the end of the
+        // span so this path is a failure.
         return Err(SplitError::NoMatch);
     }
 
@@ -460,6 +494,9 @@ fn trim_chart(chart: &Chart, ctx: &Ctx) -> TrimmedChart {
 }
 
 fn _debug_trimmed_chart(trimmed: &TrimmedChart, ctx: &Ctx) {
+    let mut trimmed: Vec<_> = trimmed.iter().collect();
+    trimmed.sort_by_key(|(key, _)| *key);
+
     for ((offset, cat), completions) in trimmed {
         println!(
             "At {offset:?}, completed <{}>:",
@@ -515,11 +552,14 @@ fn parse_atom(atom: ParseAtomPattern, text: &str, at: SourceOffset) -> Option<So
         ParseAtomPattern::Lit(lit) => text[content.byte_offset()..]
             .starts_with(lit.as_str())
             .then(|| content.forward(lit.len())),
-        ParseAtomPattern::Str => todo!(),
+        ParseAtomPattern::Str => {
+            let (end, _str) = parse_str(text, content)?;
+            Some(end)
+        }
     }
 }
 
-fn parse_name(text: &str, from: SourceOffset) -> Option<(SourceOffset, &str)> {
+pub fn parse_name(text: &str, from: SourceOffset) -> Option<(SourceOffset, &str)> {
     let mut chars = text[from.byte_offset()..].chars();
 
     let first_char = chars.next()?;
@@ -536,6 +576,30 @@ fn parse_name(text: &str, from: SourceOffset) -> Option<(SourceOffset, &str)> {
     }
 
     Some((at, &text[from.byte_offset()..at.byte_offset()]))
+}
+
+fn parse_str(text: &str, from: SourceOffset) -> Option<(SourceOffset, &str)> {
+    let mut chars = text[from.byte_offset()..].chars();
+
+    let first_char = chars.next()?;
+    if first_char != '"' {
+        return None;
+    }
+    let mut at = from.forward(first_char.len_utf8());
+
+    for next_char in chars {
+        if next_char == '"' {
+            // We have reached the end of the string.
+            return Some((
+                at.forward(next_char.len_utf8()),
+                &text[from.byte_offset() + 1..at.byte_offset()],
+            ));
+        }
+        at = at.forward(next_char.len_utf8());
+    }
+
+    // We reached the end of the input without finding a closing quote.
+    None
 }
 
 fn char_can_start_name(char: char) -> bool {

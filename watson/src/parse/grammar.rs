@@ -47,7 +47,7 @@ syntax_pat_list ::= (syntax_pat_list_one)  syntax_pat
 
 syntax_pat ::= (syntax_pat_cat)     name
              | (syntax_pat_binding) "@" kw"binding" "(" name ")"
-             | (syntax_pat_var)     "@" kw"var" "(" name ")"
+             | (syntax_pat_var)     "@" kw"variable" "(" name ")"
              | (syntax_pat_lit)     str
 
 macro_pat_list ::= (macro_pat_list_one)  macro_pat

@@ -2,7 +2,7 @@ use crate::{
     parse::macros::MacroId,
     semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
 };
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use slotmap::{SecondaryMap, SlotMap, new_key_type};
 use std::ops::Index;
 use ustr::Ustr;
@@ -14,6 +14,9 @@ pub struct ParseState {
 
     rules: SlotMap<RuleId, Rule>,
     rules_by_cat: SecondaryMap<CategoryId, Vec<RuleId>>,
+
+    can_be_empty: SecondaryMap<CategoryId, bool>,
+    initial_atoms: SecondaryMap<CategoryId, FxHashSet<ParseAtomPattern>>,
 }
 
 impl ParseState {
@@ -24,6 +27,8 @@ impl ParseState {
             new_categories: Vec::new(),
             rules: SlotMap::default(),
             rules_by_cat: SecondaryMap::default(),
+            can_be_empty: SecondaryMap::default(),
+            initial_atoms: SecondaryMap::default(),
         }
     }
 
@@ -33,6 +38,8 @@ impl ParseState {
         let id = self.categories.insert(cat);
         self.categories_by_name.insert(name, id);
         self.rules_by_cat.insert(id, Vec::new());
+        self.can_be_empty.insert(id, false);
+        self.initial_atoms.insert(id, FxHashSet::default());
         self.new_categories.push(id);
         id
     }
@@ -53,11 +60,67 @@ impl ParseState {
         let cat = rule.cat;
         let id = self.rules.insert(rule);
         self.rules_by_cat[cat].push(id);
+        self.recompute_initial_atoms();
         id
     }
 
     pub fn rules_for_cat(&self, cat: CategoryId) -> &[RuleId] {
         &self.rules_by_cat[cat]
+    }
+
+    fn recompute_initial_atoms(&mut self) {
+        // The first step it to compute which categories have empty rules.
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for (_, rule) in &self.rules {
+                if !self.can_be_empty[rule.cat]
+                    && rule.pattern().parts().iter().all(|part| match part {
+                        RulePatternPart::Atom(_) => false,
+                        RulePatternPart::Cat(cat) | RulePatternPart::TempCat(cat) => {
+                            self.can_be_empty[*cat]
+                        }
+                    })
+                {
+                    self.can_be_empty[rule.cat] = true;
+                    changed = true;
+                }
+            }
+        }
+
+        // Next we compute the initial atoms for each category.
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for (_, rule) in &self.rules {
+                for part in rule.pattern().parts() {
+                    match part {
+                        RulePatternPart::Atom(atom) => {
+                            if self.initial_atoms[rule.cat].insert(*atom) {
+                                changed = true;
+                            }
+                            break;
+                        }
+                        RulePatternPart::Cat(cat) | RulePatternPart::TempCat(cat) => {
+                            let initials = self.initial_atoms[*cat].clone();
+                            for initial in initials {
+                                if self.initial_atoms[rule.cat].insert(initial) {
+                                    changed = true;
+                                }
+                            }
+
+                            if !self.can_be_empty[*cat] {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn initial_atoms(&self, cat: CategoryId) -> &FxHashSet<ParseAtomPattern> {
+        &self.initial_atoms[cat]
     }
 }
 
@@ -101,7 +164,7 @@ pub enum SyntaxCategorySource {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Precedence(usize);
+pub struct Precedence(pub usize);
 
 impl Precedence {
     pub fn new(level: usize) -> Self {
@@ -116,6 +179,7 @@ pub enum Associativity {
     NonAssoc,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Rule {
     name: Ustr,
     cat: CategoryId,
@@ -196,7 +260,7 @@ pub enum RulePatternPart {
     TempCat(CategoryId),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ParseAtomPattern {
     Lit(Ustr),
     Kw(Ustr),

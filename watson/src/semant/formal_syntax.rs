@@ -4,7 +4,10 @@ use rustc_hash::FxHashMap;
 use slotmap::{SlotMap, new_key_type};
 use ustr::Ustr;
 
-use crate::strings;
+use crate::{
+    parse::parse_state::{Associativity, Precedence},
+    strings,
+};
 
 #[derive(Debug, Clone)]
 pub struct FormalSyntax {
@@ -46,8 +49,8 @@ impl FormalSyntax {
         self.sentence_cat
     }
 
-    pub fn add_rule(&mut self, cat: FormalSyntaxCatId) -> FormalSyntaxRuleId {
-        self.rules.insert(FormalSyntaxRule { cat })
+    pub fn add_rule(&mut self, rule: FormalSyntaxRule) -> FormalSyntaxRuleId {
+        self.rules.insert(rule)
     }
 }
 
@@ -85,7 +88,56 @@ impl FormalSyntaxCat {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FormalSyntaxRule {
+    name: Ustr,
     cat: FormalSyntaxCatId,
+    pat: FormalSyntaxPat,
+}
+
+impl FormalSyntaxRule {
+    pub fn new(name: Ustr, cat: FormalSyntaxCatId, pat: FormalSyntaxPat) -> Self {
+        Self { name, cat, pat }
+    }
+
+    pub fn name(&self) -> Ustr {
+        self.name
+    }
+
+    pub fn cat(&self) -> FormalSyntaxCatId {
+        self.cat
+    }
+
+    pub fn pattern(&self) -> &FormalSyntaxPat {
+        &self.pat
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FormalSyntaxPat {
+    parts: Vec<FormalSyntaxPatPart>,
+    precedence: Precedence,
+    associativity: Associativity,
+}
+
+impl FormalSyntaxPat {
+    pub fn new(parts: Vec<FormalSyntaxPatPart>) -> Self {
+        Self {
+            parts,
+            precedence: Precedence(0),
+            associativity: Associativity::NonAssoc,
+        }
+    }
+
+    pub fn parts(&self) -> &[FormalSyntaxPatPart] {
+        &self.parts
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FormalSyntaxPatPart {
+    Cat(FormalSyntaxCatId),
+    Binding(Ustr),
+    Var(Ustr),
+    Lit(Ustr),
 }

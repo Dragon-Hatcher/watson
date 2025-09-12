@@ -67,6 +67,10 @@ impl ParseTree {
     pub fn cat(&self) -> CategoryId {
         self.cat
     }
+
+    pub fn possibilities(&self) -> &[ParseTreeChildren] {
+        &self.possibilities
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -119,11 +123,39 @@ impl ParseTreePart {
         }
     }
 
+    pub fn is_lit(&self, lit: Ustr) -> bool {
+        if let Self::Atom(atom) = self
+            && let ParseAtomKind::Lit(text) = atom.kind
+        {
+            text == lit
+        } else {
+            false
+        }
+    }
+
     pub fn as_name(&self) -> Option<Ustr> {
         if let Self::Atom(atom) = self
             && let ParseAtomKind::Name(text) = atom.kind
         {
             Some(text)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_str_lit(&self) -> Option<Ustr> {
+        if let Self::Atom(atom) = self
+            && let ParseAtomKind::StrLit(text) = atom.kind
+        {
+            Some(text)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_node(&self) -> Option<ParseTreeId> {
+        if let Self::Node { id, .. } = self {
+            Some(*id)
         } else {
             None
         }

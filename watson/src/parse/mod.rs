@@ -10,7 +10,10 @@ pub mod source_cache;
 pub use location::{Location, SourceId, Span};
 pub use source_cache::SourceCache;
 
-use crate::context::Ctx;
+use crate::{
+    context::Ctx,
+    parse::{earley::parse_name, parse_state::ParseAtomPattern},
+};
 
 pub fn parse(root: SourceId, ctx: &mut Ctx) {
     let mut sources_stack = Vec::new();
@@ -21,7 +24,6 @@ pub fn parse(root: SourceId, ctx: &mut Ctx) {
     }
 }
 
-#[allow(unused)]
 fn parse_source(loc: Location, ctx: &mut Ctx, sources_stack: &mut Vec<Location>) {
     let source = loc.source();
     let text = ctx.sources.get_text(source);
@@ -32,7 +34,7 @@ fn parse_source(loc: Location, ctx: &mut Ctx, sources_stack: &mut Vec<Location>)
     }
 
     // Check if the current line could possible start a command.
-    if true {
+    if can_start_command(text, loc, ctx) {
         // The current line could start a command so we will assume it does.
 
         let Ok(tree) = earley::parse(loc, ctx.builtin_cats.command, ctx) else {
@@ -67,6 +69,30 @@ fn parse_source(loc: Location, ctx: &mut Ctx, sources_stack: &mut Vec<Location>)
         let text = ctx.sources.get_text(source);
         sources_stack.push(next_line(text, loc));
     }
+}
+
+fn can_start_command(text: &str, loc: Location, ctx: &Ctx) -> bool {
+    let name = parse_name(text, loc.offset());
+
+    for atom in ctx.parse_state.initial_atoms(ctx.builtin_cats.command) {
+        match atom {
+            ParseAtomPattern::Lit(lit) => {
+                if text[loc.byte_offset()..].starts_with(lit.as_str()) {
+                    return true;
+                }
+            }
+            ParseAtomPattern::Kw(kw) => {
+                if let Some((_, parsed_name)) = name
+                    && parsed_name == kw.as_str()
+                {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    false
 }
 
 fn next_line(text: &str, loc: Location) -> Location {

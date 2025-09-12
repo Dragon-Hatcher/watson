@@ -1,6 +1,7 @@
 use crate::context::Ctx;
+use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
-use crate::parse::{SourceCache, SourceId, Span};
+use crate::parse::{Location, SourceCache, SourceId, Span};
 use annotate_snippets::{Level, Message, Renderer, Snippet};
 use itertools::Itertools;
 use std::path::Path;
@@ -144,43 +145,43 @@ impl DiagManager {
         Err(())
     }
 
-    // pub fn err_parse_failure<T>(
-    //     &mut self,
-    //     location: Location,
-    //     possible_atoms: &[AtomPattern],
-    // ) -> WResult<T> {
-    //     fn format_atom(atom: &AtomPattern) -> String {
-    //         match atom {
-    //             AtomPattern::Lit(lit) => format!("\"{lit}\""),
-    //             AtomPattern::Kw(kw) => format!("\"{kw}\""),
-    //             AtomPattern::Name => "a name".to_string(),
-    //             AtomPattern::Str => "a string literal".to_string(),
-    //         }
-    //     }
+    pub fn err_parse_failure<T>(
+        &mut self,
+        location: Location,
+        possible_atoms: &[ParseAtomPattern],
+    ) -> WResult<T> {
+        fn format_atom(atom: &ParseAtomPattern) -> String {
+            match atom {
+                ParseAtomPattern::Lit(lit) => format!("\"{lit}\""),
+                ParseAtomPattern::Kw(kw) => format!("\"{kw}\""),
+                ParseAtomPattern::Name => "a name".to_string(),
+                ParseAtomPattern::Str => "a string literal".to_string(),
+            }
+        }
 
-    //     let expected = if possible_atoms.is_empty() {
-    //         "what".to_string()
-    //     } else if let [atom] = possible_atoms {
-    //         format!("expected {}", format_atom(atom))
-    //     } else if let [atom1, atom2] = possible_atoms {
-    //         format!("expected {} or {}", format_atom(atom1), format_atom(atom2))
-    //     } else {
-    //         format!(
-    //             "expected {}, or {}",
-    //             possible_atoms[..possible_atoms.len() - 1]
-    //                 .iter()
-    //                 .map(format_atom)
-    //                 .join(", "),
-    //             format_atom(possible_atoms.last().unwrap())
-    //         )
-    //     };
+        let expected = if possible_atoms.is_empty() {
+            "what".to_string()
+        } else if let [atom] = possible_atoms {
+            format!("expected {}", format_atom(atom))
+        } else if let [atom1, atom2] = possible_atoms {
+            format!("expected {} or {}", format_atom(atom1), format_atom(atom2))
+        } else {
+            format!(
+                "expected {}, or {}",
+                possible_atoms[..possible_atoms.len() - 1]
+                    .iter()
+                    .map(format_atom)
+                    .join(", "),
+                format_atom(possible_atoms.last().unwrap())
+            )
+        };
 
-    //     let diag = Diagnostic::new("error while parsing command")
-    //         .with_error(&expected, Span::new(location, location));
+        let diag = Diagnostic::new("error while parsing command")
+            .with_error(&expected, Span::new(location, location));
 
-    //     self.add_diag(diag);
-    //     Err(())
-    // }
+        self.add_diag(diag);
+        Err(())
+    }
 
     pub fn err_duplicate_formal_syntax_cat<T>(&mut self) -> WResult<T> {
         let diag = Diagnostic::new("err_duplicate_formal_syntax_cat");

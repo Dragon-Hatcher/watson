@@ -1,11 +1,20 @@
-use crate::parse::{parse_state::CategoryId, parse_tree::ParseTree};
+use crate::{
+    context::Ctx,
+    diagnostics::WResult,
+    parse::{
+        parse_state::{CategoryId, ParseAtomPattern, ParseState, RulePattern, RulePatternPart},
+        parse_tree::{
+            ParseAtomKind, ParseForest, ParseTree, ParseTreeChildren, ParseTreeId, ParseTreePart,
+        },
+    },
+};
 use rustc_hash::FxHashMap;
 use slotmap::{SlotMap, new_key_type};
 use std::{collections::HashMap, ops::Index};
 use ustr::Ustr;
 
 pub struct Macros {
-    macros: SlotMap<MacroId, MacroInfo>,
+    macros: SlotMap<MacroId, Macro>,
     by_name: FxHashMap<Ustr, MacroId>,
 }
 
@@ -23,35 +32,35 @@ impl Macros {
         self.by_name.get(&name).cloned()
     }
 
-    pub fn add_macro(&mut self, info: MacroInfo) -> MacroId {
-        let name = info.name;
-        let id = self.macros.insert(info);
+    pub fn add_macro(&mut self, mac: Macro) -> MacroId {
+        let name = mac.name;
+        let id = self.macros.insert(mac);
         self.by_name.insert(name, id);
         id
     }
 
-    pub fn macros(&self) -> impl Iterator<Item = &MacroInfo> {
+    pub fn macros(&self) -> impl Iterator<Item = &Macro> {
         self.macros.values()
     }
 }
 
 impl Index<MacroId> for Macros {
-    type Output = MacroInfo;
+    type Output = Macro;
 
     fn index(&self, index: MacroId) -> &Self::Output {
         &self.macros[index]
     }
 }
 
-pub struct MacroInfo {
+pub struct Macro {
     name: Ustr,
     cat: CategoryId,
     pat: MacroPat,
-    replacement: ParseTree,
+    replacement: ParseTreeId,
 }
 
-impl MacroInfo {
-    pub fn new(name: Ustr, cat: CategoryId, pat: MacroPat, replacement: ParseTree) -> Self {
+impl Macro {
+    pub fn new(name: Ustr, cat: CategoryId, pat: MacroPat, replacement: ParseTreeId) -> Self {
         Self {
             name,
             cat,
@@ -72,37 +81,83 @@ impl MacroInfo {
         &self.pat
     }
 
-    pub fn replacement(&self) -> &ParseTree {
-        &self.replacement
+    pub fn replacement(&self) -> ParseTreeId {
+        self.replacement
     }
+
+    pub fn collect_macro_bindings(&self, tree: &ParseTreeChildren) -> FxHashMap<Ustr, ParseTreeId> {
+        let mut map = FxHashMap::default();
+        for (&name, &idx) in self.pat.keys() {
+            map.insert(name, tree.children()[idx].as_node().unwrap());
+        }
+        map
+    }
+}
+
+pub fn do_macro_replacement(
+    replace_in: ParseTreeId,
+    bindings: &FxHashMap<Ustr, ParseTreeId>,
+    ctx: &mut Ctx,
+) -> ParseTreeId {
+    let old_tree = &ctx.parse_forest[replace_in];
+    let span = old_tree.span();
+    let cat = old_tree.cat();
+
+    let mut new_possibilities = Vec::new();
+
+    for possibility in old_tree.possibilities().to_owned() {
+        if let [binding] = possibility.children()
+            && let Some(binding) = binding.as_macro_binding()
+        {
+            // Add all the possibilities from the binding.
+            for new_possibility in ctx.parse_forest[bindings[&binding]].possibilities() {
+                new_possibilities.push(new_possibility.clone());
+            }
+        } else {
+            let mut parts = Vec::new();
+            for child in possibility.children() {
+                let part = match child {
+                    ParseTreePart::Atom(atom) => ParseTreePart::Atom(*atom),
+                    ParseTreePart::Node { id, cat, span } => {
+                        let new_node = do_macro_replacement(*id, bindings, ctx);
+                        ParseTreePart::Node {
+                            id: new_node,
+                            span: *span,
+                            cat: *cat,
+                        }
+                    }
+                };
+                parts.push(part);
+            }
+            let new_possibility = ParseTreeChildren::new(possibility.rule(), parts);
+            new_possibilities.push(new_possibility);
+        }
+    }
+
+    let new_tree = ParseTree::new(span, cat, new_possibilities);
+    ctx.parse_forest.get_or_insert(new_tree)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MacroPat {
-    parts: Vec<MacroPatPart>,
-    keys: HashMap<Ustr, usize>,
+    parts: Vec<RulePatternPart>,
+    keys: FxHashMap<Ustr, usize>,
 }
 
 impl MacroPat {
-    pub fn new(parts: Vec<MacroPatPart>, keys: HashMap<Ustr, usize>) -> Self {
+    pub fn new(parts: Vec<RulePatternPart>, keys: FxHashMap<Ustr, usize>) -> Self {
         Self { parts, keys }
     }
 
-    pub fn parts(&self) -> &[MacroPatPart] {
+    pub fn parts(&self) -> &[RulePatternPart] {
         &self.parts
     }
 
-    pub fn keys(&self) -> &HashMap<Ustr, usize> {
+    pub fn keys(&self) -> &FxHashMap<Ustr, usize> {
         &self.keys
     }
-}
 
-// TODO
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum MacroPatPart {
-    Cat(CategoryId),
-    TempCat(CategoryId),
-    Lit(Ustr),
-    Kw(Ustr),
-    Name,
+    pub fn to_parse_rule(&self) -> RulePattern {
+        RulePattern::new(self.parts.clone())
+    }
 }

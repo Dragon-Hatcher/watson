@@ -30,7 +30,7 @@ fn build_chart(start: Location, category: CategoryId, ctx: &mut Ctx) -> Chart {
 
     // Add all the start rules for the category we are parsing.
     for &rule in ctx.parse_state.rules_for_cat(category) {
-        let item = Item::new(rule, start.offset());
+        let item = Item::new(rule, start.offset(), false);
         chart.add_item(item, start.offset());
     }
 
@@ -53,13 +53,31 @@ fn build_chart(start: Location, category: CategoryId, ctx: &mut Ctx) -> Chart {
                         continue;
                     };
 
+                    if !item.template && atom == &ParseAtomPattern::MacroBinding {
+                        // We don't allow macro bindings outside of templates.
+                        continue;
+                    }
+
                     // Add the item wherever the atom ended.
                     chart.add_item(item.advance(), atom_end);
                 }
-                Some(RulePatternPart::Cat(cat) | RulePatternPart::TempCat(cat)) => {
+                Some(RulePatternPart::Cat {
+                    id: cat,
+                    template: new_template,
+                }) => {
                     // Predict. Add all the rules for the category at the current position.
                     for &prediction in ctx.parse_state.rules_for_cat(*cat) {
-                        let new_item = Item::new(prediction, current_position);
+                        let new_item =
+                            Item::new(prediction, current_position, item.template || *new_template);
+                        if chart.add_item(new_item, current_position) {
+                            // This is a new item, so we need to process it.
+                            items.push_back(new_item);
+                        }
+                    }
+
+                    // If this item is nullable add the completion for it right away
+                    if ctx.parse_state.can_be_empty(*cat) {
+                        let new_item = item.advance();
                         if chart.add_item(new_item, current_position) {
                             // This is a new item, so we need to process it.
                             items.push_back(new_item);
@@ -117,14 +135,15 @@ fn _debug_chart(chart: &Chart, ctx: &Ctx) {
                         ParseAtomPattern::Name => pattern.push_str("name "),
                         ParseAtomPattern::Lit(lit) => pattern.push_str(&format!("'{lit}' ")),
                         ParseAtomPattern::Str => pattern.push_str("str "),
+                        ParseAtomPattern::MacroBinding => pattern.push_str("macro_binding "),
                     },
-                    RulePatternPart::Cat(cat) => {
-                        let cat_name = ctx.parse_state[*cat].name();
-                        pattern.push_str(&format!("<{cat_name}> "));
-                    }
-                    RulePatternPart::TempCat(cat) => {
-                        let cat_name = ctx.parse_state[*cat].name();
-                        pattern.push_str(&format!("{{{cat_name}}} "));
+                    RulePatternPart::Cat { id, template } => {
+                        let cat_name = ctx.parse_state[*id].name();
+                        if *template {
+                            pattern.push_str(&format!("{{{cat_name}}} "));
+                        } else {
+                            pattern.push_str(&format!("<{cat_name}> "));
+                        }
                     }
                 }
             }
@@ -144,19 +163,21 @@ fn _debug_chart(chart: &Chart, ctx: &Ctx) {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Item {
     rule: RuleId,
     dot: usize,
     origin: SourceOffset,
+    template: bool,
 }
 
 impl Item {
-    fn new(rule: RuleId, origin: SourceOffset) -> Self {
+    fn new(rule: RuleId, origin: SourceOffset, template: bool) -> Self {
         Self {
             rule,
             dot: 0,
             origin,
+            template,
         }
     }
 
@@ -279,7 +300,7 @@ fn read_chart(
                 text,
                 span,
                 rule.pattern().parts(),
-                rule.associativity(),
+                rule.pattern().associativity(),
                 &mut vec![],
                 chart,
             );
@@ -338,16 +359,21 @@ fn read_chart(
                             let name = &text[start.byte_offset() + 1..span.end().byte_offset() - 1];
                             ParseAtomKind::StrLit(name.into())
                         }
+                        ParseAtomPattern::MacroBinding => {
+                            let start = skip_ws_and_comments(text, span.start().offset());
+                            let name = &text[start.byte_offset() + 1..span.end().byte_offset()];
+                            ParseAtomKind::MacroBinding(name.into())
+                        }
                     };
                     let atom = ParseAtom::new(span, kind);
                     parts.push(ParseTreePart::Atom(atom));
                 }
-                RulePatternPart::Cat(cat) | RulePatternPart::TempCat(cat) => {
-                    let tree_id = search(span, *cat, chart, ctx)?;
+                RulePatternPart::Cat { id, .. } => {
+                    let tree_id = search(span, *id, chart, ctx)?;
                     parts.push(ParseTreePart::Node {
                         id: tree_id,
                         span,
-                        cat: *cat,
+                        cat: *id,
                     });
                 }
             }
@@ -367,7 +393,7 @@ fn choose_best_rule(rules: impl Iterator<Item = RuleId>, ctx: &Ctx) -> Vec<RuleI
     let mut best_precedence = None;
 
     for rule in rules {
-        let precedence = ctx.parse_state[rule].precedence();
+        let precedence = ctx.parse_state[rule].pattern().precedence();
         if best_precedence.is_none_or(|bp| precedence < bp) {
             best_precedence = Some(precedence);
             best_rules = vec![rule];
@@ -399,7 +425,7 @@ fn split_with_pattern(
         return Ok(stack.clone());
     }
 
-    if at.byte_offset() >= span.end().byte_offset() {
+    if at.byte_offset() > span.end().byte_offset() {
         // We have reached the end of the span and not matched so this path is
         // a failure.
         return Err(SplitError::NoMatch);
@@ -423,7 +449,7 @@ fn split_with_pattern(
 
             result
         }
-        RulePatternPart::Cat(cat) | RulePatternPart::TempCat(cat) => {
+        RulePatternPart::Cat { id: cat, .. } => {
             let continuations = chart.get(&(at, cat)).ok_or(SplitError::NoMatch)?;
             let mut continuations = continuations.clone();
 
@@ -450,7 +476,7 @@ fn split_with_pattern(
                 match result {
                     Ok(split) => {
                         if matches!(associativity, Associativity::NonAssoc) {
-                            if solution.is_some() {
+                            if solution.is_some() && solution.as_ref() != Some(&split) {
                                 // We have found more than one match so this
                                 // is ambiguous.
                                 return Err(SplitError::Ambiguous);
@@ -512,14 +538,15 @@ fn _debug_trimmed_chart(trimmed: &TrimmedChart, ctx: &Ctx) {
                         ParseAtomPattern::Name => pattern.push_str("name "),
                         ParseAtomPattern::Lit(lit) => pattern.push_str(&format!("'{lit}' ")),
                         ParseAtomPattern::Str => pattern.push_str("str "),
+                        ParseAtomPattern::MacroBinding => pattern.push_str("macro_binding "),
                     },
-                    RulePatternPart::Cat(cat) => {
-                        let cat_name = ctx.parse_state[*cat].name();
-                        pattern.push_str(&format!("<{cat_name}> "));
-                    }
-                    RulePatternPart::TempCat(cat) => {
-                        let cat_name = ctx.parse_state[*cat].name();
-                        pattern.push_str(&format!("{{{cat_name}}} "));
+                    RulePatternPart::Cat { id, template } => {
+                        let cat_name = ctx.parse_state[*id].name();
+                        if *template {
+                            pattern.push_str(&format!("{{{cat_name}}} "));
+                        } else {
+                            pattern.push_str(&format!("<{cat_name}> "));
+                        }
                     }
                 }
             }
@@ -556,6 +583,10 @@ fn parse_atom(atom: ParseAtomPattern, text: &str, at: SourceOffset) -> Option<So
             let (end, _str) = parse_str(text, content)?;
             Some(end)
         }
+        ParseAtomPattern::MacroBinding => {
+            let (end, _name) = parse_macro_binding(text, content)?;
+            Some(end)
+        }
     }
 }
 
@@ -576,6 +607,33 @@ pub fn parse_name(text: &str, from: SourceOffset) -> Option<(SourceOffset, &str)
     }
 
     Some((at, &text[from.byte_offset()..at.byte_offset()]))
+}
+
+fn parse_macro_binding(text: &str, from: SourceOffset) -> Option<(SourceOffset, &str)> {
+    let content = skip_ws_and_comments(text, from);
+
+    let mut chars = text[content.byte_offset()..].chars();
+
+    let first_char = chars.next()?;
+    if first_char != '$' {
+        return None;
+    }
+    let mut at = content.forward(first_char.len_utf8());
+
+    let second_char = chars.next()?;
+    if !char_can_start_name(second_char) {
+        return None;
+    }
+    at = at.forward(second_char.len_utf8());
+
+    for next_char in chars {
+        if !char_can_continue_name(next_char) {
+            break;
+        }
+        at = at.forward(next_char.len_utf8());
+    }
+
+    Some((at, &text[content.byte_offset() + 1..at.byte_offset()]))
 }
 
 fn parse_str(text: &str, from: SourceOffset) -> Option<(SourceOffset, &str)> {

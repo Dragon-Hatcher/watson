@@ -156,6 +156,7 @@ impl DiagManager {
                 ParseAtomPattern::Kw(kw) => format!("\"{kw}\""),
                 ParseAtomPattern::Name => "a name".to_string(),
                 ParseAtomPattern::Str => "a string literal".to_string(),
+                ParseAtomPattern::MacroBinding => "a macro binding".to_string(),
             }
         }
 
@@ -207,6 +208,13 @@ impl DiagManager {
 
     pub fn err_unknown_formal_syntax_cat<T>(&mut self) -> WResult<T> {
         let diag = Diagnostic::new("err_unknown_formal_syntax_cat");
+
+        self.add_diag(diag);
+        Err(())
+    }
+
+    pub fn err_duplicate_macro_binding<T>(&mut self) -> WResult<T> {
+        let diag = Diagnostic::new("duplicate macro binding");
 
         self.add_diag(diag);
         Err(())

@@ -7,7 +7,7 @@ use crate::{
         parse_state::ParseState,
         parse_tree::ParseForest,
     },
-    semant::formal_syntax::FormalSyntax,
+    semant::formal_syntax::{self, FormalSyntax},
 };
 
 pub struct Ctx {
@@ -35,12 +35,13 @@ pub struct Ctx {
 
 impl Ctx {
     pub fn new(source_cache: SourceCache) -> Self {
+        let formal_syntax = FormalSyntax::new();
         let mut parse_state = ParseState::new();
         let builtin_cats = BuiltinCats::new(&mut parse_state);
-        let builtin_rules = add_builtin_rules(&mut parse_state, &builtin_cats);
+        let builtin_rules = add_builtin_rules(&mut parse_state, &formal_syntax, &builtin_cats);
 
         Ctx {
-            formal_syntax: FormalSyntax::new(),
+            formal_syntax,
             macros: Macros::new(),
             parse_forest: ParseForest::new(),
             parse_state,

@@ -2,7 +2,7 @@ use crate::{
     context::Ctx,
     parse::{
         Span,
-        parse_state::{CategoryId, ParseAtomPattern, RuleId},
+        parse_state::{CategoryId, ParseAtomPattern, ParseState, RuleId},
     },
 };
 use rustc_hash::FxHashMap;
@@ -96,7 +96,6 @@ impl ParseTreeChildren {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ParseTreePart {
     Atom(ParseAtom),
-    MacroBinding(ParseMacroBinding),
     Node {
         id: ParseTreeId,
         span: Span,
@@ -108,7 +107,6 @@ impl ParseTreePart {
     pub fn span(&self) -> Span {
         match self {
             Self::Atom(atom) => atom.span,
-            Self::MacroBinding(binding) => binding.span,
             Self::Node { span, .. } => *span,
         }
     }
@@ -153,6 +151,16 @@ impl ParseTreePart {
         }
     }
 
+    pub fn as_macro_binding(&self) -> Option<Ustr> {
+        if let Self::Atom(atom) = self
+            && let ParseAtomKind::MacroBinding(text) = atom.kind
+        {
+            Some(text)
+        } else {
+            None
+        }
+    }
+
     pub fn as_node(&self) -> Option<ParseTreeId> {
         if let Self::Node { id, .. } = self {
             Some(*id)
@@ -188,6 +196,7 @@ pub enum ParseAtomKind {
     Kw(Ustr),
     Name(Ustr),
     StrLit(Ustr),
+    MacroBinding(Ustr),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -200,40 +209,77 @@ pub struct ParseMacroBinding {
 pub fn _debug_parse_tree(tree: ParseTreeId, ctx: &Ctx) {
     fn recurse(tree: ParseTreeId, ctx: &Ctx, indent: usize) {
         let tree = &ctx.parse_forest[tree];
-        let indent_str = "  ".repeat(indent);
-        println!(
-            "{}ParseTree (cat: {:?}, span: {:?})",
-            indent_str,
-            ctx.parse_state[tree.cat()].name(),
-            tree.span()
-        );
-        for possibility in &tree.possibilities {
+        let indent_str = "│ ".repeat(indent);
+
+        let possibilities = &tree.possibilities;
+        if possibilities.len() == 1 {
+            let possibility = &possibilities[0];
+
             println!(
-                "{}  Possibility (rule: {:?})",
+                "{}ParseTree (cat: {:?}, rule: {:?}, span: {:?})",
                 indent_str,
-                ctx.parse_state[possibility.rule()].name()
+                ctx.parse_state[tree.cat()].name(),
+                ctx.parse_state[possibility.rule()].name(),
+                tree.span()
             );
+
             for child in possibility.children() {
                 match child {
                     ParseTreePart::Atom(atom) => {
                         println!(
-                            "{}    Atom (kind: {:?}, span: {:?})",
+                            "{}│ Atom (kind: {:?}, span: {:?})",
                             indent_str,
                             atom.kind(),
                             atom.span()
                         );
                     }
-                    ParseTreePart::MacroBinding(binding) => {
-                        println!(
-                            "{}    MacroBinding (name: {:?}, pat: {:?}, span: {:?})",
-                            indent_str, binding.name, binding.pat, binding.span
-                        );
-                    }
-                    ParseTreePart::Node { id, cat, span } => {
-                        println!("{indent_str}    Node (cat: {cat:?}, span: {span:?})");
-                        recurse(*id, ctx, indent + 3);
+                    ParseTreePart::Node { id, .. } => {
+                        recurse(*id, ctx, indent + 1);
                     }
                 }
+            }
+
+            if possibility.children().is_empty() {
+                println!("{indent_str}  <empty>");
+            }
+        } else {
+            println!(
+                "{}ParseTree (cat: {:?}, span: {:?}) !AMBIGUOUS!",
+                indent_str,
+                ctx.parse_state[tree.cat()].name(),
+                tree.span()
+            );
+
+            for (i, possibility) in possibilities.iter().enumerate() {
+                println!(
+                    "{} • Possibility {} (rule: {:?})",
+                    indent_str,
+                    i + 1,
+                    ctx.parse_state[possibility.rule()].name()
+                );
+                for child in possibility.children() {
+                    match child {
+                        ParseTreePart::Atom(atom) => {
+                            println!(
+                                "{}    Atom (kind: {:?}, span: {:?})",
+                                indent_str,
+                                atom.kind(),
+                                atom.span()
+                            );
+                        }
+                        ParseTreePart::Node { id, .. } => {
+                            recurse(*id, ctx, indent + 2);
+                        }
+                    }
+                }
+
+                if possibility.children().is_empty() {
+                    println!("{indent_str}    <empty>");
+                }
+            }
+
+            if possibilities.is_empty() {
+                println!("{indent_str}    !!!!!!! POSSIBILITIES EMPTY");
             }
         }
     }

@@ -32,12 +32,12 @@ syntax syntax.epsilon
 end
 
 macro command.notation
-    command ::= @kw"notation" $n:@name $p:macro_pat_list "=>" $s:@template(sentence) @kw"end"
+    command ::= @kw"notation" $n:name $p:macro_pat "=>" $s:@template(sentence) @kw"end"
              => macro $n sentence ::= $p => $s end
 end
 
 macro command.definition
-    command ::= @kw"definition" $n:@name $p:macro_pat_list "=>" $t:@template(term) @kw"end"
+    command ::= @kw"definition" $n:name $p:macro_pat "=>" $t:@template(term) @kw"end"
              => macro $n term ::= $p => $t end
 end
 
@@ -66,31 +66,15 @@ notation notation.iff
 end
 
 notation notation.forall
-    "∀" $x:@name "," $p:sentence => ¬∃ $x, ¬$p
+    "∀" $x:name "," $p:sentence => ¬∃ $x, ¬$p
 end
 
 macro template.variable_shorthand
-    template ::= "[" $n:@name $a:maybe_template_params "]" => [$n$a:term]
+    template ::= "[" $n:name $a:maybe_template_params "]" => [$n$a:term]
 end
 
 macro template.sentence_shorthand
-    template ::= "[" @kw"schema" $n:@name $a:maybe_template_params "]" => [$n$a:sentence]
-end
-
-macro template.param_shorthand
-    template_param ::= $n:@name => $n : term
-end
-
-macro template.arg_shorthand
-    template_arg ::= $t:term => $t : term
-end
-
-macro tactic_template.term_shorthand
-    tactic_template ::= "[" $t:term "]" => [$t:term]
-end
-
-macro tactic_template.sentence_shorthand
-    tactic_template ::= "[" "schema" $s:sentence "]" => [$s:sentence]
+    template ::= "[" @kw"schema" $n:name $a:maybe_template_params "]" => [$n$a:sentence]
 end
 
 axiom fol.equality.intro [x] :
@@ -117,14 +101,14 @@ theorem eq.comm [x] [y] : (x = y)
     |- y = x
 proof
     have x = x by fol.equality.intro [x];
-    have y = x by fol.equality.elim [x] [y] [schema _ = x];
+    have y = x by fol.equality.elim [x] [y] [_ = x];
 qed
 
 theorem eq.trans [x] [y] [z] : (x = y) (y = z)
     |- x = z
 proof
     have y = x by eq.comm [x] [y];
-    have x = z by fol.equality.elim [y] [x] [schema _ = z];
+    have x = z by fol.equality.elim [y] [x] [_ = z];
 qed
 
 axiom and.intro [schema 'p] [schema 'q] : ('p) ('q)
@@ -142,7 +126,7 @@ end
 theorem and.comm [schema 'p] [schema 'q] : ('p ∧ 'q)
     |- 'q ∧ 'p
 proof
-    have 'p by and.elim_left [schema 'p] [schema 'q];
-    have 'q by and.elim_right [schema 'p] [schema 'q];
-    --by and.intro [schema 'q] [schema 'p]
+    have 'p by and.elim_left ['p] ['q];
+    have 'q by and.elim_right ['p] ['q];
+    by and.intro ['q] ['p]
 qed

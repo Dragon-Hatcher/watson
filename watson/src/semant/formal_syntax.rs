@@ -137,7 +137,7 @@ impl FormalSyntaxPat {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FormalSyntaxPatPart {
     Cat(FormalSyntaxCatId),
-    Binding(Ustr),
-    Var(Ustr),
+    Binding(FormalSyntaxCatId),
+    Var(FormalSyntaxCatId),
     Lit(Ustr),
 }

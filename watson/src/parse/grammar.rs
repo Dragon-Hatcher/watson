@@ -4,6 +4,7 @@ use crate::{
         CategoryId, ParseAtomPattern, ParseRuleSource, ParseState, Rule, RulePattern,
         RulePatternPart,
     },
+    semant::formal_syntax::{FormalSyntax, FormalSyntaxPatPart, FormalSyntaxRuleId},
     strings,
 };
 use ustr::Ustr;
@@ -35,44 +36,55 @@ macro_rules! builtin_rules {
 /*
 Grammar of the Watson language:
 
-command ::= (mod_command)        kw"module" name
-          | (syntax_cat_command) kw"syntax_cat" name
-          | (syntax_command)     kw"syntax" name name "::=" syntax_pat_list kw"end"
-          | (macro_command)      kw"macro" name <category> "::=" macro_pat_list "=>" template(category) kw"end"
-          | (axiom_command)      kw"axiom" name template ":" hypotheses "|-" sentence kw"end"
-          | (theorem_command)    kw"theorem" name template ":" hypotheses "|-" sentence kw"proof" tactics kw"qed"
+command ::= (module_command)     module_command
+          | (syntax_cat_command) syntax_cat_command
+          | (syntax_command)     syntax_command
+          | (macro_command)      macro_command
+          | (axiom_command)      axiom_command
+          | (theorem_command)    theorem_command
 
-syntax_pat_list ::= (syntax_pat_list_one)  syntax_pat
-                  | (syntax_pat_list_many) syntax_pat syntax_pat_list
+module_command ::= (module) kw"module" name
 
-syntax_pat ::= (syntax_pat_cat)     name
-             | (syntax_pat_binding) "@" kw"binding" "(" name ")"
-             | (syntax_pat_var)     "@" kw"variable" "(" name ")"
-             | (syntax_pat_lit)     str
+syntax_cat_command ::= (syntax_cat) kw"syntax_cat" name
+syntax_command ::= (syntax) kw"syntax" name name "::=" syntax_pat_list kw"end"
 
-macro_pat_list ::= (macro_pat_list_one)  macro_pat
-                 | (macro_pat_list_many) macro_pat macro_pat_list
+syntax_pat ::= (syntax_pat_one)  syntax_pat_part
+             | (syntax_pat_many) syntax_pat_part syntax_pat
 
-macro_pat ::= (macro_pat) macro_pat_binding macro_pat_kind
+syntax_pat_part ::= (syntax_pat_cat)     name
+                  | (syntax_pat_binding) "@" kw"binding" "(" name ")"
+                  | (syntax_pat_var)     "@" kw"variable" "(" name ")"
+                  | (syntax_pat_lit)     str
+
+macro_command ::= (macro) kw"macro" name macro_replacement kw"end"
+
+macro_replacement ::= (macro_replacement) <category> "::=" macro_pat_list "=>" template(category)
+
+macro_pat ::= (macro_pat_one)  macro_pat_part
+            | (macro_pat_many) macro_pat_part macro_pat
+
+macro_pat_part ::= (macro_pat_part) macro_pat_binding macro_pat_kind
 
 macro_pat_binding ::= (macro_pat_binding_empty)
                     | (macro_pat_binding_name)  "$" name ":"
 macro_pat_kind ::= (macro_pat_kind_kw)       "@" kw"kw" str
-                 | (macro_pat_kind_name)     "@" kw"name"
                  | (macro_pat_kind_lit)      str
                  | (macro_pat_kind_cat)      name
                  | (macro_pat_kind_template) "@" kw"template" "(" name ")"
 
+axiom_command ::= (axiom) kw"axiom" name templates ":" hypotheses "|-" sentence kw"end"
+theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactics kw"qed"
+
 templates ::= (template_none)
-            | (template_many) `template template
+            | (template_many) template templates
 
 template ::= (template) "[" name maybe_template_params ":" name "]"
 
 maybe_template_params ::= (maybe_template_params_none)
                         | (maybe_template_params_some) "(" template_params ")"
-template_params ::= (template_params_one)  template_arg
-                  | (template_params_many) template_arg "," template_params
-template_arg ::= (template_arg) name
+template_params ::= (template_params_one)  template_param
+                  | (template_params_many) template_param "," template_params
+template_param ::= (template_param) name
 
 hypotheses ::= (hypotheses_none)
              | (hypotheses_many) hypothesis hypotheses
@@ -96,48 +108,66 @@ template_instantiation ::= "[" <formal_cat> "]"
 builtin_cats! {
     BuiltinCats {
         command,
-        syntax_pat_list,
+        module_command,
+        syntax_cat_command,
+        syntax_command,
+        macro_command,
+        axiom_command,
+        theorem_command,
         syntax_pat,
-        macro_pat_list,
+        syntax_pat_part,
+        macro_replacement,
         macro_pat,
+        macro_pat_part,
         macro_pat_binding,
         macro_pat_kind,
+        templates,
         template,
         maybe_template_params,
         template_params,
-        template_arg,
+        template_param,
         hypotheses,
         hypothesis,
         fact,
         tactics,
         template_instantiations,
         template_instantiation,
+        name,
+        str,
     }
 }
 
 builtin_rules! {
     BuiltinRules {
-        mod_command,
+        name,
+        str,
+        module_command,
         syntax_cat_command,
         syntax_command,
+        macro_command,
         axiom_command,
         theorem_command,
-        syntax_pat_list_one,
-        syntax_pat_list_many,
-        syntax_pat_cat,
-        syntax_pat_binding,
-        syntax_pat_var,
-        syntax_pat_lit,
-        macro_pat_list_one,
-        macro_pat_list_many,
-        macro_pat,
+        module,
+        syntax_cat,
+        syntax,
+        syntax_pat_one,
+        syntax_pat_many,
+        syntax_pat_part_cat,
+        syntax_pat_part_binding,
+        syntax_pat_part_var,
+        syntax_pat_part_lit,
+        macro_r,
+        macro_pat_one,
+        macro_pat_many,
+        macro_pat_part,
         macro_pat_binding_empty,
         macro_pat_binding_name,
         macro_pat_kind_kw,
-        macro_pat_kind_name,
         macro_pat_kind_lit,
         macro_pat_kind_cat,
         macro_pat_kind_template,
+        theorem,
+        axiom,
         template_none,
         template_many,
         template,
@@ -145,7 +175,7 @@ builtin_rules! {
         maybe_template_params_some,
         template_params_one,
         template_params_many,
-        template_arg,
+        template_param,
         hypotheses_none,
         hypotheses_many,
         hypothesis,
@@ -168,23 +198,28 @@ fn lit(lit: Ustr) -> RulePatternPart {
     RulePatternPart::Atom(ParseAtomPattern::Lit(lit))
 }
 
-fn name() -> RulePatternPart {
-    RulePatternPart::Atom(ParseAtomPattern::Name)
-}
-
-fn str() -> RulePatternPart {
-    RulePatternPart::Atom(ParseAtomPattern::Str)
-}
-
 fn cat(cat: CategoryId) -> RulePatternPart {
-    RulePatternPart::Cat(cat)
+    RulePatternPart::Cat {
+        id: cat,
+        template: false,
+    }
 }
 
 fn cat_template(cat: CategoryId) -> RulePatternPart {
-    RulePatternPart::TempCat(cat)
+    RulePatternPart::Cat {
+        id: cat,
+        template: true,
+    }
 }
 
-pub fn add_builtin_rules(parse_state: &mut ParseState, cats: &BuiltinCats) -> BuiltinRules {
+pub fn add_builtin_rules(
+    parse_state: &mut ParseState,
+    formal_syntax: &FormalSyntax,
+    cats: &BuiltinCats,
+) -> BuiltinRules {
+    let sentence_cat =
+        parse_state.new_formal_lang_cat(*strings::SENTENCE, formal_syntax.sentence_cat());
+
     let mut rule = |name: &str, cat, parts| {
         parse_state.add_rule(Rule::new(
             name,
@@ -195,52 +230,94 @@ pub fn add_builtin_rules(parse_state: &mut ParseState, cats: &BuiltinCats) -> Bu
     };
 
     BuiltinRules {
-        mod_command: rule(
-            "mod_command",
+        name: rule(
+            "name",
+            cats.name,
+            vec![RulePatternPart::Atom(ParseAtomPattern::Name)],
+        ),
+        str: rule(
+            "str",
+            cats.str,
+            vec![RulePatternPart::Atom(ParseAtomPattern::Str)],
+        ),
+        module_command: rule(
+            "module_command",
             cats.command,
-            vec![kw(*strings::MODULE), name()],
+            vec![cat(cats.module_command)],
         ),
         syntax_cat_command: rule(
             "syntax_cat_command",
             cats.command,
-            vec![kw(*strings::SYNTAX_CAT), name()],
+            vec![cat(cats.syntax_cat_command)],
         ),
         syntax_command: rule(
             "syntax_command",
             cats.command,
+            vec![cat(cats.syntax_command)],
+        ),
+        macro_command: rule("macro_command", cats.command, vec![cat(cats.macro_command)]),
+        axiom_command: rule("axiom_command", cats.command, vec![cat(cats.axiom_command)]),
+        theorem_command: rule(
+            "theorem_command",
+            cats.command,
+            vec![cat(cats.theorem_command)],
+        ),
+        module: rule(
+            "module",
+            cats.module_command,
+            vec![kw(*strings::MODULE), cat(cats.name)],
+        ),
+        syntax_cat: rule(
+            "syntax_cat",
+            cats.syntax_cat_command,
+            vec![kw(*strings::SYNTAX_CAT), cat(cats.name)],
+        ),
+        syntax: rule(
+            "syntax",
+            cats.syntax_command,
             vec![
                 kw(*strings::SYNTAX),
-                name(),
-                name(),
+                cat(cats.name),
+                cat(cats.name),
                 lit(*strings::BNF_REPLACE),
-                cat(cats.syntax_pat_list),
+                cat(cats.syntax_pat),
                 kw(*strings::END),
             ],
         ),
-        axiom_command: rule(
-            "axiom_command",
-            cats.command,
+        macro_r: rule(
+            "macro_r",
+            cats.macro_command,
+            vec![
+                kw(*strings::MACRO),
+                cat(cats.name),
+                cat(cats.macro_replacement),
+                kw(*strings::END),
+            ],
+        ),
+        axiom: rule(
+            "axiom",
+            cats.axiom_command,
             vec![
                 kw(*strings::AXIOM),
-                name(),
-                cat(cats.template),
+                cat(cats.name),
+                cat(cats.templates),
                 lit(*strings::COLON),
                 cat(cats.hypotheses),
-                kw(*strings::TURNSTILE),
+                lit(*strings::TURNSTILE),
                 cat(cats.fact),
                 kw(*strings::END),
             ],
         ),
-        theorem_command: rule(
-            "theorem_command",
-            cats.command,
+        theorem: rule(
+            "theorem",
+            cats.theorem_command,
             vec![
                 kw(*strings::THEOREM),
-                name(),
-                cat(cats.template),
+                cat(cats.name),
+                cat(cats.templates),
                 lit(*strings::COLON),
                 cat(cats.hypotheses),
-                kw(*strings::TURNSTILE),
+                lit(*strings::TURNSTILE),
                 cat(cats.fact),
                 kw(*strings::PROOF),
                 cat(cats.tactics),
@@ -248,76 +325,87 @@ pub fn add_builtin_rules(parse_state: &mut ParseState, cats: &BuiltinCats) -> Bu
             ],
         ),
 
-        syntax_pat_list_one: rule(
-            "syntax_pat_list_one",
-            cats.syntax_pat_list,
-            vec![cat(cats.syntax_pat)],
+        syntax_pat_one: rule(
+            "syntax_pat_one",
+            cats.syntax_pat,
+            vec![cat(cats.syntax_pat_part)],
         ),
-        syntax_pat_list_many: rule(
-            "syntax_pat_list_many",
-            cats.syntax_pat_list,
-            vec![cat(cats.syntax_pat), cat(cats.syntax_pat_list)],
+        syntax_pat_many: rule(
+            "syntax_pat_many",
+            cats.syntax_pat,
+            vec![cat(cats.syntax_pat_part), cat(cats.syntax_pat)],
         ),
 
-        syntax_pat_cat: rule("syntax_pat_cat", cats.syntax_pat, vec![name()]),
-        syntax_pat_binding: rule(
-            "syntax_pat_binding",
-            cats.syntax_pat,
+        syntax_pat_part_cat: rule(
+            "syntax_pat_part_cat",
+            cats.syntax_pat_part,
+            vec![cat(cats.name)],
+        ),
+        syntax_pat_part_binding: rule(
+            "syntax_pat_part_binding",
+            cats.syntax_pat_part,
             vec![
                 lit(*strings::AT),
                 kw(*strings::BINDING),
                 lit(*strings::LEFT_PAREN),
-                name(),
+                cat(cats.name),
                 lit(*strings::RIGHT_PAREN),
             ],
         ),
-        syntax_pat_var: rule(
-            "syntax_pat_var",
-            cats.syntax_pat,
+        syntax_pat_part_var: rule(
+            "syntax_pat_part_var",
+            cats.syntax_pat_part,
             vec![
                 lit(*strings::AT),
                 kw(*strings::VARIABLE),
                 lit(*strings::LEFT_PAREN),
-                name(),
+                cat(cats.name),
                 lit(*strings::RIGHT_PAREN),
             ],
         ),
-        syntax_pat_lit: rule("syntax_pat_lit", cats.syntax_pat, vec![str()]),
-
-        macro_pat_list_one: rule(
-            "macro_pat_list_one",
-            cats.macro_pat_list,
-            vec![cat(cats.macro_pat)],
-        ),
-        macro_pat_list_many: rule(
-            "macro_pat_list_many",
-            cats.macro_pat_list,
-            vec![cat(cats.macro_pat), cat(cats.macro_pat_list)],
+        syntax_pat_part_lit: rule(
+            "syntax_pat_part_lit",
+            cats.syntax_pat_part,
+            vec![cat(cats.str)],
         ),
 
-        macro_pat: rule(
-            "macro_pat",
+        macro_pat_one: rule(
+            "macro_pat_one",
             cats.macro_pat,
+            vec![cat(cats.macro_pat_part)],
+        ),
+        macro_pat_many: rule(
+            "macro_pat_many",
+            cats.macro_pat,
+            vec![cat(cats.macro_pat_part), cat(cats.macro_pat)],
+        ),
+
+        macro_pat_part: rule(
+            "macro_pat_part",
+            cats.macro_pat_part,
             vec![cat(cats.macro_pat_binding), cat(cats.macro_pat_kind)],
         ),
         macro_pat_binding_empty: rule("macro_pat_binding_empty", cats.macro_pat_binding, vec![]),
         macro_pat_binding_name: rule(
             "macro_pat_binding_name",
             cats.macro_pat_binding,
-            vec![lit(*strings::DOLLAR), name(), lit(*strings::COLON)],
+            vec![lit(*strings::DOLLAR), cat(cats.name), lit(*strings::COLON)],
         ),
         macro_pat_kind_kw: rule(
             "macro_pat_kind_kw",
             cats.macro_pat_kind,
-            vec![lit(*strings::AT), kw(*strings::KW), str()],
+            vec![lit(*strings::AT), kw(*strings::KW), cat(cats.str)],
         ),
-        macro_pat_kind_name: rule(
-            "macro_pat_kind_name",
+        macro_pat_kind_lit: rule(
+            "macro_pat_kind_lit",
             cats.macro_pat_kind,
-            vec![lit(*strings::AT), kw(*strings::NAME)],
+            vec![cat(cats.str)],
         ),
-        macro_pat_kind_lit: rule("macro_pat_kind_lit", cats.macro_pat_kind, vec![str()]),
-        macro_pat_kind_cat: rule("macro_pat_kind_cat", cats.macro_pat_kind, vec![name()]),
+        macro_pat_kind_cat: rule(
+            "macro_pat_kind_cat",
+            cats.macro_pat_kind,
+            vec![cat(cats.name)],
+        ),
         macro_pat_kind_template: rule(
             "macro_pat_kind_template",
             cats.macro_pat_kind,
@@ -325,16 +413,16 @@ pub fn add_builtin_rules(parse_state: &mut ParseState, cats: &BuiltinCats) -> Bu
                 lit(*strings::AT),
                 kw(*strings::TEMPLATE),
                 lit(*strings::LEFT_PAREN),
-                name(),
+                cat(cats.name),
                 lit(*strings::RIGHT_PAREN),
             ],
         ),
 
-        template_none: rule("template_none", cats.template, vec![]),
+        template_none: rule("template_none", cats.templates, vec![]),
         template_many: rule(
             "template_many",
-            cats.template,
-            vec![lit(*strings::TEMPLATE), cat(cats.template)],
+            cats.templates,
+            vec![cat(cats.template), cat(cats.templates)],
         ),
 
         template: rule(
@@ -342,10 +430,10 @@ pub fn add_builtin_rules(parse_state: &mut ParseState, cats: &BuiltinCats) -> Bu
             cats.template,
             vec![
                 lit(*strings::LEFT_BRACKET),
-                name(),
+                cat(cats.name),
                 cat(cats.maybe_template_params),
                 lit(*strings::COLON),
-                name(),
+                cat(cats.name),
                 lit(*strings::RIGHT_BRACKET),
             ],
         ),
@@ -367,18 +455,18 @@ pub fn add_builtin_rules(parse_state: &mut ParseState, cats: &BuiltinCats) -> Bu
         template_params_one: rule(
             "template_params_one",
             cats.template_params,
-            vec![cat(cats.template_arg)],
+            vec![cat(cats.template_param)],
         ),
         template_params_many: rule(
             "template_params_many",
             cats.template_params,
             vec![
-                cat(cats.template_arg),
+                cat(cats.template_param),
                 lit(*strings::COMMA),
                 cat(cats.template_params),
             ],
         ),
-        template_arg: rule("template_arg", cats.template_arg, vec![name()]),
+        template_param: rule("template_param", cats.template_param, vec![cat(cats.name)]),
 
         hypotheses_none: rule("hypotheses_none", cats.hypotheses, vec![]),
         hypotheses_many: rule(
@@ -402,12 +490,12 @@ pub fn add_builtin_rules(parse_state: &mut ParseState, cats: &BuiltinCats) -> Bu
             cats.fact,
             vec![
                 kw(*strings::ASSUME),
-                cat(cats.fact),
+                cat(sentence_cat),
                 lit(*strings::TURNSTILE),
-                cat(cats.fact),
+                cat(sentence_cat),
             ],
         ),
-        fact_sentence: rule("fact_sentence", cats.fact, vec![cat(cats.syntax_pat)]),
+        fact_sentence: rule("fact_sentence", cats.fact, vec![cat(sentence_cat)]),
 
         tactics_none: rule("tactics_none", cats.tactics, vec![]),
         tactics_have: rule(
@@ -426,7 +514,7 @@ pub fn add_builtin_rules(parse_state: &mut ParseState, cats: &BuiltinCats) -> Bu
             cats.tactics,
             vec![
                 kw(*strings::BY),
-                name(),
+                cat(cats.name),
                 cat(cats.template_instantiations),
                 cat(cats.tactics),
             ],
@@ -451,23 +539,59 @@ pub fn add_builtin_rules(parse_state: &mut ParseState, cats: &BuiltinCats) -> Bu
             ],
         ),
     }
-
-    // TODO: template_instantiation
 }
 
 pub fn add_builtin_syntax_for_cat(for_cat: CategoryId, ctx: &mut Ctx) {
     ctx.parse_state.add_rule(Rule::new(
-        "macro_command",
-        ctx.builtin_cats.command,
+        "macro_replacement",
+        ctx.builtin_cats.macro_replacement,
         ParseRuleSource::Builtin,
         RulePattern::new(vec![
-            kw(*strings::MACRO),
             kw(ctx.parse_state[for_cat].name()),
             lit(*strings::BNF_REPLACE),
-            cat(ctx.builtin_cats.macro_pat_list),
+            cat(ctx.builtin_cats.macro_pat),
             lit(*strings::FAT_ARROW),
             cat_template(for_cat),
-            kw(*strings::END),
         ]),
     ));
+
+    ctx.parse_state.add_rule(Rule::new(
+        "macro_binding",
+        for_cat,
+        ParseRuleSource::Builtin,
+        RulePattern::new(vec![RulePatternPart::Atom(ParseAtomPattern::MacroBinding)]),
+    ));
+}
+
+pub fn add_formal_syntax_rule(rule_id: FormalSyntaxRuleId, ctx: &mut Ctx) {
+    let rule = &ctx.formal_syntax[rule_id];
+
+    let mut parts = Vec::new();
+    for formal_part in rule.pattern().parts() {
+        let part = match formal_part {
+            FormalSyntaxPatPart::Cat(formal_cat) => {
+                let cat = ctx.parse_state.cat_for_formal_cat(*formal_cat);
+                RulePatternPart::Cat {
+                    id: cat,
+                    template: false,
+                }
+            }
+            FormalSyntaxPatPart::Binding(_) | FormalSyntaxPatPart::Var(_) => {
+                cat(ctx.builtin_cats.name)
+            }
+            FormalSyntaxPatPart::Lit(lit_str) => lit(*lit_str),
+        };
+        parts.push(part);
+    }
+
+    let parse_rule_pattern = RulePattern::new(parts);
+
+    let parse_rule = Rule::new(
+        "formal_syntax_rule",
+        ctx.parse_state.cat_for_formal_cat(rule.cat()),
+        ParseRuleSource::FormalLang(rule_id),
+        parse_rule_pattern,
+    );
+
+    ctx.parse_state.add_rule(parse_rule);
 }

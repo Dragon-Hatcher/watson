@@ -20,7 +20,14 @@ pub fn parse(root: SourceId, ctx: &mut Ctx) {
     sources_stack.push(root.start_loc());
 
     while let Some(next) = sources_stack.pop() {
+        update_state(ctx);
         parse_source(next, ctx, &mut sources_stack);
+    }
+}
+
+fn update_state(ctx: &mut Ctx) {
+    while let Some(cat) = ctx.parse_state.pop_new_categories() {
+        grammar::add_builtin_syntax_for_cat(cat, ctx);
     }
 }
 

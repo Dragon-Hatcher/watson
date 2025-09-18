@@ -75,7 +75,15 @@ pub fn elaborate_command(command: ParseTreeId, ctx: &mut Ctx) -> WResult<Option<
         macro_command ::= [macro_cmd] => {
             elaborate_macro(macro_cmd.as_node().unwrap(), ctx)?;
             Ok(None)
-        }
+        },
+        axiom_command ::= [axiom_cmd] => {
+            elaborate_axiom(axiom_cmd.as_node().unwrap(), ctx)?;
+            Ok(None)
+        },
+        theorem_command ::= [theorem_cmd] => {
+            elaborate_theorem(theorem_cmd.as_node().unwrap(), ctx)?;
+            Ok(None)
+        },
     }
 }
 
@@ -500,6 +508,41 @@ fn elaborate_macro_pat_kind(pat: ParseTreeId, ctx: &mut Ctx) -> WResult<RulePatt
             Ok(RulePatternPart::Cat { id: cat, template: true })
         }
 
+    }
+}
+
+fn elaborate_axiom(axiom: ParseTreeId, ctx: &mut Ctx) -> WResult<()> {
+    // axiom_command ::= (axiom) kw"axiom" name templates ":" hypotheses "|-" sentence kw"end"
+
+    match_rule! { (ctx, axiom) =>
+        axiom_command ::= [axiom_kw, name, templates, colon, hypotheses, turnstile, sentence, end_kw] => {
+            debug_assert!(axiom_kw.is_kw(*strings::AXIOM));
+            debug_assert!(colon.is_lit(*strings::COLON));
+            debug_assert!(turnstile.is_lit(*strings::TURNSTILE));
+            debug_assert!(end_kw.is_kw(*strings::END));
+
+            todo!();
+
+            Ok(())
+        }
+    }
+}
+
+fn elaborate_theorem(theorem: ParseTreeId, ctx: &mut Ctx) -> WResult<()> {
+    // theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactics kw"qed"
+
+    match_rule! { (ctx, theorem) =>
+        theorem_command ::= [theorem_kw, name, templates, colon, hypotheses, turnstile, sentence, proof_kw, tactics, qed_kw] => {
+            debug_assert!(theorem_kw.is_kw(*strings::THEOREM));
+            debug_assert!(colon.is_lit(*strings::COLON));
+            debug_assert!(turnstile.is_lit(*strings::TURNSTILE));
+            debug_assert!(proof_kw.is_kw(*strings::PROOF));
+            debug_assert!(qed_kw.is_kw(*strings::QED));
+
+            todo!();
+
+            Ok(())
+        }
     }
 }
 

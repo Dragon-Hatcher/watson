@@ -5,7 +5,8 @@ use crate::{
     context::Ctx,
     diagnostics::{DiagManager, WResult},
     parse::{
-        SourceId, grammar,
+        SourceId,
+        grammar::{self, add_builtin_syntax_for_formal_cat},
         macros::{Macro, MacroPat, Macros, do_macro_replacement},
         parse_state::{ParseAtomPattern, ParseRuleSource, ParseState, Rule, RulePatternPart},
         parse_tree::{
@@ -135,6 +136,8 @@ fn elaborate_syntax_cat(cat: ParseTreeId, ctx: &mut Ctx) -> WResult<()> {
             let formal_cat = ctx.formal_syntax.add_cat(FormalSyntaxCat::new(cat_name));
 
             ctx.parse_state.new_formal_lang_cat(cat_name, formal_cat);
+
+            add_builtin_syntax_for_formal_cat(formal_cat, ctx);
 
             Ok(())
         }
@@ -546,6 +549,67 @@ fn elaborate_theorem(theorem: ParseTreeId, ctx: &mut Ctx) -> WResult<()> {
     }
 }
 
+pub fn elaborate_maybe_shorthand_args(
+    maybe_args: ParseTreeId,
+    ctx: &mut Ctx,
+) -> WResult<Vec<ParseTreeId>> {
+    // maybe_shorthand_args ::= (maybe_shorthand_args_none)
+    //                        | (maybe_shorthand_args_some) "(" shorthand_args ")"
+
+    match_rule! { (ctx, maybe_args) =>
+        maybe_shorthand_args_none ::= [] => {
+            Ok(Vec::new())
+        },
+        maybe_shorthand_args_some ::= [l_paren, args, r_paren] => {
+            debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
+            debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
+
+            elaborate_shorthand_args(args.as_node().unwrap(), ctx)
+        }
+    }
+}
+
+fn elaborate_shorthand_args(args: ParseTreeId, ctx: &mut Ctx) -> WResult<Vec<ParseTreeId>> {
+    let mut next_args = Some(args);
+    let mut arg_list = Vec::new();
+
+    while let Some(args) = next_args {
+        // shorthand_args ::= (shorthand_args_one)  shorthand_arg
+        //                  | (shorthand_args_many) shorthand_arg "," shorthand_args
+
+        let (arg, next) = match_rule! { (ctx, args) =>
+            shorthand_args_one ::= [arg] => {
+                let arg = arg.as_node().unwrap();
+                (arg, None)
+            },
+            shorthand_args_many ::= [arg, comma, rest] => {
+                let arg = arg.as_node().unwrap();
+                let rest = rest.as_node().unwrap();
+                debug_assert!(comma.is_lit(*strings::COMMA));
+                (arg, Some(rest))
+            }
+        };
+
+        arg_list.push(elaborate_shorthand_arg(arg, ctx)?);
+        next_args = next;
+    }
+
+    Ok(arg_list)
+}
+
+fn elaborate_shorthand_arg(arg: ParseTreeId, ctx: &mut Ctx) -> WResult<ParseTreeId> {
+    // shorthand_arg ::= (shorthand_arg) any_fragment
+
+    match_rule! { (ctx, arg) =>
+        shorthand_arg ::= [frag] => {
+            let frag = frag.as_node().unwrap();
+            debug_assert!(ctx.parse_forest[frag].cat() == ctx.builtin_cats.any_fragment);
+
+            Ok(frag)
+        }
+    }
+}
+
 fn elaborate_name(name: ParseTreeId, ctx: &mut Ctx) -> WResult<Ustr> {
     match_rule! { (ctx, name) =>
         name ::= [name_atom] => {
@@ -588,7 +652,7 @@ fn expect_unambiguous<'a>(
     }
 }
 
-fn reduce_to_builtin(og_tree_id: ParseTreeId, ctx: &mut Ctx) -> WResult<ParseTreeId> {
+pub fn reduce_to_builtin(og_tree_id: ParseTreeId, ctx: &mut Ctx) -> WResult<ParseTreeId> {
     let tree = &ctx.parse_forest[og_tree_id];
 
     // If we have no macro possibilities then we are already done.

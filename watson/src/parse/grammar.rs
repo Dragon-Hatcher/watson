@@ -4,7 +4,9 @@ use crate::{
         CategoryId, ParseAtomPattern, ParseRuleSource, ParseState, Rule, RulePattern,
         RulePatternPart,
     },
-    semant::formal_syntax::{FormalSyntax, FormalSyntaxPatPart, FormalSyntaxRuleId},
+    semant::formal_syntax::{
+        FormalSyntax, FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId,
+    },
     strings,
 };
 use ustr::Ustr;
@@ -102,7 +104,18 @@ tactics ::= (tactics_none)
 template_instantiations ::= (template_instantiations_none)
                           | (template_instantiations_many) template_instantiation template_instantiations
 
-template_instantiation ::= "[" <formal_cat> "]"
+template_instantiation ::= "[" any_fragment "]"
+
+<formal_cat> ::= name maybe_shorthand_args
+
+maybe_shorthand_args ::= (maybe_shorthand_args_none)
+                       | (maybe_shorthand_args_some) "(" shorthand_args ")"
+
+shorthand_args ::= (shorthand_args_one)  shorthand_arg
+                 | (shorthand_args_many) shorthand_arg "," shorthand_args
+shorthand_arg ::= (shorthand_arg) any_fragment
+
+any_fragment ::= <formal_cat>
 */
 
 builtin_cats! {
@@ -132,6 +145,10 @@ builtin_cats! {
         tactics,
         template_instantiations,
         template_instantiation,
+        maybe_shorthand_args,
+        shorthand_args,
+        shorthand_arg,
+        any_fragment,
         name,
         str,
     }
@@ -187,6 +204,12 @@ builtin_rules! {
         tactics_todo,
         template_instantiations_none,
         template_instantiations_many,
+        template_instantiation,
+        maybe_shorthand_args_none,
+        maybe_shorthand_args_some,
+        shorthand_args_one,
+        shorthand_args_many,
+        shorthand_arg,
     }
 }
 
@@ -538,6 +561,48 @@ pub fn add_builtin_rules(
                 cat(cats.template_instantiations),
             ],
         ),
+        template_instantiation: rule(
+            "template_instantiation",
+            cats.template_instantiation,
+            vec![
+                lit(*strings::LEFT_BRACKET),
+                cat(cats.any_fragment),
+                lit(*strings::RIGHT_BRACKET),
+            ],
+        ),
+        maybe_shorthand_args_none: rule(
+            "maybe_shorthand_args_none",
+            cats.maybe_shorthand_args,
+            vec![],
+        ),
+        maybe_shorthand_args_some: rule(
+            "maybe_shorthand_args_some",
+            cats.maybe_shorthand_args,
+            vec![
+                lit(*strings::LEFT_PAREN),
+                cat(cats.shorthand_args),
+                lit(*strings::RIGHT_PAREN),
+            ],
+        ),
+        shorthand_args_one: rule(
+            "shorthand_args_one",
+            cats.shorthand_args,
+            vec![cat(cats.shorthand_arg)],
+        ),
+        shorthand_args_many: rule(
+            "shorthand_args_many",
+            cats.shorthand_args,
+            vec![
+                cat(cats.shorthand_arg),
+                lit(*strings::COMMA),
+                cat(cats.shorthand_args),
+            ],
+        ),
+        shorthand_arg: rule(
+            "shorthand_arg",
+            cats.shorthand_arg,
+            vec![cat(cats.any_fragment)],
+        ),
     }
 }
 
@@ -560,6 +625,27 @@ pub fn add_builtin_syntax_for_cat(for_cat: CategoryId, ctx: &mut Ctx) {
         for_cat,
         ParseRuleSource::Builtin,
         RulePattern::new(vec![RulePatternPart::Atom(ParseAtomPattern::MacroBinding)]),
+    ));
+}
+
+pub fn add_builtin_syntax_for_formal_cat(formal_cat: FormalSyntaxCatId, ctx: &mut Ctx) {
+    let macro_cat = ctx.parse_state.cat_for_formal_cat(formal_cat);
+
+    ctx.parse_state.add_rule(Rule::new(
+        "formal_cat",
+        macro_cat,
+        ParseRuleSource::Builtin,
+        RulePattern::new(vec![
+            cat(ctx.builtin_cats.name),
+            cat(ctx.builtin_cats.maybe_shorthand_args),
+        ]),
+    ));
+
+    ctx.parse_state.add_rule(Rule::new(
+        "any_fragment",
+        ctx.builtin_cats.any_fragment,
+        ParseRuleSource::Builtin,
+        RulePattern::new(vec![cat(macro_cat)]),
     ));
 }
 

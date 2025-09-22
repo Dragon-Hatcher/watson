@@ -6,7 +6,7 @@ use crate::{
     },
 };
 use rustc_hash::FxHashMap;
-use slotmap::{new_key_type, SecondaryMap, SlotMap};
+use slotmap::{SecondaryMap, SlotMap, new_key_type};
 use std::ops::Index;
 use ustr::Ustr;
 

@@ -2,17 +2,18 @@ use crate::{
     context::Ctx,
     parse::{
         Span,
-        parse_state::{CategoryId, ParseAtomPattern, ParseState, RuleId},
+        parse_state::{CategoryId, ParseAtomPattern, RuleId},
     },
 };
 use rustc_hash::FxHashMap;
-use slotmap::{SlotMap, new_key_type};
+use slotmap::{new_key_type, SecondaryMap, SlotMap};
 use std::ops::Index;
 use ustr::Ustr;
 
 pub struct ParseForest {
     trees: SlotMap<ParseTreeId, ParseTree>,
     ids_by_tree: FxHashMap<ParseTree, ParseTreeId>,
+    has_unexpanded_macro: SecondaryMap<ParseTreeId, bool>,
 }
 
 impl ParseForest {
@@ -20,17 +21,45 @@ impl ParseForest {
         Self {
             trees: SlotMap::default(),
             ids_by_tree: FxHashMap::default(),
+            has_unexpanded_macro: SecondaryMap::default(),
         }
+    }
+
+    fn check_has_unexpanded_macro(&self, tree: &ParseTree) -> bool {
+        for possibility in &tree.possibilities {
+            for part in &possibility.children {
+                match part {
+                    ParseTreePart::Atom(atom) => {
+                        if let ParseAtomKind::MacroBinding(_) = atom.kind() {
+                            return true;
+                        }
+                    }
+                    ParseTreePart::Node { id, .. } => {
+                        if self.has_unexpanded_macro[*id] {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        false
     }
 
     pub fn get_or_insert(&mut self, tree: ParseTree) -> ParseTreeId {
         if let Some(&id) = self.ids_by_tree.get(&tree) {
             id
         } else {
+            let has_unexpanded_macro = self.check_has_unexpanded_macro(&tree);
             let id = self.trees.insert(tree.clone());
             self.ids_by_tree.insert(tree, id);
+            self.has_unexpanded_macro[id] = has_unexpanded_macro;
             id
         }
+    }
+
+    pub fn has_unexpanded_macro(&self, tree: ParseTreeId) -> bool {
+        self.has_unexpanded_macro[tree]
     }
 }
 

@@ -130,3 +130,51 @@ proof
     have 'q by and.elim_right ['p] ['q];
     by and.intro ['q] ['p]
 qed
+
+definition if
+    @kw"if" $p:sentence @kw"then" $t:term @kw"else" $f:false =>
+        {x : x ∈ $t ∧ $p} ∪ {x : x ∈ $f ∧ ¬$p}
+end
+
+theorem if.true [schema p] [t] [f] : (p)
+    |- if p then t else f = t
+proof
+    have h₁ := {x : x ∈ t ∧  p} = t by todo;
+    have h₂ := {x : x ∈ f ∧ ¬p} = ∅ by todo;
+    goal t ∪ ∅ = t by rw [h₁, h₂];
+    by union_empty_set
+qed
+
+theorem if.false [schema p] [t] [f] : (¬p)
+    |- if p then t else f = f
+proof
+    have h₁ := {x : x ∈ t ∧  p} = ∅ by todo;
+    have h₂ := {x : x ∈ f ∧ ¬p} = f by todo;
+    goal ∅ ∪ f = f by rw [h₁, h₂];
+    by empty_set_union
+qed
+
+theorem if.either [schema p] [t] [f] :
+    |- (if p then t else f = t) ∨ (if p then t else f = f)
+proof
+    have p ∨ ¬p by em [p];
+    cases p ∨ ¬p
+    ⬝  p => have if p then t else f = t by if.true;  by or.intro_left
+    ⬝ ¬p => have if p then t else f = f by if.false; by or.intro_right
+qed
+
+theorem if.inverse [schema p] [t] [f] :
+    |- if p then t else f = if ¬p then f else t
+proof
+    have p ∨ ¬p by em [p];
+    cases p ∨ ¬p
+    ⬝  p => 
+        have if  p then t else f = t by if.true;
+        have ¬¬p by double_negation;
+        have if ¬p then f else t = t by if.false;
+        by eq.trans
+    ⬝ ¬p =>
+        have if  p then t else f = f by if.false;
+        have if ¬p then f else t = f by if.true;
+        by eq.trans
+qed

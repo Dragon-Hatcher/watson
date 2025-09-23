@@ -7,16 +7,21 @@ use crate::{
     parse::{
         SourceId,
         grammar::{self, add_builtin_syntax_for_formal_cat},
-        macros::{Macro, MacroPat, Macros, do_macro_replacement},
-        parse_state::{ParseAtomPattern, ParseRuleSource, ParseState, Rule, RulePatternPart},
+        macros::{Macro, MacroPat, do_macro_replacement},
+        parse_state::{ParseAtomPattern, ParseRuleSource, Rule, RulePatternPart},
         parse_tree::{
             _debug_parse_tree, ParseForest, ParseTree, ParseTreeChildren, ParseTreeId,
             ParseTreePart,
         },
         source_cache::{SourceDecl, source_id_to_path},
     },
-    semant::formal_syntax::{
-        FormalSyntaxCat, FormalSyntaxPat, FormalSyntaxPatPart, FormalSyntaxRule,
+    semant::{
+        formal_syntax::{
+            FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxPat, FormalSyntaxPatPart,
+            FormalSyntaxRule,
+        },
+        parse_fragment::{NameCtx, UnresolvedFact, parse_fact, parse_fragment},
+        theorems::{Template, TheoremStatement},
     },
     strings,
 };
@@ -158,7 +163,7 @@ fn elaborate_syntax(syntax: ParseTreeId, ctx: &mut Ctx) -> WResult<()> {
             let pat = elaborate_syntax_pat(pat_list.as_node().unwrap(), ctx)?;
 
             let Some(cat) = ctx.formal_syntax.cat_by_name(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat();
+                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat.span());
             };
 
             let rule = FormalSyntaxRule::new(rule_name, cat, pat);
@@ -203,37 +208,37 @@ fn elaborate_syntax_pat_part(pat: ParseTreeId, ctx: &mut Ctx) -> WResult<FormalS
     //                   | (syntax_pat_lit)     str
 
     match_rule! { (ctx, pat) =>
-        syntax_pat_part_cat ::= [cat_name] => {
-            let cat_name = elaborate_name(cat_name.as_node().unwrap(), ctx)?;
+        syntax_pat_part_cat ::= [cat_name_node] => {
+            let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
 
             let Some(cat) = ctx.formal_syntax.cat_by_name(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat();
+                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
             Ok(FormalSyntaxPatPart::Cat(cat))
         },
-        syntax_pat_part_binding ::= [at, binding_kw, l_paren, cat_name, r_paren] => {
+        syntax_pat_part_binding ::= [at, binding_kw, l_paren, cat_name_node, r_paren] => {
             debug_assert!(at.is_lit(*strings::AT));
             debug_assert!(binding_kw.is_kw(*strings::BINDING));
             debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
             debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
 
-            let cat_name = elaborate_name(cat_name.as_node().unwrap(), ctx)?;
+            let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
             let Some(cat) = ctx.formal_syntax.cat_by_name(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat();
+                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
             Ok(FormalSyntaxPatPart::Binding(cat))
         },
-        syntax_pat_part_var ::= [at, var_kw, l_paren, cat_name, r_paren] => {
+        syntax_pat_part_var ::= [at, var_kw, l_paren, cat_name_node, r_paren] => {
             debug_assert!(at.is_lit(*strings::AT));
             debug_assert!(var_kw.is_kw(*strings::VARIABLE));
             debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
             debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
 
-            let cat_name = elaborate_name(cat_name.as_node().unwrap(), ctx)?;
+            let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
             let Some(cat) = ctx.formal_syntax.cat_by_name(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat();
+                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
             Ok(FormalSyntaxPatPart::Var(cat))
@@ -518,13 +523,28 @@ fn elaborate_axiom(axiom: ParseTreeId, ctx: &mut Ctx) -> WResult<()> {
     // axiom_command ::= (axiom) kw"axiom" name templates ":" hypotheses "|-" sentence kw"end"
 
     match_rule! { (ctx, axiom) =>
-        axiom_command ::= [axiom_kw, name, templates, colon, hypotheses, turnstile, sentence, end_kw] => {
+        axiom ::= [axiom_kw, name_node, templates, colon, hypotheses, turnstile, sentence, end_kw] => {
             debug_assert!(axiom_kw.is_kw(*strings::AXIOM));
             debug_assert!(colon.is_lit(*strings::COLON));
             debug_assert!(turnstile.is_lit(*strings::TURNSTILE));
             debug_assert!(end_kw.is_kw(*strings::END));
 
-            todo!();
+            let name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
+            let templates = elaborate_templates(templates.as_node().unwrap(), ctx)?;
+
+            let mut name_ctx = make_name_ctx(&templates);
+            let hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
+            let hypotheses = hypotheses.into_iter().map(|h| parse_fact(h, &mut name_ctx, ctx)).collect::<WResult<Vec<_>>>()?;
+            let conclusion = parse_fragment(sentence.as_node().unwrap(), ctx.formal_syntax.sentence_cat(), &mut name_ctx, ctx)?;
+
+            let templates = templates_to_map(templates);
+            let theorem_stmt = TheoremStatement::new(templates, hypotheses, conclusion);
+
+            if let Some(_previous) = ctx.theorem_stmts.get(name) {
+                return ctx.diags.err_duplicate_theorem(name, name_node.span());
+            }
+
+            ctx.theorem_stmts.add(name, theorem_stmt);
 
             Ok(())
         }
@@ -532,19 +552,221 @@ fn elaborate_axiom(axiom: ParseTreeId, ctx: &mut Ctx) -> WResult<()> {
 }
 
 fn elaborate_theorem(theorem: ParseTreeId, ctx: &mut Ctx) -> WResult<()> {
-    // theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactics kw"qed"
+    // theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactic kw"qed"
 
     match_rule! { (ctx, theorem) =>
-        theorem_command ::= [theorem_kw, name, templates, colon, hypotheses, turnstile, sentence, proof_kw, tactics, qed_kw] => {
+        theorem ::= [theorem_kw, name_node, templates, colon, hypotheses, turnstile, sentence, proof_kw, tactic, qed_kw] => {
             debug_assert!(theorem_kw.is_kw(*strings::THEOREM));
             debug_assert!(colon.is_lit(*strings::COLON));
             debug_assert!(turnstile.is_lit(*strings::TURNSTILE));
             debug_assert!(proof_kw.is_kw(*strings::PROOF));
             debug_assert!(qed_kw.is_kw(*strings::QED));
 
-            todo!();
+            let name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
+            let templates = elaborate_templates(templates.as_node().unwrap(), ctx)?;
+
+            let mut name_ctx = make_name_ctx(&templates);
+            let hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
+            let hypotheses = hypotheses.into_iter().map(|h| parse_fact(h, &mut name_ctx, ctx)).collect::<WResult<Vec<_>>>()?;
+            let conclusion = parse_fragment(sentence.as_node().unwrap(), ctx.formal_syntax.sentence_cat(), &mut name_ctx, ctx)?;
+
+            let templates = templates_to_map(templates);
+            let theorem_stmt = TheoremStatement::new(templates, hypotheses, conclusion);
+
+            if let Some(_previous) = ctx.theorem_stmts.get(name) {
+                return ctx.diags.err_duplicate_theorem(name, name_node.span());
+            }
+
+            ctx.theorem_stmts.add(name, theorem_stmt);
 
             Ok(())
+        }
+    }
+}
+
+fn make_name_ctx(templates: &[Template]) -> NameCtx {
+    let mut names = NameCtx::new();
+    for template in templates {
+        names.add_template(template.name(), template.clone());
+    }
+    names
+}
+
+fn templates_to_map(templates: Vec<Template>) -> FxHashMap<Ustr, Template> {
+    let mut map = FxHashMap::default();
+    for template in templates {
+        map.insert(template.name(), template);
+    }
+    map
+}
+
+fn elaborate_templates(mut templates: ParseTreeId, ctx: &mut Ctx) -> WResult<Vec<Template>> {
+    // templates ::= (template_none)
+    //             | (template_many) template templates
+
+    let mut templates_list = Vec::new();
+
+    loop {
+        match_rule! { (ctx, templates) =>
+            template_none ::= [] => {
+                return Ok(templates_list);
+            },
+            template_many ::= [template, rest] => {
+                let template = template.as_node().unwrap();
+
+                templates_list.push(elaborate_template(template, ctx)?);
+                templates = rest.as_node().unwrap();
+            }
+        }
+    }
+}
+
+fn elaborate_template(template: ParseTreeId, ctx: &mut Ctx) -> WResult<Template> {
+    // template ::= (template) "[" name maybe_template_params ":" name "]"
+
+    match_rule! { (ctx, template) =>
+        template ::= [l_brack, name, maybe_params, colon, cat_name_node, r_brack] => {
+            debug_assert!(l_brack.is_lit(*strings::LEFT_BRACKET));
+            debug_assert!(colon.is_lit(*strings::COLON));
+            debug_assert!(r_brack.is_lit(*strings::RIGHT_BRACKET));
+
+            let name = elaborate_name(name.as_node().unwrap(), ctx)?;
+            let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
+            let Some(cat) = ctx.formal_syntax.cat_by_name(cat_name) else {
+                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
+            };
+            let params = elaborate_maybe_template_params(maybe_params.as_node().unwrap(), ctx)?;
+
+            Ok(Template::new(name, cat, params))
+        }
+    }
+}
+
+fn elaborate_maybe_template_params(
+    maybe_params: ParseTreeId,
+    ctx: &mut Ctx,
+) -> WResult<Vec<FormalSyntaxCatId>> {
+    // maybe_template_params ::= (maybe_template_params_none)
+    //                         | (maybe_template_params_some) "(" template_params ")"
+
+    match_rule! { (ctx, maybe_params) =>
+        maybe_template_params_none ::= [] => {
+            Ok(Vec::new())
+        },
+        maybe_template_params_some ::= [l_paren, params, r_paren] => {
+            debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
+            debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
+
+            elaborate_template_params(params.as_node().unwrap(), ctx)
+        }
+    }
+}
+
+fn elaborate_template_params(
+    params: ParseTreeId,
+    ctx: &mut Ctx,
+) -> WResult<Vec<FormalSyntaxCatId>> {
+    // template_params ::= (template_params_one)  template_param
+    //                   | (template_params_many) template_param "," template_params
+
+    let mut params_list = Vec::new();
+    let mut next_params = Some(params);
+
+    while let Some(params) = next_params {
+        let (param, rest) = match_rule! { (ctx, params) =>
+            template_params_one ::= [param] => {
+                let param = param.as_node().unwrap();
+                (param, None)
+            },
+            template_params_many ::= [param, comma, rest] => {
+                let param = param.as_node().unwrap();
+                let rest = rest.as_node().unwrap();
+                debug_assert!(comma.is_lit(*strings::COMMA));
+
+                (param, Some(rest))
+            }
+        };
+
+        params_list.push(elaborate_template_param(param, ctx)?);
+        next_params = rest;
+    }
+
+    Ok(params_list)
+}
+
+fn elaborate_template_param(param: ParseTreeId, ctx: &mut Ctx) -> WResult<FormalSyntaxCatId> {
+    // template_param ::= (template_param) name
+
+    match_rule! { (ctx, param) =>
+        template_param ::= [cat_name_node] => {
+            let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
+
+            let Some(cat) = ctx.formal_syntax.cat_by_name(cat_name) else {
+                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
+            };
+
+            Ok(cat)
+        }
+    }
+}
+
+fn elaborate_hypotheses(hypotheses: ParseTreeId, ctx: &mut Ctx) -> WResult<Vec<UnresolvedFact>> {
+    // hypotheses ::= (hypotheses_none)
+    //              | (hypotheses_many) hypothesis hypotheses
+
+    let mut hypotheses_list = Vec::new();
+    let mut next_hypotheses = Some(hypotheses);
+
+    while let Some(hypotheses) = next_hypotheses {
+        match_rule! { (ctx, hypotheses) =>
+            hypotheses_none ::= [] => {
+                next_hypotheses = None;
+            },
+            hypotheses_many ::= [hypothesis, rest] => {
+                let hypothesis = hypothesis.as_node().unwrap();
+                let rest = rest.as_node().unwrap();
+
+                hypotheses_list.push(elaborate_hypothesis(hypothesis, ctx)?);
+                next_hypotheses = Some(rest);
+            }
+        }
+    }
+
+    Ok(hypotheses_list)
+}
+
+fn elaborate_hypothesis(hypothesis: ParseTreeId, ctx: &mut Ctx) -> WResult<UnresolvedFact> {
+    // hypothesis ::= (hypothesis) "(" fact ")"
+
+    match_rule! { (ctx, hypothesis) =>
+        hypothesis ::= [l_paren, fact, r_paren] => {
+            debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
+            debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
+
+            let fact = fact.as_node().unwrap();
+            let fact = elaborate_fact(fact, ctx)?;
+
+            Ok(fact)
+        }
+    }
+}
+
+fn elaborate_fact(fact: ParseTreeId, ctx: &mut Ctx) -> WResult<UnresolvedFact> {
+    // fact ::= (fact_assumption) kw"assume" sentence "|-" sentence
+    //        | (fact_sentence)   sentence
+
+    match_rule! { (ctx, fact) =>
+        fact_assumption ::= [assume_kw, assumption, turnstile, conclusion] => {
+            debug_assert!(assume_kw.is_kw(*strings::ASSUME));
+            debug_assert!(turnstile.is_lit(*strings::TURNSTILE));
+
+            let assumption = assumption.as_node().unwrap();
+            let conclusion = conclusion.as_node().unwrap();
+            Ok(UnresolvedFact::new(Some(assumption), conclusion))
+        },
+        fact_sentence ::= [conclusion] => {
+            let conclusion = conclusion.as_node().unwrap();
+            Ok(UnresolvedFact::new(None, conclusion))
         }
     }
 }
@@ -610,7 +832,7 @@ fn elaborate_shorthand_arg(arg: ParseTreeId, ctx: &mut Ctx) -> WResult<ParseTree
     }
 }
 
-fn elaborate_name(name: ParseTreeId, ctx: &mut Ctx) -> WResult<Ustr> {
+pub fn elaborate_name(name: ParseTreeId, ctx: &mut Ctx) -> WResult<Ustr> {
     match_rule! { (ctx, name) =>
         name ::= [name_atom] => {
             let name = name_atom.as_name().unwrap();

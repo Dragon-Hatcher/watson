@@ -96,10 +96,10 @@ hypothesis ::= (hypothesis) "(" fact ")"
 fact ::= (fact_assumption) kw"assume" sentence "|-" sentence
        | (fact_sentence)   sentence
 
-tactics ::= (tactics_none)
-          | (tactics_have) kw"have" fact tactics ";" tactics
-          | (tactics_by)   kw"by" name template_instantiations tactics
-          | (tactics_todo) kw"todo" tactics
+tactic ::= (tactic_none)
+         | (tactic_have) kw"have" fact tactics ";" tactics
+         | (tactic_by)   kw"by" name template_instantiations
+         | (tactic_todo) kw"todo"
 
 template_instantiations ::= (template_instantiations_none)
                           | (template_instantiations_many) template_instantiation template_instantiations
@@ -142,7 +142,7 @@ builtin_cats! {
         hypotheses,
         hypothesis,
         fact,
-        tactics,
+        tactic,
         template_instantiations,
         template_instantiation,
         maybe_shorthand_args,
@@ -198,10 +198,10 @@ builtin_rules! {
         hypothesis,
         fact_assumption,
         fact_sentence,
-        tactics_none,
-        tactics_have,
-        tactics_by,
-        tactics_todo,
+        tactic_none,
+        tactic_have,
+        tactic_by,
+        tactic_todo,
         template_instantiations_none,
         template_instantiations_many,
         template_instantiation,
@@ -343,7 +343,7 @@ pub fn add_builtin_rules(
                 lit(*strings::TURNSTILE),
                 cat(sentence_cat),
                 kw(*strings::PROOF),
-                cat(cats.tactics),
+                cat(cats.tactic),
                 kw(*strings::QED),
             ],
         ),
@@ -520,32 +520,32 @@ pub fn add_builtin_rules(
         ),
         fact_sentence: rule("fact_sentence", cats.fact, vec![cat(sentence_cat)]),
 
-        tactics_none: rule("tactics_none", cats.tactics, vec![]),
-        tactics_have: rule(
-            "tactics_have",
-            cats.tactics,
+        tactic_none: rule("tactic_none", cats.tactic, vec![]),
+        tactic_have: rule(
+            "tactic_have",
+            cats.tactic,
             vec![
                 kw(*strings::HAVE),
                 cat(cats.fact),
-                cat(cats.tactics),
+                cat(cats.tactic),
                 lit(*strings::SEMICOLON),
-                cat(cats.tactics),
+                cat(cats.tactic),
             ],
         ),
-        tactics_by: rule(
-            "tactics_by",
-            cats.tactics,
+        tactic_by: rule(
+            "tactic_by",
+            cats.tactic,
             vec![
                 kw(*strings::BY),
                 cat(cats.name),
                 cat(cats.template_instantiations),
-                cat(cats.tactics),
+                cat(cats.tactic),
             ],
         ),
-        tactics_todo: rule(
-            "tactics_todo",
-            cats.tactics,
-            vec![kw(*strings::TODO), cat(cats.tactics)],
+        tactic_todo: rule(
+            "tactic_todo",
+            cats.tactic,
+            vec![kw(*strings::TODO), cat(cats.tactic)],
         ),
 
         template_instantiations_none: rule(
@@ -632,7 +632,7 @@ pub fn add_builtin_syntax_for_formal_cat(formal_cat: FormalSyntaxCatId, ctx: &mu
     let macro_cat = ctx.parse_state.cat_for_formal_cat(formal_cat);
 
     ctx.parse_state.add_rule(Rule::new(
-        "formal_cat",
+        "template_instantiation",
         macro_cat,
         ParseRuleSource::Builtin,
         RulePattern::new(vec![

@@ -206,8 +206,9 @@ impl DiagManager {
         Err(())
     }
 
-    pub fn err_unknown_formal_syntax_cat<T>(&mut self) -> WResult<T> {
-        let diag = Diagnostic::new("err_unknown_formal_syntax_cat");
+    pub fn err_unknown_formal_syntax_cat<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
+        let diag = Diagnostic::new(&format!("unknown formal syntax category `{name}`"))
+            .with_error("", span);
 
         self.add_diag(diag);
         Err(())

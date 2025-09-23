@@ -1,5 +1,3 @@
-use std::ops::Index;
-
 use rustc_hash::FxHashMap;
 use slotmap::SecondaryMap;
 use ustr::Ustr;
@@ -8,29 +6,98 @@ use crate::{
     context::Ctx,
     diagnostics::WResult,
     parse::{
-        elaborator::{elaborate_maybe_shorthand_args, reduce_to_builtin},
+        elaborator::{elaborate_maybe_shorthand_args, elaborate_name, reduce_to_builtin},
         macros::do_macro_replacement,
         parse_state::{ParseRuleSource, SyntaxCategorySource},
-        parse_tree::ParseTreeId,
+        parse_tree::{_debug_parse_tree, ParseTreeId},
     },
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart},
-        fragment::{FragData, FragPart, FragRuleApplication, Fragment, FragmentId},
+        fragment::{
+            _debug_fragment, FragData, FragPart, FragRuleApplication, FragTemplateRef, Fragment,
+            FragmentId,
+        },
+        theorems::{Fact, Template},
     },
 };
 
+pub struct UnresolvedFact {
+    assumption: Option<ParseTreeId>,
+    conclusion: ParseTreeId,
+}
+
+impl UnresolvedFact {
+    pub fn new(assumption: Option<ParseTreeId>, conclusion: ParseTreeId) -> Self {
+        Self {
+            assumption,
+            conclusion,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct NameCtx {
-    templates: FxHashMap<Ustr, TemplateInfo>,
+    templates: FxHashMap<Ustr, Template>,
     shorthands: FxHashMap<Ustr, FragmentId>,
     bindings: SecondaryMap<FormalSyntaxCatId, Vec<Ustr>>,
 }
 
-pub struct TemplateInfo {
-    cat: FormalSyntaxCatId,
-    params: Vec<FormalSyntaxCatId>,
+impl NameCtx {
+    pub fn new() -> Self {
+        Self {
+            templates: FxHashMap::default(),
+            shorthands: FxHashMap::default(),
+            bindings: SecondaryMap::default(),
+        }
+    }
+
+    pub fn add_template(&mut self, name: Ustr, template: Template) {
+        self.templates.insert(name, template);
+    }
+}
+
+pub fn parse_fact(fact: UnresolvedFact, names: &mut NameCtx, ctx: &mut Ctx) -> WResult<Fact> {
+    let sentence_cat = ctx.formal_syntax.sentence_cat();
+
+    let assumption = if let Some(assumption_tree) = fact.assumption {
+        Some(parse_fragment(assumption_tree, sentence_cat, names, ctx)?)
+    } else {
+        None
+    };
+    let conclusion = parse_fragment(fact.conclusion, sentence_cat, names, ctx)?;
+
+    Ok(Fact::new(assumption, conclusion))
 }
 
 pub fn parse_any_fragment(
+    tree: ParseTreeId,
+    expected_cat: FormalSyntaxCatId,
+    names: &mut NameCtx,
+    ctx: &mut Ctx,
+) -> WResult<FragmentId> {
+    let Some(frag) = maybe_parse_any_fragment(tree, expected_cat, names, ctx)? else {
+        // TODO: actual error message
+        return ctx.diags.err_ambiguous_parse(ctx.parse_forest[tree].span());
+    };
+
+    Ok(frag)
+}
+
+pub fn parse_fragment(
+    tree: ParseTreeId,
+    expected_cat: FormalSyntaxCatId,
+    names: &mut NameCtx,
+    ctx: &mut Ctx,
+) -> WResult<FragmentId> {
+    let Some(frag) = maybe_parse_fragment(tree, expected_cat, names, ctx)? else {
+        // TODO: actual error message
+        return ctx.diags.err_ambiguous_parse(ctx.parse_forest[tree].span());
+    };
+
+    Ok(frag)
+}
+
+fn maybe_parse_any_fragment(
     tree: ParseTreeId,
     expected_cat: FormalSyntaxCatId,
     names: &mut NameCtx,
@@ -55,7 +122,7 @@ pub fn parse_any_fragment(
             continue;
         }
 
-        if let Some(frag_id) = parse_fragment(frag, expected_cat, names, ctx)? {
+        if let Some(frag_id) = maybe_parse_fragment(frag, expected_cat, names, ctx)? {
             possible_formals.push(frag_id);
         }
     }
@@ -66,7 +133,7 @@ pub fn parse_any_fragment(
     }
 }
 
-pub fn parse_fragment(
+fn maybe_parse_fragment(
     tree: ParseTreeId,
     expected_cat: FormalSyntaxCatId,
     names: &mut NameCtx,
@@ -85,7 +152,7 @@ pub fn parse_fragment(
 
         match rule.source() {
             ParseRuleSource::Builtin => {
-                let name = possibility.children()[0].as_name().unwrap();
+                let name = elaborate_name(possibility.children()[0].as_node().unwrap(), ctx)?;
                 let args = elaborate_maybe_shorthand_args(
                     possibility.children()[1].as_node().unwrap(),
                     ctx,
@@ -107,17 +174,40 @@ pub fn parse_fragment(
                     successful_fragments.push(*replacement);
                     continue;
                 } else if let Some(template) = names.templates.get(&name) {
-                    if template.cat != expected_cat {
+                    let template_cat = template.cat();
+
+                    if template_cat != expected_cat {
                         // This template is not for the expected category.
                         continue;
                     }
 
-                    if template.params.len() != args.len() {
+                    if template.params().len() != args.len() {
                         // Wrong number of arguments.
                         continue;
                     }
 
-                    todo!();
+                    let mut arg_frags = Vec::new();
+                    let mut template_success = true;
+
+                    for (param_cat, arg_frag_id) in
+                        template.params().to_vec().iter().zip(args.iter())
+                    {
+                        let Some(arg_frag) =
+                            maybe_parse_any_fragment(*arg_frag_id, *param_cat, names, ctx)?
+                        else {
+                            template_success = false;
+                            break;
+                        };
+
+                        arg_frags.push(arg_frag);
+                    }
+
+                    if template_success {
+                        let frag_data = FragData::Template(FragTemplateRef::new(name, arg_frags));
+                        let frag = Fragment::new(template_cat, frag_data);
+                        let frag_id = ctx.fragments.get_or_insert(frag);
+                        successful_fragments.push(frag_id);
+                    }
                 } else {
                     // This is not a valid shorthand or template.
                     continue;
@@ -129,15 +219,37 @@ pub fn parse_fragment(
                 let mut frag_parts = Vec::new();
                 let mut rule_success = true;
 
+                // First push the bindings from this rule to the name context.
+                let mut binding_count: SecondaryMap<FormalSyntaxCatId, usize> =
+                    SecondaryMap::default();
+                for (child, formal_part) in possibility
+                    .children()
+                    .iter()
+                    .zip(formal_rule.pattern().clone().parts())
+                {
+                    if let FormalSyntaxPatPart::Binding(var_formal_cat) = formal_part {
+                        let var_name = elaborate_name(child.as_node().unwrap(), ctx)?;
+                        names
+                            .bindings
+                            .entry(*var_formal_cat)
+                            .unwrap()
+                            .or_default()
+                            .push(var_name);
+                        *binding_count.entry(*var_formal_cat).unwrap().or_default() += 1;
+                    }
+                }
+
+                let formal_rule = &ctx.formal_syntax[formal_rule_id];
+
                 for (child, formal_part) in possibility
                     .children()
                     .iter()
                     .zip(formal_rule.pattern().clone().parts())
                 {
                     match formal_part {
-                        FormalSyntaxPatPart::Cat(_) => {
+                        FormalSyntaxPatPart::Cat(cat) => {
                             let Some(child_frag_id) =
-                                parse_fragment(child.as_node().unwrap(), expected_cat, names, ctx)?
+                                maybe_parse_fragment(child.as_node().unwrap(), *cat, names, ctx)?
                             else {
                                 rule_success = false;
                                 break;
@@ -151,7 +263,7 @@ pub fn parse_fragment(
                                 break;
                             };
 
-                            let var_name = child.as_name().unwrap();
+                            let var_name = elaborate_name(child.as_node().unwrap(), ctx)?;
                             let Some((idx, _)) = bindings
                                 .iter()
                                 .enumerate()
@@ -180,11 +292,20 @@ pub fn parse_fragment(
                     let frag_id = ctx.fragments.get_or_insert(frag);
                     successful_fragments.push(frag_id);
                 }
+
+                // Now pop the bindings we added to the name context.
+                for (cat, count) in binding_count {
+                    let bindings = names.bindings.get_mut(cat).unwrap();
+                    let new_len = bindings.len() - count;
+                    bindings.truncate(new_len);
+                }
             }
             ParseRuleSource::Macro(macro_id) => {
                 // Expand the macro and add the new possibilities to the stack.
                 let bindings = &ctx.macros[*macro_id].collect_macro_bindings(&possibility);
-                let expanded = do_macro_replacement(tree, bindings, ctx);
+                let expanded =
+                    do_macro_replacement(ctx.macros[*macro_id].replacement(), bindings, ctx);
+
                 for possibility in ctx.parse_forest[expanded].possibilities() {
                     possibilities_todo.push(possibility.clone());
                 }
@@ -197,80 +318,3 @@ pub fn parse_fragment(
         _ => Ok(None),
     }
 }
-
-// // Formal syntax fragments when written in watson source code may be
-// // ambiguous between different formal syntax categories. So we don't parse
-// // them until we know which category they should be. At the point this
-// // function is called, we know the expected category.
-
-// // The first thing we are going to do is expand the given parse tree into
-// // one that contains only formal syntax rules, i.e. no macros. This will
-// // make it possible to perform name resolution correctly by exposing all
-// // bindings.
-// let expanded_tree = expand_tree(tree, ctx);
-
-// fn expand_tree(tree: ParseTreeId, ctx: &mut Ctx) -> ParseTreeId {
-//     // This function takes a parse tree that may contain macros and expands
-//     // all macros into their definitions, producing a parse tree that only
-//     // contains formal syntax rules.
-//     //
-//     // This is necessary because macros can introduce new bindings and
-//     // change the structure of the parse tree in ways that affect name
-//     // resolution and fragment parsing.
-//     //
-//     // We are going to expand from the bottom up, so we don't have to expand
-//     // the same macro multiple times. So the first step is to expand all the
-//     // children of this node, then if this node is a macro we expand it. The
-//     // macro might introduce new child macros that need to be expanded so we
-//     // repeat until there are no more macros.
-
-//     if !ctx.parse_forest.has_unexpanded_macro(tree) {
-//         return tree;
-//     }
-
-//     let old_tree = &ctx.parse_forest[tree];
-//     let span = old_tree.span();
-//     let cat = old_tree.cat();
-
-//     let mut new_possibilities = Vec::new();
-//     let mut possibilities_to_expand = old_tree.possibilities().to_vec();
-
-//     while let Some(possibility) = possibilities_to_expand.pop() {
-//         // First expand all children.
-
-//         let mut new_children = Vec::with_capacity(possibility.children().len());
-//         for child in possibility.children() {
-//             match child {
-//                 ParseTreePart::Atom(atom) => {
-//                     new_children.push(ParseTreePart::Atom(*atom));
-//                 }
-//                 ParseTreePart::Node { id, span, cat } => {
-//                     let expanded = expand_tree(*id, ctx);
-//                     new_children.push(ParseTreePart::Node { id: expanded, span: *span, cat: *cat });
-//                 }
-//             }
-//         }
-
-//         let possibility = ParseTreeChildren::new(possibility.rule(), new_children);
-
-//         // Now the children are clean. We either push this possibility or expand
-//         // it if it's a macro.
-
-//         let rule = &ctx.parse_state[possibility.rule()];
-
-//         let &ParseRuleSource::Macro(macro_id) = rule.source() else {
-//             new_possibilities.push(possibility);
-//             continue;
-//         };
-
-//         let bindings = &ctx.macros[macro_id].collect_macro_bindings(&possibility);
-//         let expanded = do_macro_replacement(tree, bindings, ctx);
-
-//         for possibility in ctx.parse_forest[expanded].possibilities() {
-//             possibilities_to_expand.push(possibility.clone());
-//         }
-//     }
-
-//     let new_tree = ParseTree::new(span, cat, new_possibilities);
-//     ctx.parse_forest.get_or_insert(new_tree)
-// }

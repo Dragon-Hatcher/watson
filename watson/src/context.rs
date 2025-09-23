@@ -2,12 +2,14 @@ use crate::{
     diagnostics::DiagManager,
     parse::{
         SourceCache,
-        grammar::{BuiltinCats, BuiltinRules, add_builtin_rules},
+        grammar::{
+            BuiltinCats, BuiltinRules, add_builtin_rules, add_builtin_syntax_for_formal_cat,
+        },
         macros::Macros,
         parse_state::ParseState,
         parse_tree::ParseForest,
     },
-    semant::{formal_syntax::FormalSyntax, fragment::FragmentForest},
+    semant::{formal_syntax::FormalSyntax, fragment::FragmentForest, theorems::TheoremStatements},
 };
 
 pub struct Ctx {
@@ -26,6 +28,9 @@ pub struct Ctx {
     /// Fragments of sentences in the formal language.
     pub fragments: FragmentForest,
 
+    /// All the existing theorems/axioms and what they state.
+    pub theorem_stmts: TheoremStatements,
+
     /// Diagnostics manager for reporting errors and warnings.
     pub diags: DiagManager,
 
@@ -43,16 +48,21 @@ impl Ctx {
         let builtin_cats = BuiltinCats::new(&mut parse_state);
         let builtin_rules = add_builtin_rules(&mut parse_state, &formal_syntax, &builtin_cats);
 
-        Ctx {
+        let mut ctx = Ctx {
             macros: Macros::new(),
             parse_forest: ParseForest::new(),
             parse_state,
             formal_syntax,
             fragments: FragmentForest::new(),
+            theorem_stmts: TheoremStatements::new(),
             diags: DiagManager::new(),
             sources: source_cache,
             builtin_cats,
             builtin_rules,
-        }
+        };
+
+        add_builtin_syntax_for_formal_cat(ctx.formal_syntax.sentence_cat(), &mut ctx);
+
+        ctx
     }
 }

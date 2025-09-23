@@ -53,7 +53,7 @@ impl ParseForest {
             let has_unexpanded_macro = self.check_has_unexpanded_macro(&tree);
             let id = self.trees.insert(tree.clone());
             self.ids_by_tree.insert(tree, id);
-            self.has_unexpanded_macro[id] = has_unexpanded_macro;
+            self.has_unexpanded_macro.insert(id, has_unexpanded_macro);
             id
         }
     }

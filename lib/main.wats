@@ -81,7 +81,7 @@ axiom fol.equality.intro [x] :
     |- x = x
 end
 
-axiom fol.equality.elim [x] [y] [schema 'p(_)] : (x = y) ('p(x))
+axiom fol.equality.elim [x] [y] [schema 'p(term)] : (x = y) ('p(x))
     |- 'p(y)
 end
 
@@ -93,7 +93,7 @@ axiom modus_ponens [schema 'p] [schema 'q] : ('p) ('p → 'q)
     |- 'q
 end
 
-axiom exists.intro [schema 'p(_)] [y] : ('p(y))
+axiom exists.intro [schema 'p(term)] [y] : ('p(y))
     |- ∃x, 'p(x)
 end
 
@@ -131,12 +131,12 @@ proof
     by and.intro ['q] ['p]
 qed
 
-definition if
-    @kw"if" $p:sentence @kw"then" $t:term @kw"else" $f:false =>
+-- definition if
+    @kw"if" $p:sentence @kw"then" $t:term @kw"else" $f:term =>
         {x : x ∈ $t ∧ $p} ∪ {x : x ∈ $f ∧ ¬$p}
 end
 
-theorem if.true [schema p] [t] [f] : (p)
+-- theorem if.true [schema p] [t] [f] : (p)
     |- if p then t else f = t
 proof
     have h₁ := {x : x ∈ t ∧  p} = t by todo;
@@ -145,7 +145,7 @@ proof
     by union_empty_set
 qed
 
-theorem if.false [schema p] [t] [f] : (¬p)
+-- theorem if.false [schema p] [t] [f] : (¬p)
     |- if p then t else f = f
 proof
     have h₁ := {x : x ∈ t ∧  p} = ∅ by todo;
@@ -154,7 +154,7 @@ proof
     by empty_set_union
 qed
 
-theorem if.either [schema p] [t] [f] :
+-- theorem if.either [schema p] [t] [f] :
     |- (if p then t else f = t) ∨ (if p then t else f = f)
 proof
     have p ∨ ¬p by em [p];
@@ -163,7 +163,7 @@ proof
     ⬝ ¬p => have if p then t else f = f by if.false; by or.intro_right
 qed
 
-theorem if.inverse [schema p] [t] [f] :
+-- theorem if.inverse [schema p] [t] [f] :
     |- if p then t else f = if ¬p then f else t
 proof
     have p ∨ ¬p by em [p];

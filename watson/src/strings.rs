@@ -14,7 +14,6 @@ str_const! {
     SYNTAX_CAT = "syntax_category";
     SYNTAX = "syntax";
     MACRO = "macro";
-    MACRO_RULE = "macro_rule";
     AXIOM = "axiom";
     THEOREM = "theorem";
     PROOF = "proof";
@@ -46,11 +45,7 @@ str_const! {
     BINDING = "binding";
     VARIABLE = "variable";
     KW = "kw";
-    NAME = "name";
     TEMPLATE = "template";
-    FORMAL_TEMPLATE_RULE = "formal_template";
-    FORMAL_TEMPLATE_ARG_RULE = "formal_template_arg";
-    TACTIC_TEMPLATE_RULE = "tactic_template";
 }
 
 str_const! {

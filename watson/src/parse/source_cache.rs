@@ -1,5 +1,3 @@
-use ustr::Ustr;
-
 use crate::{
     parse::{Span, location::SourceId},
     strings,

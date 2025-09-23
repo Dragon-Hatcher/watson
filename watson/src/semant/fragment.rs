@@ -1,6 +1,9 @@
 use std::ops::Index;
 
-use crate::semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId};
+use crate::{
+    context::Ctx,
+    semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
+};
 use rustc_hash::FxHashMap;
 use slotmap::{SlotMap, new_key_type};
 use ustr::Ustr;
@@ -88,4 +91,54 @@ pub enum FragPart {
 pub struct FragTemplateRef {
     name: Ustr,
     args: Vec<FragmentId>,
+}
+
+impl FragTemplateRef {
+    pub fn new(name: Ustr, args: Vec<FragmentId>) -> Self {
+        Self { name, args }
+    }
+}
+
+pub fn _debug_fragment(frag: FragmentId, ctx: &mut Ctx) {
+    fn debug_frag(frag: FragmentId, ctx: &mut Ctx, depth: usize) {
+        let frag = &ctx.fragments[frag];
+        let indent = "  ".repeat(depth);
+        match &frag.data.clone() {
+            FragData::Rule(app) => {
+                let rule = &ctx.formal_syntax[app.rule];
+                println!(
+                    "{}Rule: {} -> {}",
+                    indent,
+                    rule.name(),
+                    ctx.formal_syntax[rule.cat()].name()
+                );
+                for child in &app.children {
+                    match child {
+                        FragPart::Fragment(child_frag) => {
+                            debug_frag(*child_frag, ctx, depth + 1);
+                        }
+                        FragPart::Variable(cat, idx) => {
+                            println!(
+                                "{}  Var: {}[{}]",
+                                indent,
+                                ctx.formal_syntax[*cat].name(),
+                                idx
+                            );
+                        }
+                    }
+                }
+            }
+            FragData::Template(template) => {
+                println!("{}Template: {}", indent, template.name);
+                for arg in &template.args {
+                    debug_frag(*arg, ctx, depth + 1);
+                }
+            }
+            FragData::Hole(idx) => {
+                println!("{}Hole: {}", indent, idx);
+            }
+        }
+    }
+
+    debug_frag(frag, ctx, 0);
 }

@@ -1,16 +1,13 @@
 use crate::{
     context::Ctx,
-    diagnostics::WResult,
     parse::{
-        parse_state::{CategoryId, ParseAtomPattern, ParseState, RulePattern, RulePatternPart},
-        parse_tree::{
-            ParseAtomKind, ParseForest, ParseTree, ParseTreeChildren, ParseTreeId, ParseTreePart,
-        },
+        parse_state::{CategoryId, RulePattern, RulePatternPart},
+        parse_tree::{ParseTree, ParseTreeChildren, ParseTreeId, ParseTreePart},
     },
 };
 use rustc_hash::FxHashMap;
 use slotmap::{SlotMap, new_key_type};
-use std::{collections::HashMap, ops::Index};
+use std::ops::Index;
 use ustr::Ustr;
 
 pub struct Macros {

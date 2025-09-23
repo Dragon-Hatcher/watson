@@ -1,7 +1,10 @@
 use rustc_hash::FxHashMap;
 use ustr::Ustr;
 
-use crate::semant::{formal_syntax::FormalSyntaxCatId, fragment::FragmentId};
+use crate::semant::{
+    formal_syntax::FormalSyntaxCatId,
+    fragment::{_debug_fragment, FragmentId},
+};
 
 pub struct TheoremStatements {
     theorems: FxHashMap<Ustr, TheoremStatement>,
@@ -21,8 +24,13 @@ impl TheoremStatements {
     pub fn get(&self, name: Ustr) -> Option<&TheoremStatement> {
         self.theorems.get(&name)
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&Ustr, &TheoremStatement)> {
+        self.theorems.iter()
+    }
 }
 
+#[derive(Debug, Clone)]
 pub struct TheoremStatement {
     templates: FxHashMap<Ustr, Template>,
     hypotheses: Vec<Fact>,
@@ -101,4 +109,41 @@ impl Fact {
     pub fn conclusion(&self) -> FragmentId {
         self.conclusion
     }
+}
+
+pub fn _debug_theorem_statement(name: Ustr, stmt: &TheoremStatement, ctx: &crate::Ctx) {
+    println!("Theorem {name}:");
+    for (name, template) in stmt.templates() {
+        if template.params().is_empty() {
+            println!(
+                "  [{} : {}]",
+                name,
+                ctx.formal_syntax[template.cat()].name(),
+            );
+        } else {
+            println!(
+                "  [{}({}) : {}]",
+                name,
+                template
+                    .params()
+                    .iter()
+                    .map(|cat| ctx.formal_syntax[*cat].name().as_str())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                ctx.formal_syntax[template.cat()].name(),
+            );
+        }
+    }
+    for fact in stmt.hypotheses() {
+        if let Some(assump) = fact.assumption() {
+            println!(
+                "  (assume {} |- {})",
+                _debug_fragment(assump, ctx),
+                _debug_fragment(fact.conclusion(), ctx)
+            );
+        } else {
+            println!("  ({})", _debug_fragment(fact.conclusion(), ctx));
+        }
+    }
+    println!("  |- {}", _debug_fragment(stmt.conclusion(), ctx));
 }

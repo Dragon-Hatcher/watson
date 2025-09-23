@@ -1,6 +1,7 @@
 use crate::{
     context::Ctx,
     parse::{SourceCache, SourceId, source_cache::SourceDecl},
+    semant::theorems::_debug_theorem_statement,
 };
 use std::path::Path;
 use ustr::Ustr;
@@ -42,5 +43,10 @@ fn make_source_cache(root_file: &Path) -> (SourceCache, SourceId) {
 }
 
 fn compile(root: SourceId, ctx: &mut Ctx) {
-    parse::parse(root, ctx)
+    parse::parse(root, ctx);
+
+    for (name, stmt) in ctx.theorem_stmts.iter() {
+        _debug_theorem_statement(*name, stmt, ctx);
+        println!();
+    }
 }

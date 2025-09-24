@@ -73,11 +73,28 @@ pub enum FragData {
 pub struct FragRuleApplication {
     rule: FormalSyntaxRuleId,
     children: Vec<FragPart>,
+    bindings_added: usize,
 }
 
 impl FragRuleApplication {
-    pub fn new(rule: FormalSyntaxRuleId, children: Vec<FragPart>) -> Self {
-        Self { rule, children }
+    pub fn new(rule: FormalSyntaxRuleId, children: Vec<FragPart>, bindings_added: usize) -> Self {
+        Self {
+            rule,
+            children,
+            bindings_added,
+        }
+    }
+
+    pub fn rule(&self) -> FormalSyntaxRuleId {
+        self.rule
+    }
+
+    pub fn children(&self) -> &[FragPart] {
+        &self.children
+    }
+
+    pub fn bindings_added(&self) -> usize {
+        self.bindings_added
     }
 }
 
@@ -96,6 +113,14 @@ pub struct FragTemplateRef {
 impl FragTemplateRef {
     pub fn new(name: Ustr, args: Vec<FragmentId>) -> Self {
         Self { name, args }
+    }
+
+    pub fn name(&self) -> Ustr {
+        self.name
+    }
+
+    pub fn args(&self) -> &[FragmentId] {
+        &self.args
     }
 }
 
@@ -164,10 +189,10 @@ pub fn _debug_fragment(frag: FragmentId, ctx: &Ctx) -> String {
             }
             FragData::Template(template) => {
                 if template.args.is_empty() {
-                    format!("#{}", template.name)
+                    format!("{}", template.name)
                 } else {
                     format!(
-                        "#{}({})",
+                        "{}({})",
                         template.name,
                         template
                             .args

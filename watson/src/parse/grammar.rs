@@ -539,14 +539,9 @@ pub fn add_builtin_rules(
                 kw(*strings::BY),
                 cat(cats.name),
                 cat(cats.template_instantiations),
-                cat(cats.tactic),
             ],
         ),
-        tactic_todo: rule(
-            "tactic_todo",
-            cats.tactic,
-            vec![kw(*strings::TODO), cat(cats.tactic)],
-        ),
+        tactic_todo: rule("tactic_todo", cats.tactic, vec![kw(*strings::TODO)]),
 
         template_instantiations_none: rule(
             "template_instantiations_none",

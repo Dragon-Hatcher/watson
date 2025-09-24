@@ -1,6 +1,6 @@
-// pub fn plural(n: usize) -> &'static str {
-//     if n == 1 { "" } else { "s" }
-// }
+pub fn plural(n: usize) -> &'static str {
+    if n == 1 { "" } else { "s" }
+}
 
 // pub mod ansi {
 //     pub const ANSI_RESET: &str = "\x1b[0m";

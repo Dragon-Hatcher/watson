@@ -2,7 +2,7 @@ use rustc_hash::FxHashMap;
 use ustr::Ustr;
 
 use crate::{
-    context::Ctx,
+    context::{self, Ctx},
     diagnostics::{DiagManager, WResult},
     parse::{
         SourceId,
@@ -16,12 +16,13 @@ use crate::{
         source_cache::{SourceDecl, source_id_to_path},
     },
     semant::{
+        check_proof::{UnresolvedByTactic, UnresolvedHaveTactic, UnresolvedTactic},
         formal_syntax::{
             FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxPat, FormalSyntaxPatPart,
             FormalSyntaxRule,
         },
         parse_fragment::{NameCtx, UnresolvedFact, parse_fact, parse_fragment},
-        theorems::{Template, TheoremStatement},
+        theorems::{Template, TheoremId, TheoremStatement, UnresolvedProof},
     },
     strings,
 };
@@ -165,6 +166,10 @@ fn elaborate_syntax(syntax: ParseTreeId, ctx: &mut Ctx) -> WResult<()> {
             let Some(cat) = ctx.formal_syntax.cat_by_name(cat_name) else {
                 return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat.span());
             };
+
+            if let Some(_) = ctx.formal_syntax.rule_by_name(rule_name) {
+                return ctx.diags.err_duplicate_formal_syntax_rule();
+            }
 
             let rule = FormalSyntaxRule::new(rule_name, cat, pat);
             let rule_id = ctx.formal_syntax.add_rule(rule);
@@ -537,14 +542,15 @@ fn elaborate_axiom(axiom: ParseTreeId, ctx: &mut Ctx) -> WResult<()> {
             let hypotheses = hypotheses.into_iter().map(|h| parse_fact(h, &mut name_ctx, ctx)).collect::<WResult<Vec<_>>>()?;
             let conclusion = parse_fragment(sentence.as_node().unwrap(), ctx.formal_syntax.sentence_cat(), &mut name_ctx, ctx)?;
 
-            let templates = templates_to_map(templates);
-            let theorem_stmt = TheoremStatement::new(templates, hypotheses, conclusion);
+            let theorem_stmt = TheoremStatement::new(templates, hypotheses, conclusion, UnresolvedProof::Axiom);
 
-            if let Some(_previous) = ctx.theorem_stmts.get(name) {
+            let id = TheoremId::new(name);
+
+            if let Some(_previous) = ctx.theorem_stmts.get(id) {
                 return ctx.diags.err_duplicate_theorem(name, name_node.span());
             }
 
-            ctx.theorem_stmts.add(name, theorem_stmt);
+            ctx.theorem_stmts.add(id, theorem_stmt);
 
             Ok(())
         }
@@ -570,14 +576,16 @@ fn elaborate_theorem(theorem: ParseTreeId, ctx: &mut Ctx) -> WResult<()> {
             let hypotheses = hypotheses.into_iter().map(|h| parse_fact(h, &mut name_ctx, ctx)).collect::<WResult<Vec<_>>>()?;
             let conclusion = parse_fragment(sentence.as_node().unwrap(), ctx.formal_syntax.sentence_cat(), &mut name_ctx, ctx)?;
 
-            let templates = templates_to_map(templates);
-            let theorem_stmt = TheoremStatement::new(templates, hypotheses, conclusion);
+            let tactic = tactic.as_node().unwrap();
+            let theorem_stmt = TheoremStatement::new(templates, hypotheses, conclusion, UnresolvedProof::Theorem(tactic));
 
-            if let Some(_previous) = ctx.theorem_stmts.get(name) {
+            let id = TheoremId::new(name);
+
+            if let Some(_previous) = ctx.theorem_stmts.get(id) {
                 return ctx.diags.err_duplicate_theorem(name, name_node.span());
             }
 
-            ctx.theorem_stmts.add(name, theorem_stmt);
+            ctx.theorem_stmts.add(id, theorem_stmt);
 
             Ok(())
         }
@@ -590,14 +598,6 @@ fn make_name_ctx(templates: &[Template]) -> NameCtx {
         names.add_template(template.name(), template.clone());
     }
     names
-}
-
-fn templates_to_map(templates: Vec<Template>) -> FxHashMap<Ustr, Template> {
-    let mut map = FxHashMap::default();
-    for template in templates {
-        map.insert(template.name(), template);
-    }
-    map
 }
 
 fn elaborate_templates(mut templates: ParseTreeId, ctx: &mut Ctx) -> WResult<Vec<Template>> {
@@ -824,6 +824,80 @@ fn elaborate_shorthand_arg(arg: ParseTreeId, ctx: &mut Ctx) -> WResult<ParseTree
 
     match_rule! { (ctx, arg) =>
         shorthand_arg ::= [frag] => {
+            let frag = frag.as_node().unwrap();
+            debug_assert!(ctx.parse_forest[frag].cat() == ctx.builtin_cats.any_fragment);
+
+            Ok(frag)
+        }
+    }
+}
+
+pub fn elaborate_tactic(tactic: ParseTreeId, ctx: &mut Ctx) -> WResult<UnresolvedTactic> {
+    // tactic ::= (tactic_none)
+    //          | (tactic_have) kw"have" fact tactics ";" tactics
+    //          | (tactic_by)   kw"by" name template_instantiations
+    //          | (tactic_todo) kw"todo"
+
+    match_rule! { (ctx, tactic) =>
+        tactic_none ::= [] => {
+            Ok(UnresolvedTactic::None)
+        },
+        tactic_have ::= [have_kw, fact, proof, semicolon, continuation] => {
+            debug_assert!(have_kw.is_kw(*strings::HAVE));
+            debug_assert!(semicolon.is_lit(*strings::SEMICOLON));
+
+            let fact = elaborate_fact(fact.as_node( ).unwrap(), ctx)?;
+            let tactic = UnresolvedHaveTactic { fact, proof: proof.as_node().unwrap(), continuation: continuation.as_node().unwrap() };
+            Ok(UnresolvedTactic::Have(tactic))
+        },
+        tactic_by ::= [by_kw, theorem_name_node, template_insts] => {
+            debug_assert!(by_kw.is_kw(*strings::BY));
+
+            let theorem_name = elaborate_name(theorem_name_node.as_node().unwrap(), ctx)?;
+            let templates = elaborate_template_instantiations(template_insts.as_node().unwrap(), ctx)?;
+
+            let tactic = UnresolvedByTactic { theorem_name, theorem_name_span: theorem_name_node.span(), templates };
+            Ok(UnresolvedTactic::By(tactic))
+        },
+        tactic_todo ::= [todo_kw] => {
+            debug_assert!(todo_kw.is_kw(*strings::TODO));
+
+            Ok(UnresolvedTactic::Todo)
+        }
+    }
+}
+
+fn elaborate_template_instantiations(
+    mut insts: ParseTreeId,
+    ctx: &mut Ctx,
+) -> WResult<Vec<ParseTreeId>> {
+    // template_instantiations ::= (template_instantiations_none)
+    //                           | (template_instantiations_many) template_instantiation template_instantiations
+
+    let mut insts_list = Vec::new();
+
+    loop {
+        match_rule! { (ctx, insts) =>
+            template_instantiations_none ::= [] => {
+                return Ok(insts_list);
+            },
+            template_instantiations_many ::= [inst, rest] => {
+                let inst = inst.as_node().unwrap();
+                insts_list.push(elaborate_template_instantiation(inst, ctx)?);
+                insts = rest.as_node().unwrap();
+            }
+        }
+    }
+}
+
+fn elaborate_template_instantiation(inst: ParseTreeId, ctx: &mut Ctx) -> WResult<ParseTreeId> {
+    // template_instantiation ::= (template_instantiation) "[" any_fragment "]"
+
+    match_rule! { (ctx, inst) =>
+        template_instantiation ::= [l_brack, frag, r_brack] => {
+            debug_assert!(l_brack.is_lit(*strings::LEFT_BRACKET));
+            debug_assert!(r_brack.is_lit(*strings::RIGHT_BRACKET));
+
             let frag = frag.as_node().unwrap();
             debug_assert!(ctx.parse_forest[frag].cat() == ctx.builtin_cats.any_fragment);
 

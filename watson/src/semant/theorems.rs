@@ -1,13 +1,31 @@
+use std::ops::Index;
+
 use rustc_hash::FxHashMap;
 use ustr::Ustr;
 
-use crate::semant::{
-    formal_syntax::FormalSyntaxCatId,
-    fragment::{_debug_fragment, FragmentId},
+use crate::{
+    parse::parse_tree::ParseTreeId,
+    semant::{
+        formal_syntax::FormalSyntaxCatId,
+        fragment::{_debug_fragment, FragmentId},
+    },
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TheoremId(Ustr);
+
+impl TheoremId {
+    pub fn new(name: Ustr) -> Self {
+        Self(name)
+    }
+
+    pub fn name(&self) -> Ustr {
+        self.0
+    }
+}
+
 pub struct TheoremStatements {
-    theorems: FxHashMap<Ustr, TheoremStatement>,
+    theorems: FxHashMap<TheoremId, TheoremStatement>,
 }
 
 impl TheoremStatements {
@@ -17,40 +35,51 @@ impl TheoremStatements {
         }
     }
 
-    pub fn add(&mut self, name: Ustr, statement: TheoremStatement) {
-        self.theorems.insert(name, statement);
+    pub fn get(&self, id: TheoremId) -> Option<&TheoremStatement> {
+        self.theorems.get(&id)
     }
 
-    pub fn get(&self, name: Ustr) -> Option<&TheoremStatement> {
-        self.theorems.get(&name)
+    pub fn add(&mut self, id: TheoremId, statement: TheoremStatement) {
+        self.theorems.insert(id, statement);
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&Ustr, &TheoremStatement)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&TheoremId, &TheoremStatement)> {
         self.theorems.iter()
+    }
+}
+
+impl Index<TheoremId> for TheoremStatements {
+    type Output = TheoremStatement;
+
+    fn index(&self, index: TheoremId) -> &Self::Output {
+        &self.theorems[&index]
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct TheoremStatement {
-    templates: FxHashMap<Ustr, Template>,
+    templates: Vec<Template>,
     hypotheses: Vec<Fact>,
     conclusion: FragmentId,
+    proof: UnresolvedProof,
 }
 
 impl TheoremStatement {
     pub fn new(
-        templates: FxHashMap<Ustr, Template>,
+        templates: Vec<Template>,
         hypotheses: Vec<Fact>,
         conclusion: FragmentId,
+        proof: UnresolvedProof,
     ) -> Self {
         Self {
             templates,
             hypotheses,
             conclusion,
+            proof,
         }
     }
 
-    pub fn templates(&self) -> &FxHashMap<Ustr, Template> {
+    pub fn templates(&self) -> &[Template] {
         &self.templates
     }
 
@@ -61,6 +90,16 @@ impl TheoremStatement {
     pub fn conclusion(&self) -> FragmentId {
         self.conclusion
     }
+
+    pub fn proof(&self) -> &UnresolvedProof {
+        &self.proof
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UnresolvedProof {
+    Axiom,
+    Theorem(ParseTreeId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -111,19 +150,19 @@ impl Fact {
     }
 }
 
-pub fn _debug_theorem_statement(name: Ustr, stmt: &TheoremStatement, ctx: &crate::Ctx) {
-    println!("Theorem {name}:");
-    for (name, template) in stmt.templates() {
+pub fn _debug_theorem_statement(id: TheoremId, stmt: &TheoremStatement, ctx: &crate::Ctx) {
+    println!("Theorem {}:", id.name());
+    for template in stmt.templates() {
         if template.params().is_empty() {
             println!(
                 "  [{} : {}]",
-                name,
+                template.name(),
                 ctx.formal_syntax[template.cat()].name(),
             );
         } else {
             println!(
                 "  [{}({}) : {}]",
-                name,
+                template.name(),
                 template
                     .params()
                     .iter()

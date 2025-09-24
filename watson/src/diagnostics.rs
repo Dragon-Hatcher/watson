@@ -2,6 +2,7 @@ use crate::context::Ctx;
 use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
+use crate::util::plural;
 use annotate_snippets::{Level, Message, Renderer, Snippet};
 use itertools::Itertools;
 use std::path::Path;
@@ -246,6 +247,36 @@ impl DiagManager {
 }
 
 // Below are errors relating specifically to proofs.
+
+impl DiagManager {
+    pub fn err_non_existent_theorem(&mut self, name: Ustr, span: Span) {
+        let diag = Diagnostic::new(&format!("unknown theorem `{name}`")).with_error("", span);
+
+        self.add_diag(diag);
+    }
+
+    pub fn err_missing_tactic_templates(&mut self, last_template: Span, missing: usize) {
+        let diag = Diagnostic::new(&format!(
+            "missing {missing} tactic template{}",
+            plural(missing)
+        ))
+        .with_error(
+            &format!("expected {missing} more tactic template{}", plural(missing)),
+            last_template,
+        );
+
+        self.add_diag(diag);
+    }
+
+    pub fn err_extra_tactic_templates(&mut self, extra_template: Span, extra: usize) {
+        let diag = Diagnostic::new(&format!("extra tactic template{}", plural(extra))).with_error(
+            &format!("found {extra} extra tactic template{}", plural(extra)),
+            extra_template,
+        );
+
+        self.add_diag(diag);
+    }
+}
 
 // impl DiagManager {
 //     pub fn err_unknown_theorem(&mut self, theorem: TheoremId, name: Ustr, span: Span) {

@@ -1,5 +1,4 @@
 use rustc_hash::FxHashMap;
-use slotmap::SecondaryMap;
 use ustr::Ustr;
 
 use crate::{
@@ -21,6 +20,7 @@ use crate::{
     },
 };
 
+#[derive(Debug, Clone, Copy)]
 pub struct UnresolvedFact {
     assumption: Option<ParseTreeId>,
     conclusion: ParseTreeId,
@@ -33,13 +33,22 @@ impl UnresolvedFact {
             conclusion,
         }
     }
+
+    pub fn assumption(&self) -> Option<ParseTreeId> {
+        self.assumption
+    }
+
+    pub fn conclusion(&self) -> ParseTreeId {
+        self.conclusion
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct NameCtx {
     templates: FxHashMap<Ustr, Template>,
     shorthands: FxHashMap<Ustr, FragmentId>,
-    bindings: SecondaryMap<FormalSyntaxCatId, Vec<Ustr>>,
+    bindings: Vec<(FormalSyntaxCatId, Ustr)>,
+    holes: Vec<FormalSyntaxCatId>,
 }
 
 impl NameCtx {
@@ -47,12 +56,21 @@ impl NameCtx {
         Self {
             templates: FxHashMap::default(),
             shorthands: FxHashMap::default(),
-            bindings: SecondaryMap::default(),
+            bindings: Vec::new(),
+            holes: Vec::new(),
         }
     }
 
     pub fn add_template(&mut self, name: Ustr, template: Template) {
         self.templates.insert(name, template);
+    }
+
+    pub fn add_hole(&mut self, cat: FormalSyntaxCatId) {
+        self.holes.push(cat);
+    }
+
+    pub fn clear_holes(&mut self) {
+        self.holes.clear();
     }
 }
 
@@ -158,7 +176,32 @@ fn maybe_parse_fragment(
                     ctx,
                 )?;
 
-                if let Some(replacement) = names.shorthands.get(&name) {
+                if !names.holes.is_empty()
+                    && let Some(hole) = parse_hole_name(&name)
+                {
+                    // This is a hole. We can use it directly.
+
+                    if !args.is_empty() {
+                        // Holes cannot take arguments.
+                        continue;
+                    }
+
+                    if hole >= names.holes.len() {
+                        // This hole index is out of bounds.
+                        continue;
+                    }
+
+                    if names.holes[hole] != expected_cat {
+                        // This hole is not for the expected category.
+                        continue;
+                    }
+
+                    let frag_data = FragData::Hole(hole);
+                    let frag = Fragment::new(expected_cat, frag_data);
+                    let frag_id = ctx.fragments.get_or_insert(frag);
+                    successful_fragments.push(frag_id);
+                    continue;
+                } else if let Some(replacement) = names.shorthands.get(&name) {
                     // This is a shorthand for a fragment. We can use it directly.
 
                     if !args.is_empty() {
@@ -220,8 +263,7 @@ fn maybe_parse_fragment(
                 let mut rule_success = true;
 
                 // First push the bindings from this rule to the name context.
-                let mut binding_count: SecondaryMap<FormalSyntaxCatId, usize> =
-                    SecondaryMap::default();
+                let mut binding_count = 0;
                 for (child, formal_part) in possibility
                     .children()
                     .iter()
@@ -229,13 +271,8 @@ fn maybe_parse_fragment(
                 {
                     if let FormalSyntaxPatPart::Binding(var_formal_cat) = formal_part {
                         let var_name = elaborate_name(child.as_node().unwrap(), ctx)?;
-                        names
-                            .bindings
-                            .entry(*var_formal_cat)
-                            .unwrap()
-                            .or_default()
-                            .push(var_name);
-                        *binding_count.entry(*var_formal_cat).unwrap().or_default() += 1;
+                        names.bindings.push((*var_formal_cat, var_name));
+                        binding_count += 1;
                     }
                 }
 
@@ -258,21 +295,24 @@ fn maybe_parse_fragment(
                         }
                         FormalSyntaxPatPart::Var(var_formal_cat) => {
                             // We need to check the names environment for a binding with this name.
-                            let Some(bindings) = names.bindings.get(*var_formal_cat) else {
-                                rule_success = false;
-                                break;
-                            };
 
                             let var_name = elaborate_name(child.as_node().unwrap(), ctx)?;
-                            let Some((idx, _)) = bindings
+                            let Some((idx, (cat, _))) = names
+                                .bindings
                                 .iter()
                                 .enumerate()
                                 .rev()
-                                .find(|(_, b)| **b == var_name)
+                                .find(|(_, b)| b.1 == var_name)
                             else {
                                 rule_success = false;
                                 break;
                             };
+
+                            if cat != var_formal_cat {
+                                // This variable was bound with a different category.
+                                rule_success = false;
+                                break;
+                            }
 
                             frag_parts.push(FragPart::Variable(*var_formal_cat, idx))
                         }
@@ -286,19 +326,20 @@ fn maybe_parse_fragment(
 
                 if rule_success {
                     // This possibility was successful. We can construct a fragment for it.
-                    let frag_data =
-                        FragData::Rule(FragRuleApplication::new(formal_rule_id, frag_parts));
+                    let frag_data = FragData::Rule(FragRuleApplication::new(
+                        formal_rule_id,
+                        frag_parts,
+                        binding_count,
+                    ));
                     let frag = Fragment::new(ctx.formal_syntax[formal_rule_id].cat(), frag_data);
                     let frag_id = ctx.fragments.get_or_insert(frag);
                     successful_fragments.push(frag_id);
                 }
 
                 // Now pop the bindings we added to the name context.
-                for (cat, count) in binding_count {
-                    let bindings = names.bindings.get_mut(cat).unwrap();
-                    let new_len = bindings.len() - count;
-                    bindings.truncate(new_len);
-                }
+                names
+                    .bindings
+                    .truncate(names.bindings.len() - binding_count);
             }
             ParseRuleSource::Macro(macro_id) => {
                 // Expand the macro and add the new possibilities to the stack.
@@ -316,5 +357,15 @@ fn maybe_parse_fragment(
     match &successful_fragments[..] {
         [frag] => Ok(Some(*frag)),
         _ => Ok(None),
+    }
+}
+
+fn parse_hole_name(name: &str) -> Option<usize> {
+    if name == "_" {
+        Some(0)
+    } else if name.starts_with('_') {
+        name[1..].parse().ok()
+    } else {
+        None
     }
 }

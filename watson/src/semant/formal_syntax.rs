@@ -16,6 +16,7 @@ pub struct FormalSyntax {
     sentence_cat: FormalSyntaxCatId,
 
     rules: SlotMap<FormalSyntaxRuleId, FormalSyntaxRule>,
+    rules_by_name: FxHashMap<Ustr, FormalSyntaxRuleId>,
 }
 
 impl FormalSyntax {
@@ -30,6 +31,7 @@ impl FormalSyntax {
             cats_by_name,
             sentence_cat,
             rules: SlotMap::default(),
+            rules_by_name: FxHashMap::default(),
         }
     }
 
@@ -42,7 +44,7 @@ impl FormalSyntax {
     }
 
     pub fn cat_by_name(&self, name: Ustr) -> Option<FormalSyntaxCatId> {
-        self.cats_by_name.get(&name).cloned()
+        self.cats_by_name.get(&name).copied()
     }
 
     pub fn sentence_cat(&self) -> FormalSyntaxCatId {
@@ -50,7 +52,15 @@ impl FormalSyntax {
     }
 
     pub fn add_rule(&mut self, rule: FormalSyntaxRule) -> FormalSyntaxRuleId {
-        self.rules.insert(rule)
+        let name = rule.name;
+        assert!(!self.rules_by_name.contains_key(&name));
+        let id = self.rules.insert(rule);
+        self.rules_by_name.insert(name, id);
+        id
+    }
+
+    pub fn rule_by_name(&self, name: Ustr) -> Option<FormalSyntaxRuleId> {
+        self.rules_by_name.get(&name).copied()
     }
 }
 

@@ -8,7 +8,8 @@ use crate::{
     parse::{Span, elaborator::elaborate_tactic, parse_tree::ParseTreeId},
     semant::{
         fragment::{
-            FragData, FragPart, FragRuleApplication, FragTemplateRef, Fragment, FragmentId,
+            _debug_fact, _debug_fragment, FragData, FragPart, FragRuleApplication, FragTemplateRef,
+            Fragment, FragmentId,
         },
         parse_fragment::{NameCtx, UnresolvedFact, parse_any_fragment, parse_fragment},
         proof_status::ProofStatus,
@@ -60,6 +61,7 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
             UnresolvedTactic::None => {
                 let goal_fact = Fact::new(None, state.goal);
                 if !state.knowns.contains(&goal_fact) {
+                    eprintln!("[{}] Proof incorrect from missing goal.", id.name());
                     proof_correct = false;
                 }
             }
@@ -76,6 +78,7 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                     ) else {
                         // There isn't much we can do if the assumption doesn't parse
                         // we just drop this state and the continuation too.
+                        eprintln!("[{}] Proof incorrect from parse failure.", id.name());
                         proof_correct = false;
                         continue;
                     };
@@ -93,6 +96,7 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                     &mut state.names,
                     ctx,
                 ) else {
+                    eprintln!("[{}] Proof incorrect from parse failure.", id.name());
                     proof_correct = false;
                     continue;
                 };
@@ -108,6 +112,7 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                 let theorem_id = TheoremId::new(tactic.theorem_name);
                 let Some(theorem) = ctx.theorem_stmts.get(theorem_id) else {
                     // The theorem doesn't exist.
+                    eprintln!("[{}] Proof incorrect from non-existent theorem.", id.name());
                     proof_correct = false;
                     ctx.diags
                         .err_non_existent_theorem(tactic.theorem_name, tactic.theorem_name_span);
@@ -118,6 +123,10 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
 
                 if theorem.templates().len() != tactic.templates.len() {
                     // The number of templates doesn't match.
+                    eprintln!(
+                        "[{}] Proof incorrect from template count mismatch.",
+                        id.name()
+                    );
                     proof_correct = false;
                     if theorem.templates().len() > tactic.templates.len() {
                         ctx.diags.err_missing_tactic_templates(
@@ -151,6 +160,7 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                     let Ok(instantiation) =
                         parse_any_fragment(*instantiation, template.cat(), &mut state.names, ctx)
                     else {
+                        eprintln!("[{}] Proof incorrect from parse failure.", id.name());
                         proof_correct = false;
                         continue;
                     };
@@ -175,6 +185,13 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                     let instantiated = instantiate_fact_with_templates(hypothesis, &templates, ctx);
 
                     if !state.knowns.contains(&instantiated) {
+                        let theorem = &ctx.theorem_stmts[theorem_id];
+                        dbg!(_debug_fragment(theorem.conclusion(), ctx));
+                        eprintln!(
+                            "[{}] Proof incorrect from missing hypothesis {}.",
+                            id.name(),
+                            _debug_fact(instantiated, ctx)
+                        );
                         proof_correct = false;
                         // TODO: error message.
                     }
@@ -185,6 +202,12 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                     instantiate_fragment_with_templates(theorem.conclusion(), &templates, ctx);
 
                 if conclusion != state.goal {
+                    eprintln!(
+                        "[{}] Proof incorrect from theorem {} mismatch goal {}.",
+                        id.name(),
+                        _debug_fragment(conclusion, ctx),
+                        _debug_fragment(state.goal, ctx),
+                    );
                     proof_correct = false;
                     // TODO: error message.
                 }
@@ -247,7 +270,12 @@ fn instantiate_fragment_with_templates(
         }
         FragData::Template(temp) => {
             let replacement = templates[&temp.name()];
-            let args = temp.args().to_vec();
+            let args: Vec<_> = temp
+                .args()
+                .to_vec()
+                .into_iter()
+                .map(|arg| instantiate_fragment_with_templates(arg, templates, ctx))
+                .collect();
             fill_template_holes(replacement, &args, 0, ctx)
         }
         FragData::Hole(_) => unreachable!(),

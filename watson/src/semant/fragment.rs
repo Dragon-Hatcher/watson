@@ -2,7 +2,10 @@ use std::ops::Index;
 
 use crate::{
     context::Ctx,
-    semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
+    semant::{
+        formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
+        theorems::Fact,
+    },
 };
 use rustc_hash::FxHashMap;
 use slotmap::{SlotMap, new_key_type};
@@ -121,6 +124,18 @@ impl FragTemplateRef {
 
     pub fn args(&self) -> &[FragmentId] {
         &self.args
+    }
+}
+
+pub fn _debug_fact(fact: Fact, ctx: &Ctx) -> String {
+    if let Some(assumption) = fact.assumption() {
+        format!(
+            "assume {} |- {}",
+            _debug_fragment(assumption, ctx),
+            _debug_fragment(fact.conclusion(), ctx)
+        )
+    } else {
+        _debug_fragment(fact.conclusion(), ctx)
     }
 }
 

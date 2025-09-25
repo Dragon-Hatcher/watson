@@ -11,6 +11,7 @@ use crate::{
             FragData, FragPart, FragRuleApplication, FragTemplateRef, Fragment, FragmentId,
         },
         parse_fragment::{NameCtx, UnresolvedFact, parse_any_fragment, parse_fragment},
+        proof_status::ProofStatus,
         theorems::{Fact, TheoremId, TheoremStatement, UnresolvedProof},
     },
 };
@@ -19,41 +20,11 @@ pub fn check_proofs(ctx: &mut Ctx) {
     let theorem_ids: Vec<TheoremId> = ctx.theorem_stmts.iter().map(|(id, _)| *id).collect();
 
     for id in theorem_ids {
-        _ = check_proof(id, ctx);
-    }
-}
+        let Ok(status) = check_proof(id, ctx) else {
+            continue;
+        };
 
-pub struct ProofStatus {
-    correct: bool,
-    todo_used: bool,
-    is_axiom: bool,
-    theorems_used: FxHashSet<TheoremId>,
-}
-
-impl ProofStatus {
-    pub fn new_axiom() -> Self {
-        Self {
-            correct: true,
-            todo_used: false,
-            is_axiom: true,
-            theorems_used: FxHashSet::default(),
-        }
-    }
-
-    pub fn correct(&self) -> bool {
-        self.correct
-    }
-
-    pub fn todo_used(&self) -> bool {
-        self.todo_used
-    }
-
-    pub fn is_axiom(&self) -> bool {
-        self.is_axiom
-    }
-
-    pub fn theorems_used(&self) -> &FxHashSet<TheoremId> {
-        &self.theorems_used
+        ctx.proof_statuses.add(id, status);
     }
 }
 
@@ -224,12 +195,11 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
         }
     }
 
-    Ok(ProofStatus {
-        correct: proof_correct,
+    Ok(ProofStatus::new_theorem(
+        proof_correct,
         todo_used,
-        is_axiom: false,
         theorems_used,
-    })
+    ))
 }
 
 fn instantiate_fact_with_templates(
@@ -316,7 +286,8 @@ fn fill_template_holes(
             ctx.fragments.get_or_insert(Fragment::new(cat, data))
         }
         FragData::Template(template) => {
-            let new_args = args
+            let new_args = template
+                .args()
                 .iter()
                 .map(|arg| fill_template_holes(*arg, args, debruijn_shift, ctx))
                 .collect();

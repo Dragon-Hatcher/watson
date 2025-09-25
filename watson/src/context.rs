@@ -9,7 +9,10 @@ use crate::{
         parse_state::ParseState,
         parse_tree::ParseForest,
     },
-    semant::{formal_syntax::FormalSyntax, fragment::FragmentForest, theorems::TheoremStatements},
+    semant::{
+        formal_syntax::FormalSyntax, fragment::FragmentForest, proof_status::ProofStatuses,
+        theorems::TheoremStatements,
+    },
 };
 
 pub struct Ctx {
@@ -30,6 +33,9 @@ pub struct Ctx {
 
     /// All the existing theorems/axioms and what they state.
     pub theorem_stmts: TheoremStatements,
+
+    /// The results of checking all proofs.
+    pub proof_statuses: ProofStatuses,
 
     /// Diagnostics manager for reporting errors and warnings.
     pub diags: DiagManager,
@@ -55,6 +61,7 @@ impl Ctx {
             formal_syntax,
             fragments: FragmentForest::new(),
             theorem_stmts: TheoremStatements::new(),
+            proof_statuses: ProofStatuses::new(),
             diags: DiagManager::new(),
             sources: source_cache,
             builtin_cats,

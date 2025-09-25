@@ -1,8 +1,8 @@
 use crate::{
     context::Ctx,
-    diagnostics::WResult,
     parse::{SourceCache, SourceId, parse, source_cache::SourceDecl},
-    semant::{check_proof::check_proofs, theorems::_debug_theorem_statement},
+    report::display_report,
+    semant::check_proof::check_proofs,
 };
 use std::path::Path;
 use ustr::Ustr;
@@ -10,7 +10,7 @@ use ustr::Ustr;
 mod context;
 mod diagnostics;
 mod parse;
-// mod report;
+mod report;
 mod semant;
 mod strings;
 mod util;
@@ -23,6 +23,7 @@ fn main() {
     let mut ctx = Ctx::new(source_cache);
 
     compile(root_id, &mut ctx);
+    display_report(&ctx);
 
     if ctx.diags.has_errors() {
         ctx.diags.print_errors(&ctx);
@@ -46,4 +47,5 @@ fn make_source_cache(root_file: &Path) -> (SourceCache, SourceId) {
 fn compile(root: SourceId, ctx: &mut Ctx) {
     parse(root, ctx);
     check_proofs(ctx);
+    ctx.proof_statuses.recompute_circular_dependencies();
 }

@@ -1,5 +1,5 @@
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::vec;
+use std::{ops::Deref, vec};
 use ustr::Ustr;
 
 use crate::{
@@ -7,6 +7,7 @@ use crate::{
     diagnostics::WResult,
     parse::{Span, elaborator::elaborate_tactic, parse_tree::ParseTreeId},
     semant::{
+        formal_syntax::FormalSyntaxRuleId,
         fragment::{
             _debug_fact, _debug_fragment, FragData, FragPart, FragRuleApplication, FragTemplateRef,
             Fragment, FragmentId,
@@ -17,7 +18,7 @@ use crate::{
     },
 };
 
-pub fn check_proofs(ctx: &mut Ctx) {
+pub fn check_proofs<'ctx>(ctx: &'ctx Ctx<'ctx>) {
     let theorem_ids: Vec<TheoremId> = ctx.theorem_stmts.iter().map(|(id, _)| *id).collect();
 
     for id in theorem_ids {
@@ -30,15 +31,16 @@ pub fn check_proofs(ctx: &mut Ctx) {
 }
 
 #[derive(Debug, Clone)]
-struct ProofState {
-    knowns: FxHashSet<Fact>,
-    goal: FragmentId,
-    names: NameCtx,
+struct ProofState<'ctx> {
+    knowns: FxHashSet<Fact<'ctx>>,
+    goal: FragmentId<'ctx>,
+    names: NameCtx<'ctx>,
 }
 
-fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
-    let theorem_smt = &ctx.theorem_stmts[id];
-
+fn check_proof<'ctx>(
+    theorem_smt: TheoremId<'ctx>,
+    ctx: &'ctx Ctx<'ctx>,
+) -> WResult<ProofStatus<'ctx>> {
     let proof = match theorem_smt.proof() {
         UnresolvedProof::Axiom => return Ok(ProofStatus::new_axiom()),
         UnresolvedProof::Theorem(proof) => *proof,
@@ -61,7 +63,10 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
             UnresolvedTactic::None => {
                 let goal_fact = Fact::new(None, state.goal);
                 if !state.knowns.contains(&goal_fact) {
-                    eprintln!("[{}] Proof incorrect from missing goal.", id.name());
+                    eprintln!(
+                        "[{}] Proof incorrect from missing goal.",
+                        theorem_smt.name()
+                    );
                     proof_correct = false;
                 }
             }
@@ -78,7 +83,10 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                     ) else {
                         // There isn't much we can do if the assumption doesn't parse
                         // we just drop this state and the continuation too.
-                        eprintln!("[{}] Proof incorrect from parse failure.", id.name());
+                        eprintln!(
+                            "[{}] Proof incorrect from parse failure.",
+                            theorem_smt.name()
+                        );
                         proof_correct = false;
                         continue;
                     };
@@ -96,7 +104,10 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                     &mut state.names,
                     ctx,
                 ) else {
-                    eprintln!("[{}] Proof incorrect from parse failure.", id.name());
+                    eprintln!(
+                        "[{}] Proof incorrect from parse failure.",
+                        theorem_smt.name()
+                    );
                     proof_correct = false;
                     continue;
                 };
@@ -109,23 +120,25 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                 proof_states.push((state, tactic.continuation));
             }
             UnresolvedTactic::By(tactic) => {
-                let theorem_id = TheoremId::new(tactic.theorem_name);
-                let Some(theorem) = ctx.theorem_stmts.get(theorem_id) else {
+                let Some(theorem) = ctx.theorem_stmts.get(tactic.theorem_name) else {
                     // The theorem doesn't exist.
-                    eprintln!("[{}] Proof incorrect from non-existent theorem.", id.name());
+                    eprintln!(
+                        "[{}] Proof incorrect from non-existent theorem.",
+                        theorem_smt.name()
+                    );
                     proof_correct = false;
                     ctx.diags
                         .err_non_existent_theorem(tactic.theorem_name, tactic.theorem_name_span);
                     continue;
                 };
 
-                theorems_used.insert(theorem_id);
+                theorems_used.insert(theorem);
 
                 if theorem.templates().len() != tactic.templates.len() {
                     // The number of templates doesn't match.
                     eprintln!(
                         "[{}] Proof incorrect from template count mismatch.",
-                        id.name()
+                        theorem.name()
                     );
                     proof_correct = false;
                     if theorem.templates().len() > tactic.templates.len() {
@@ -133,13 +146,13 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                             tactic
                                 .templates
                                 .last()
-                                .map(|t| ctx.parse_forest[*t].span())
+                                .map(|t| t.span())
                                 .unwrap_or(tactic.theorem_name_span),
                             theorem.templates().len() - tactic.templates.len(),
                         );
                     } else {
                         ctx.diags.err_extra_tactic_templates(
-                            ctx.parse_forest[tactic.templates[theorem.templates().len()]].span(),
+                            tactic.templates[theorem.templates().len()].span(),
                             tactic.templates.len() - theorem.templates().len(),
                         );
                     }
@@ -147,11 +160,8 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                 }
 
                 let mut template_instantiations = Vec::new();
-                for (template, instantiation) in theorem
-                    .templates()
-                    .to_vec()
-                    .iter()
-                    .zip(tactic.templates.iter())
+                for (template, instantiation) in
+                    theorem.0.templates().iter().zip(tactic.templates.iter())
                 {
                     for &param_cat in template.params() {
                         state.names.add_hole(param_cat)
@@ -160,7 +170,10 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                     let Ok(instantiation) =
                         parse_any_fragment(*instantiation, template.cat(), &mut state.names, ctx)
                     else {
-                        eprintln!("[{}] Proof incorrect from parse failure.", id.name());
+                        eprintln!(
+                            "[{}] Proof incorrect from parse failure.",
+                            theorem_smt.name()
+                        );
                         proof_correct = false;
                         continue;
                     };
@@ -168,8 +181,6 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                     state.names.clear_holes();
                     template_instantiations.push(instantiation);
                 }
-
-                let theorem = &ctx.theorem_stmts[theorem_id];
 
                 if template_instantiations.len() != theorem.templates().len() {
                     // One of the template instantiations had an error.
@@ -181,15 +192,14 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                     templates.insert(template.name(), template_instantiations[i]);
                 }
 
-                for hypothesis in theorem.hypotheses().to_vec() {
+                for &hypothesis in theorem.hypotheses() {
                     let instantiated = instantiate_fact_with_templates(hypothesis, &templates, ctx);
 
                     if !state.knowns.contains(&instantiated) {
-                        let theorem = &ctx.theorem_stmts[theorem_id];
                         dbg!(_debug_fragment(theorem.conclusion(), ctx));
                         eprintln!(
                             "[{}] Proof incorrect from missing hypothesis {}.",
-                            id.name(),
+                            theorem_smt.name(),
                             _debug_fact(instantiated, ctx)
                         );
                         proof_correct = false;
@@ -197,14 +207,13 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
                     }
                 }
 
-                let theorem = &ctx.theorem_stmts[theorem_id];
                 let conclusion =
                     instantiate_fragment_with_templates(theorem.conclusion(), &templates, ctx);
 
                 if conclusion != state.goal {
                     eprintln!(
                         "[{}] Proof incorrect from theorem {} mismatch goal {}.",
-                        id.name(),
+                        theorem_smt.name(),
                         _debug_fragment(conclusion, ctx),
                         _debug_fragment(state.goal, ctx),
                     );
@@ -225,11 +234,11 @@ fn check_proof(id: TheoremId, ctx: &mut Ctx) -> WResult<ProofStatus> {
     ))
 }
 
-fn instantiate_fact_with_templates(
-    fact: Fact,
-    templates: &FxHashMap<Ustr, FragmentId>,
-    ctx: &mut Ctx,
-) -> Fact {
+fn instantiate_fact_with_templates<'ctx>(
+    fact: Fact<'ctx>,
+    templates: &FxHashMap<Ustr, FragmentId<'ctx>>,
+    ctx: &'ctx Ctx<'ctx>,
+) -> Fact<'ctx> {
     let assumption = fact
         .assumption()
         .map(|assump| instantiate_fragment_with_templates(assump, templates, ctx));
@@ -237,44 +246,41 @@ fn instantiate_fact_with_templates(
     Fact::new(assumption, conclusion)
 }
 
-fn instantiate_fragment_with_templates(
-    frag: FragmentId,
-    templates: &FxHashMap<Ustr, FragmentId>,
-    ctx: &mut Ctx,
-) -> FragmentId {
-    let frag = &ctx.fragments[frag];
-    let cat = frag.cat();
-
-    match frag.data() {
+fn instantiate_fragment_with_templates<'ctx>(
+    frag: FragmentId<'ctx>,
+    templates: &FxHashMap<Ustr, FragmentId<'ctx>>,
+    ctx: &'ctx Ctx<'ctx>,
+) -> FragmentId<'ctx> {
+    match frag.0.data() {
         FragData::Rule(rule) => {
             let formal_rule = rule.rule();
             let bindings_added = rule.bindings_added();
 
-            let mut new_parts = Vec::new();
-            for part in rule.children().to_vec() {
+            let mut new_parts: Vec<FragPart<'ctx>> = Vec::new();
+            for part in rule.children() {
                 let new_part = match part {
                     FragPart::Fragment(frag_id) => {
-                        let new_frag = instantiate_fragment_with_templates(frag_id, templates, ctx);
+                        let new_frag =
+                            instantiate_fragment_with_templates(*frag_id, templates, ctx);
                         FragPart::Fragment(new_frag)
                     }
-                    FragPart::Variable(cat, idx) => FragPart::Variable(cat, idx),
+                    FragPart::Variable(cat, idx) => FragPart::Variable(*cat, *idx),
                 };
                 new_parts.push(new_part);
             }
-            let data = FragData::Rule(FragRuleApplication::new(
+            let data: FragData<'ctx> = FragData::Rule(FragRuleApplication::new(
                 formal_rule,
                 new_parts,
                 bindings_added,
             ));
-            ctx.fragments.get_or_insert(Fragment::new(cat, data))
+            ctx.fragments.get_or_insert(Fragment::new(frag.cat(), data))
         }
         FragData::Template(temp) => {
             let replacement = templates[&temp.name()];
             let args: Vec<_> = temp
                 .args()
-                .to_vec()
                 .into_iter()
-                .map(|arg| instantiate_fragment_with_templates(arg, templates, ctx))
+                .map(|&arg| instantiate_fragment_with_templates(arg, templates, ctx))
                 .collect();
             fill_template_holes(replacement, &args, 0, ctx)
         }
@@ -282,16 +288,13 @@ fn instantiate_fragment_with_templates(
     }
 }
 
-fn fill_template_holes(
-    frag_id: FragmentId,
-    args: &[FragmentId],
+fn fill_template_holes<'ctx>(
+    frag: FragmentId<'ctx>,
+    args: &[FragmentId<'ctx>],
     debruijn_shift: usize,
-    ctx: &mut Ctx,
-) -> FragmentId {
-    let frag = &ctx.fragments[frag_id];
-    let cat = frag.cat();
-
-    match frag.data().clone() {
+    ctx: &'ctx Ctx<'ctx>,
+) -> FragmentId<'ctx> {
+    match frag.0.data() {
         FragData::Rule(rule_app) => {
             let new_children = rule_app
                 .children()
@@ -311,7 +314,7 @@ fn fill_template_holes(
                 new_children,
                 rule_app.bindings_added(),
             ));
-            ctx.fragments.get_or_insert(Fragment::new(cat, data))
+            ctx.fragments.get_or_insert(Fragment::new(frag.cat(), data))
         }
         FragData::Template(template) => {
             let new_args = template
@@ -320,24 +323,25 @@ fn fill_template_holes(
                 .map(|arg| fill_template_holes(*arg, args, debruijn_shift, ctx))
                 .collect();
             let data = FragData::Template(FragTemplateRef::new(template.name(), new_args));
-            ctx.fragments.get_or_insert(Fragment::new(cat, data))
+            ctx.fragments.get_or_insert(Fragment::new(frag.cat(), data))
         }
         FragData::Hole(idx) => {
-            let replacement = args[idx];
+            let replacement = args[*idx];
             fix_debruijn_indices(replacement, debruijn_shift, ctx)
         }
     }
 }
 
-fn fix_debruijn_indices(frag_id: FragmentId, shift: usize, ctx: &mut Ctx) -> FragmentId {
+fn fix_debruijn_indices<'ctx>(
+    frag: FragmentId<'ctx>,
+    shift: usize,
+    ctx: &'ctx Ctx<'ctx>,
+) -> FragmentId<'ctx> {
     if shift == 0 {
-        return frag_id;
+        return frag;
     }
 
-    let frag = &ctx.fragments[frag_id];
-    let cat = frag.cat();
-
-    match frag.data().clone() {
+    match frag.0.data() {
         FragData::Rule(rule_app) => {
             let new_children = rule_app
                 .children()
@@ -354,7 +358,7 @@ fn fix_debruijn_indices(frag_id: FragmentId, shift: usize, ctx: &mut Ctx) -> Fra
                 new_children,
                 rule_app.bindings_added(),
             ));
-            ctx.fragments.get_or_insert(Fragment::new(cat, data))
+            ctx.fragments.get_or_insert(Fragment::new(frag.cat(), data))
         }
         FragData::Template(template) => {
             let new_args = template
@@ -363,13 +367,13 @@ fn fix_debruijn_indices(frag_id: FragmentId, shift: usize, ctx: &mut Ctx) -> Fra
                 .map(|&arg| fix_debruijn_indices(arg, shift, ctx))
                 .collect();
             let data = FragData::Template(FragTemplateRef::new(template.name(), new_args));
-            ctx.fragments.get_or_insert(Fragment::new(cat, data))
+            ctx.fragments.get_or_insert(Fragment::new(frag.cat(), data))
         }
-        FragData::Hole(_) => frag_id,
+        FragData::Hole(_) => frag,
     }
 }
 
-fn name_ctx_from_smt(smt: &TheoremStatement) -> NameCtx {
+fn name_ctx_from_smt(smt: TheoremId) -> NameCtx {
     let mut names = NameCtx::new();
     for template in smt.templates() {
         names.add_template(template.name(), template.clone());
@@ -378,23 +382,23 @@ fn name_ctx_from_smt(smt: &TheoremStatement) -> NameCtx {
 }
 
 #[derive(Debug, Clone)]
-pub enum UnresolvedTactic {
+pub enum UnresolvedTactic<'ctx> {
     None,
-    Have(UnresolvedHaveTactic),
-    By(UnresolvedByTactic),
+    Have(UnresolvedHaveTactic<'ctx>),
+    By(UnresolvedByTactic<'ctx>),
     Todo,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct UnresolvedHaveTactic {
-    pub fact: UnresolvedFact,
-    pub proof: ParseTreeId,
-    pub continuation: ParseTreeId,
+pub struct UnresolvedHaveTactic<'ctx> {
+    pub fact: UnresolvedFact<'ctx>,
+    pub proof: ParseTreeId<'ctx>,
+    pub continuation: ParseTreeId<'ctx>,
 }
 
 #[derive(Debug, Clone)]
-pub struct UnresolvedByTactic {
+pub struct UnresolvedByTactic<'ctx> {
     pub theorem_name: Ustr,
     pub theorem_name_span: Span,
-    pub templates: Vec<ParseTreeId>,
+    pub templates: Vec<ParseTreeId<'ctx>>,
 }

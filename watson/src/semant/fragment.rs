@@ -1,7 +1,8 @@
 use std::ops::Index;
 
 use crate::{
-    context::Ctx,
+    context::{Ctx, arena::InternedArena},
+    declare_intern_handle,
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
         theorems::Fact,
@@ -11,76 +12,64 @@ use rustc_hash::FxHashMap;
 use slotmap::{SlotMap, new_key_type};
 use ustr::Ustr;
 
-pub struct FragmentForest {
-    fragments: SlotMap<FragmentId, Fragment>,
-    ids_by_fragment: FxHashMap<Fragment, FragmentId>,
+pub struct FragmentForest<'ctx> {
+    fragments: InternedArena<Fragment<'ctx>, FragmentId<'ctx>>,
 }
 
-impl FragmentForest {
+impl<'ctx> FragmentForest<'ctx> {
     pub fn new() -> Self {
         Self {
-            fragments: SlotMap::default(),
-            ids_by_fragment: FxHashMap::default(),
+            fragments: InternedArena::new(),
         }
     }
 
-    pub fn get_or_insert(&mut self, frag: Fragment) -> FragmentId {
-        if let Some(&id) = self.ids_by_fragment.get(&frag) {
-            id
-        } else {
-            let id = self.fragments.insert(frag.clone());
-            self.ids_by_fragment.insert(frag, id);
-            id
-        }
+    pub fn get_or_insert(&'ctx self, frag: Fragment<'ctx>) -> FragmentId<'ctx> {
+        self.fragments.intern(frag)
     }
 }
 
-impl Index<FragmentId> for FragmentForest {
-    type Output = Fragment;
-
-    fn index(&self, index: FragmentId) -> &Self::Output {
-        &self.fragments[index]
-    }
-}
-
-new_key_type! { pub struct FragmentId; }
+declare_intern_handle! { FragmentId<'ctx> => Fragment<'ctx> }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Fragment {
-    cat: FormalSyntaxCatId,
-    data: FragData,
+pub struct Fragment<'ctx> {
+    cat: FormalSyntaxCatId<'ctx>,
+    data: FragData<'ctx>,
 }
 
-impl Fragment {
-    pub fn new(cat: FormalSyntaxCatId, data: FragData) -> Self {
+impl<'ctx> Fragment<'ctx> {
+    pub fn new(cat: FormalSyntaxCatId<'ctx>, data: FragData<'ctx>) -> Self {
         Self { cat, data }
     }
 
-    pub fn cat(&self) -> FormalSyntaxCatId {
+    pub fn cat(&self) -> FormalSyntaxCatId<'ctx> {
         self.cat
     }
 
-    pub fn data(&self) -> &FragData {
+    pub fn data(&'ctx self) -> &'ctx FragData<'ctx> {
         &self.data
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum FragData {
-    Rule(FragRuleApplication),
-    Template(FragTemplateRef),
+pub enum FragData<'ctx> {
+    Rule(FragRuleApplication<'ctx>),
+    Template(FragTemplateRef<'ctx>),
     Hole(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FragRuleApplication {
-    rule: FormalSyntaxRuleId,
-    children: Vec<FragPart>,
+pub struct FragRuleApplication<'ctx> {
+    rule: FormalSyntaxRuleId<'ctx>,
+    children: Vec<FragPart<'ctx>>,
     bindings_added: usize,
 }
 
-impl FragRuleApplication {
-    pub fn new(rule: FormalSyntaxRuleId, children: Vec<FragPart>, bindings_added: usize) -> Self {
+impl<'ctx> FragRuleApplication<'ctx> {
+    pub fn new(
+        rule: FormalSyntaxRuleId<'ctx>,
+        children: Vec<FragPart<'ctx>>,
+        bindings_added: usize,
+    ) -> Self {
         Self {
             rule,
             children,
@@ -88,11 +77,11 @@ impl FragRuleApplication {
         }
     }
 
-    pub fn rule(&self) -> FormalSyntaxRuleId {
+    pub fn rule(&self) -> FormalSyntaxRuleId<'ctx> {
         self.rule
     }
 
-    pub fn children(&self) -> &[FragPart] {
+    pub fn children(&self) -> &[FragPart<'ctx>] {
         &self.children
     }
 
@@ -102,19 +91,19 @@ impl FragRuleApplication {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum FragPart {
-    Fragment(FragmentId),
-    Variable(FormalSyntaxCatId, usize), // Debruijn index
+pub enum FragPart<'ctx> {
+    Fragment(FragmentId<'ctx>),
+    Variable(FormalSyntaxCatId<'ctx>, usize), // Debruijn index
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FragTemplateRef {
+pub struct FragTemplateRef<'ctx> {
     name: Ustr,
-    args: Vec<FragmentId>,
+    args: Vec<FragmentId<'ctx>>,
 }
 
-impl FragTemplateRef {
-    pub fn new(name: Ustr, args: Vec<FragmentId>) -> Self {
+impl<'ctx> FragTemplateRef<'ctx> {
+    pub fn new(name: Ustr, args: Vec<FragmentId<'ctx>>) -> Self {
         Self { name, args }
     }
 
@@ -150,28 +139,25 @@ pub fn _debug_fragment(frag: FragmentId, ctx: &Ctx) -> String {
             }
         }
 
-        let frag = &ctx.fragments[frag];
-
         match &frag.data {
             FragData::Rule(rule_app) => {
-                let rule = &ctx.formal_syntax[rule_app.rule];
                 let mut str = String::new();
                 let mut child_idx = 0;
 
-                if rule.pattern().parts().len() > 1 {
+                if rule_app.rule.pattern().parts().len() > 1 {
                     str.push('(');
                 }
 
                 let first_bind = bound_count;
                 let mut bind_offset = 0;
 
-                for part in rule.pattern().parts() {
+                for part in rule_app.rule.pattern().parts() {
                     if let FormalSyntaxPatPart::Binding(_) = part {
                         bound_count += 1;
                     }
                 }
 
-                for part in rule.pattern().parts() {
+                for part in rule_app.rule.pattern().parts() {
                     match part {
                         FormalSyntaxPatPart::Binding(_) => {
                             str.push_str(&format!("?{}", first_bind + bind_offset));
@@ -196,7 +182,7 @@ pub fn _debug_fragment(frag: FragmentId, ctx: &Ctx) -> String {
                     str.pop();
                 }
 
-                if rule.pattern().parts().len() > 1 {
+                if rule_app.rule.pattern().parts().len() > 1 {
                     str.push(')');
                 }
 

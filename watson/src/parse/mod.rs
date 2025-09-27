@@ -15,7 +15,7 @@ use crate::{
     parse::{earley::parse_name, parse_state::ParseAtomPattern},
 };
 
-pub fn parse(root: SourceId, ctx: &mut Ctx) {
+pub fn parse(root: SourceId, ctx: &Ctx) {
     let mut sources_stack = Vec::new();
     sources_stack.push(root.start_loc());
 
@@ -25,13 +25,13 @@ pub fn parse(root: SourceId, ctx: &mut Ctx) {
     }
 }
 
-fn update_state(ctx: &mut Ctx) {
+fn update_state(ctx: &Ctx) {
     while let Some(cat) = ctx.parse_state.pop_new_categories() {
         grammar::add_builtin_syntax_for_cat(cat, ctx);
     }
 }
 
-fn parse_source(loc: Location, ctx: &mut Ctx, sources_stack: &mut Vec<Location>) {
+fn parse_source(loc: Location, ctx: &Ctx, sources_stack: &mut Vec<Location>) {
     let source = loc.source();
     let text = ctx.sources.get_text(source);
 
@@ -54,7 +54,7 @@ fn parse_source(loc: Location, ctx: &mut Ctx, sources_stack: &mut Vec<Location>)
 
         // Push the location after this command onto the stack so we can
         // continue parsing this source file later.
-        let after_command = ctx.parse_forest[tree].span().end();
+        let after_command = tree.span().end();
         sources_stack.push(after_command);
 
         // Now let's elaborate the command.

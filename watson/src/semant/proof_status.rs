@@ -5,16 +5,16 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::semant::{check_circularity::find_circular_dependency_groups, theorems::TheoremId};
 
 #[derive(Debug)]
-pub struct ProofStatuses {
-    statuses: FxHashMap<TheoremId, ProofStatus>,
-    circulars: Vec<Vec<TheoremId>>,
+pub struct ProofStatuses<'ctx> {
+    statuses: FxHashMap<TheoremId<'ctx>, ProofStatus<'ctx>>,
+    circulars: Vec<Vec<TheoremId<'ctx>>>,
     theorem_cnt: usize,
     axiom_cnt: usize,
     correct_cnt: usize,
     todo_cnt: usize,
 }
 
-impl ProofStatuses {
+impl<'ctx> ProofStatuses<'ctx> {
     pub fn new() -> Self {
         Self {
             statuses: FxHashMap::default(),
@@ -26,7 +26,7 @@ impl ProofStatuses {
         }
     }
 
-    pub fn add(&mut self, theorem: TheoremId, status: ProofStatus) {
+    pub fn add(&mut self, theorem: TheoremId<'ctx>, status: ProofStatus<'ctx>) {
         self.theorem_cnt += !status.is_axiom as usize;
         self.axiom_cnt += status.is_axiom as usize;
         self.correct_cnt += status.correct as usize;
@@ -71,23 +71,23 @@ impl ProofStatuses {
     }
 }
 
-impl Index<TheoremId> for ProofStatuses {
-    type Output = ProofStatus;
+impl<'ctx> Index<TheoremId<'ctx>> for ProofStatuses<'ctx> {
+    type Output = ProofStatus<'ctx>;
 
-    fn index(&self, index: TheoremId) -> &Self::Output {
+    fn index(&self, index: TheoremId<'ctx>) -> &Self::Output {
         &self.statuses[&index]
     }
 }
 
 #[derive(Debug)]
-pub struct ProofStatus {
+pub struct ProofStatus<'ctx> {
     correct: bool,
     todo_used: bool,
     is_axiom: bool,
-    theorems_used: FxHashSet<TheoremId>,
+    theorems_used: FxHashSet<TheoremId<'ctx>>,
 }
 
-impl ProofStatus {
+impl<'ctx> ProofStatus<'ctx> {
     pub fn new_axiom() -> Self {
         Self {
             correct: true,
@@ -100,7 +100,7 @@ impl ProofStatus {
     pub fn new_theorem(
         correct: bool,
         todo_used: bool,
-        theorems_used: FxHashSet<TheoremId>,
+        theorems_used: FxHashSet<TheoremId<'ctx>>,
     ) -> Self {
         Self {
             correct,

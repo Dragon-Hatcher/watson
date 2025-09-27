@@ -13,9 +13,13 @@ use crate::{
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{char, cmp::Reverse, collections::VecDeque};
 
-pub fn parse(start: Location, category: CategoryId, ctx: &mut Ctx) -> WResult<ParseTreeId> {
+pub fn parse<'ctx>(
+    start: Location,
+    category: CategoryId<'ctx>,
+    ctx: &'ctx Ctx<'ctx>,
+) -> WResult<ParseTreeId<'ctx>> {
     let chart = build_chart(start, category, ctx);
-    let trimmed = trim_chart(&chart, ctx);
+    let trimmed = trim_chart(&chart);
 
     if !trimmed.contains_key(&(start.offset(), category)) {
         return make_parse_error(&chart, start.source(), ctx);
@@ -24,7 +28,11 @@ pub fn parse(start: Location, category: CategoryId, ctx: &mut Ctx) -> WResult<Pa
     read_chart(start, category, &trimmed, ctx)
 }
 
-fn build_chart(start: Location, category: CategoryId, ctx: &mut Ctx) -> Chart {
+fn build_chart<'ctx>(
+    start: Location,
+    category: CategoryId<'ctx>,
+    ctx: &'ctx Ctx<'ctx>,
+) -> Chart<'ctx> {
     let text = ctx.sources.get_text(start.source());
     let mut chart = Chart::new(start.offset());
 
@@ -41,8 +49,7 @@ fn build_chart(start: Location, category: CategoryId, ctx: &mut Ctx) -> Chart {
         let mut items: VecDeque<Item> = items.iter().copied().collect();
 
         while let Some(item) = items.pop_front() {
-            let rule = &ctx.parse_state[item.rule];
-            let next_part = rule.pattern().parts().get(item.dot);
+            let next_part = item.rule.0.pattern().parts().get(item.dot);
 
             match next_part {
                 Some(RulePatternPart::Atom(atom)) => {
@@ -91,7 +98,7 @@ fn build_chart(start: Location, category: CategoryId, ctx: &mut Ctx) -> Chart {
                 None => {
                     // Complete. We have reached the end of this rule, so we need to
                     // find all the items that were waiting for this rule to complete.
-                    let Some(waiters) = chart.get_waiters(item.origin, rule.cat()) else {
+                    let Some(waiters) = chart.get_waiters(item.origin, item.rule.cat()) else {
                         // No one was waiting for this rule to complete, so we can
                         // just move on.
                         continue;
@@ -114,7 +121,7 @@ fn build_chart(start: Location, category: CategoryId, ctx: &mut Ctx) -> Chart {
     chart
 }
 
-fn _debug_chart(chart: &Chart, ctx: &Ctx) {
+fn _debug_chart(chart: &Chart) {
     for (i, items) in chart.items_at_offset.iter().enumerate() {
         if items.is_empty() {
             continue;
@@ -123,9 +130,8 @@ fn _debug_chart(chart: &Chart, ctx: &Ctx) {
         let pos = chart.start_offset.forward(i);
         println!("At {pos:?}:");
         for item in items {
-            let rule = &ctx.parse_state[item.rule];
             let mut pattern = String::new();
-            for (j, part) in rule.pattern().parts().iter().enumerate() {
+            for (j, part) in item.rule.pattern().parts().iter().enumerate() {
                 if j == item.dot {
                     pattern.push_str("• ");
                 }
@@ -138,7 +144,7 @@ fn _debug_chart(chart: &Chart, ctx: &Ctx) {
                         ParseAtomPattern::MacroBinding => pattern.push_str("macro_binding "),
                     },
                     RulePatternPart::Cat { id, template } => {
-                        let cat_name = ctx.parse_state[*id].name();
+                        let cat_name = id.name();
                         if *template {
                             pattern.push_str(&format!("{{{cat_name}}} "));
                         } else {
@@ -147,13 +153,13 @@ fn _debug_chart(chart: &Chart, ctx: &Ctx) {
                     }
                 }
             }
-            if item.dot == rule.pattern().parts().len() {
+            if item.dot == item.rule.pattern().parts().len() {
                 pattern.push('•');
             }
             let origin = item.origin;
             println!(
                 "  {} -> {} (from {:?})",
-                ctx.parse_state[rule.cat()].name(),
+                item.rule.cat().name(),
                 pattern,
                 origin
             );
@@ -164,15 +170,15 @@ fn _debug_chart(chart: &Chart, ctx: &Ctx) {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct Item {
-    rule: RuleId,
+struct Item<'ctx> {
+    rule: RuleId<'ctx>,
     dot: usize,
     origin: SourceOffset,
     template: bool,
 }
 
-impl Item {
-    fn new(rule: RuleId, origin: SourceOffset, template: bool) -> Self {
+impl<'ctx> Item<'ctx> {
+    fn new(rule: RuleId<'ctx>, origin: SourceOffset, template: bool) -> Self {
         Self {
             rule,
             dot: 0,
@@ -189,13 +195,13 @@ impl Item {
     }
 }
 
-struct Chart {
+struct Chart<'ctx> {
     start_offset: SourceOffset,
-    items_at_offset: Vec<FxHashSet<Item>>,
-    waiting: FxHashMap<(SourceOffset, CategoryId), FxHashSet<Item>>,
+    items_at_offset: Vec<FxHashSet<Item<'ctx>>>,
+    waiting: FxHashMap<(SourceOffset, CategoryId<'ctx>), FxHashSet<Item<'ctx>>>,
 }
 
-impl Chart {
+impl<'ctx> Chart<'ctx> {
     fn new(start_offset: SourceOffset) -> Self {
         Self {
             start_offset,
@@ -215,35 +221,38 @@ impl Chart {
         }
     }
 
-    fn add_item(&mut self, item: Item, pos: SourceOffset) -> bool {
+    fn add_item(&mut self, item: Item<'ctx>, pos: SourceOffset) -> bool {
         self.ensure_offset(pos);
         let index = self.idx_for_offset(pos);
         self.items_at_offset[index].insert(item)
     }
 
-    fn wait_for_completion(&mut self, at: SourceOffset, cat: CategoryId, item: Item) {
+    fn wait_for_completion(&mut self, at: SourceOffset, cat: CategoryId<'ctx>, item: Item<'ctx>) {
         self.waiting.entry((at, cat)).or_default().insert(item);
     }
 
-    fn get_items(&self, at: SourceOffset) -> Option<&FxHashSet<Item>> {
+    fn get_items(&self, at: SourceOffset) -> Option<&FxHashSet<Item<'ctx>>> {
         let index = self.idx_for_offset(at);
         self.items_at_offset.get(index)
     }
 
-    fn get_waiters(&self, at: SourceOffset, cat: CategoryId) -> Option<&FxHashSet<Item>> {
+    fn get_waiters(
+        &self,
+        at: SourceOffset,
+        cat: CategoryId<'ctx>,
+    ) -> Option<&FxHashSet<Item<'ctx>>> {
         self.waiting.get(&(at, cat))
     }
 }
 
-fn make_parse_error<T>(chart: &Chart, source: SourceId, ctx: &mut Ctx) -> WResult<T> {
+fn make_parse_error<'ctx, T>(chart: &Chart, source: SourceId, ctx: &'ctx Ctx<'ctx>) -> WResult<T> {
     let latest_pos = chart.start_offset.forward(chart.items_at_offset.len() - 1);
     let latest_items = chart.items_at_offset.last().unwrap();
 
     let mut possible_next_atoms = FxHashSet::default();
 
     for item in latest_items {
-        let rule = &ctx.parse_state[item.rule];
-        let pat = rule.pattern();
+        let pat = item.rule.pattern();
         if let Some(RulePatternPart::Atom(atom)) = pat.parts().get(item.dot) {
             possible_next_atoms.insert(*atom);
         }
@@ -258,12 +267,12 @@ fn make_parse_error<T>(chart: &Chart, source: SourceId, ctx: &mut Ctx) -> WResul
     ctx.diags.err_parse_failure(location, &possible_atoms)
 }
 
-fn read_chart(
+fn read_chart<'ctx>(
     start: Location,
-    cat: CategoryId,
-    chart: &TrimmedChart,
-    ctx: &mut Ctx,
-) -> WResult<ParseTreeId> {
+    cat: CategoryId<'ctx>,
+    chart: &TrimmedChart<'ctx>,
+    ctx: &'ctx Ctx<'ctx>,
+) -> WResult<ParseTreeId<'ctx>> {
     // First we are going to find the length of the longest parse. Our recursive
     // function needs to know the full span so we assume the longest span is the
     // correct one.
@@ -275,12 +284,12 @@ fn read_chart(
     let span = Span::new(start, Location::new(start.source(), SourceOffset::new(end)));
 
     // Now we can recursively read the parse tree.
-    fn search(
+    fn search<'ctx>(
         span: Span,
-        cat: CategoryId,
-        chart: &TrimmedChart,
-        ctx: &mut Ctx,
-    ) -> WResult<ParseTreeId> {
+        cat: CategoryId<'ctx>,
+        chart: &TrimmedChart<'ctx>,
+        ctx: &'ctx Ctx<'ctx>,
+    ) -> WResult<ParseTreeId<'ctx>> {
         // The idea here is to check which rules we have for the given span and
         // category. We then choose which among those rules is best. If there
         // is still a tie the parse is ambiguous.
@@ -288,13 +297,12 @@ fn read_chart(
             .iter()
             .filter(|(_, end)| *end == span.end().offset())
             .map(|(rule, _end)| *rule);
-        let best_rules = choose_best_rule(rules, ctx);
+        let best_rules = choose_best_rule(rules);
 
         // Each rule gives us a pattern which we can use to split the span
         // into parts. We then recursively search for each part.
         let mut possibilities = Vec::new();
-        for rule_id in &best_rules {
-            let rule = &ctx.parse_state[*rule_id];
+        for &rule in &best_rules {
             let text = ctx.sources.get_text(span.source());
             let split = split_with_pattern(
                 text,
@@ -308,13 +316,13 @@ fn read_chart(
             match split {
                 Ok(split) => {
                     let children = split_to_children(
-                        &rule.pattern().parts().to_owned(),
+                        rule.0.pattern().parts(),
                         &split,
                         span.start(),
                         chart,
                         ctx,
                     )?;
-                    possibilities.push(ParseTreeChildren::new(*rule_id, children));
+                    possibilities.push(ParseTreeChildren::new(rule, children));
                 }
                 // We don't allow any ambiguity within a single rule, only between
                 // rules. So this is an immediate error.
@@ -326,16 +334,16 @@ fn read_chart(
         }
 
         let tree = ParseTree::new(span, cat, possibilities);
-        Ok(ctx.parse_forest.get_or_insert(tree))
+        Ok(ctx.parse_forest.intern(tree))
     }
 
-    fn split_to_children(
-        pattern: &[RulePatternPart],
+    fn split_to_children<'ctx>(
+        pattern: &[RulePatternPart<'ctx>],
         offsets: &[SourceOffset],
         start: Location,
-        chart: &TrimmedChart,
-        ctx: &mut Ctx,
-    ) -> WResult<Vec<ParseTreePart>> {
+        chart: &TrimmedChart<'ctx>,
+        ctx: &'ctx Ctx<'ctx>,
+    ) -> WResult<Vec<ParseTreePart<'ctx>>> {
         debug_assert_eq!(pattern.len(), offsets.len());
 
         let mut start = start;
@@ -387,13 +395,13 @@ fn read_chart(
     search(span, cat, chart, ctx)
 }
 
-fn choose_best_rule(rules: impl Iterator<Item = RuleId>, ctx: &Ctx) -> Vec<RuleId> {
+fn choose_best_rule<'ctx>(rules: impl Iterator<Item = RuleId<'ctx>>) -> Vec<RuleId<'ctx>> {
     // We pick the rules with the lowest precedence value.
     let mut best_rules = Vec::new();
     let mut best_precedence = None;
 
     for rule in rules {
-        let precedence = ctx.parse_state[rule].pattern().precedence();
+        let precedence = rule.pattern().precedence();
         if best_precedence.is_none_or(|bp| precedence < bp) {
             best_precedence = Some(precedence);
             best_rules = vec![rule];
@@ -496,40 +504,37 @@ fn split_with_pattern(
     }
 }
 
-type TrimmedChart = FxHashMap<(SourceOffset, CategoryId), Vec<(RuleId, SourceOffset)>>;
+type TrimmedChart<'ctx> =
+    FxHashMap<(SourceOffset, CategoryId<'ctx>), Vec<(RuleId<'ctx>, SourceOffset)>>;
 
-fn trim_chart(chart: &Chart, ctx: &Ctx) -> TrimmedChart {
-    let mut trimmed: TrimmedChart = FxHashMap::default();
+fn trim_chart<'ctx>(chart: &Chart<'ctx>) -> TrimmedChart<'ctx> {
+    let mut trimmed: TrimmedChart<'ctx> = FxHashMap::default();
 
     for (i, items) in chart.items_at_offset.iter().enumerate() {
         let pos = chart.start_offset.forward(i);
         for item in items {
-            if item.dot != ctx.parse_state[item.rule].pattern().parts().len() {
+            if item.dot != item.rule.pattern().parts().len() {
                 // We only care about completed items.
                 continue;
             }
 
-            let rule = item.rule;
-            let cat = ctx.parse_state[rule].cat();
-            let origin = item.origin;
-            trimmed.entry((origin, cat)).or_default().push((rule, pos));
+            trimmed
+                .entry((item.origin, item.rule.cat()))
+                .or_default()
+                .push((item.rule, pos));
         }
     }
 
     trimmed
 }
 
-fn _debug_trimmed_chart(trimmed: &TrimmedChart, ctx: &Ctx) {
+fn _debug_trimmed_chart<'ctx>(trimmed: &TrimmedChart<'ctx>, ctx: &'ctx Ctx<'ctx>) {
     let mut trimmed: Vec<_> = trimmed.iter().collect();
     trimmed.sort_by_key(|(key, _)| *key);
 
     for ((offset, cat), completions) in trimmed {
-        println!(
-            "At {offset:?}, completed <{}>:",
-            ctx.parse_state[*cat].name()
-        );
+        println!("At {offset:?}, completed <{}>:", cat.name());
         for (rule, end) in completions {
-            let rule = &ctx.parse_state[*rule];
             let mut pattern = String::new();
             for part in rule.pattern().parts() {
                 match part {
@@ -541,7 +546,7 @@ fn _debug_trimmed_chart(trimmed: &TrimmedChart, ctx: &Ctx) {
                         ParseAtomPattern::MacroBinding => pattern.push_str("macro_binding "),
                     },
                     RulePatternPart::Cat { id, template } => {
-                        let cat_name = ctx.parse_state[*id].name();
+                        let cat_name = id.name();
                         if *template {
                             pattern.push_str(&format!("{{{cat_name}}} "));
                         } else {
@@ -550,12 +555,7 @@ fn _debug_trimmed_chart(trimmed: &TrimmedChart, ctx: &Ctx) {
                     }
                 }
             }
-            println!(
-                "  {} -> {} (to {:?})",
-                ctx.parse_state[rule.cat()].name(),
-                pattern,
-                end
-            );
+            println!("  {} -> {} (to {:?})", rule.cat().name(), pattern, end);
         }
         println!();
     }

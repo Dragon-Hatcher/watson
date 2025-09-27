@@ -1,5 +1,6 @@
 use crate::{
-    context::Ctx,
+    context::{Ctx, arena::InternedArena},
+    declare_intern_handle,
     parse::{
         Span,
         parse_state::{CategoryId, ParseAtomPattern, RuleId},
@@ -7,81 +8,70 @@ use crate::{
 };
 use rustc_hash::FxHashMap;
 use slotmap::{SecondaryMap, SlotMap, new_key_type};
-use std::ops::Index;
+use std::{
+    hash::Hash,
+    ops::{Deref, Index},
+};
 use ustr::Ustr;
 
-pub struct ParseForest {
-    trees: SlotMap<ParseTreeId, ParseTree>,
-    ids_by_tree: FxHashMap<ParseTree, ParseTreeId>,
-    has_unexpanded_macro: SecondaryMap<ParseTreeId, bool>,
+pub struct ParseForest<'ctx> {
+    trees: InternedArena<ParseTree<'ctx>, ParseTreeId<'ctx>>,
 }
 
-impl ParseForest {
+impl<'ctx> ParseForest<'ctx> {
     pub fn new() -> Self {
         Self {
-            trees: SlotMap::default(),
-            ids_by_tree: FxHashMap::default(),
-            has_unexpanded_macro: SecondaryMap::default(),
+            trees: InternedArena::new(),
         }
     }
 
     fn check_has_unexpanded_macro(&self, tree: &ParseTree) -> bool {
-        for possibility in &tree.possibilities {
-            for part in &possibility.children {
-                match part {
-                    ParseTreePart::Atom(atom) => {
-                        if let ParseAtomKind::MacroBinding(_) = atom.kind() {
-                            return true;
-                        }
-                    }
-                    ParseTreePart::Node { id, .. } => {
-                        if self.has_unexpanded_macro[*id] {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
+        todo!()
+        // for possibility in &tree.possibilities {
+        //     for part in &possibility.children {
+        //         match part {
+        //             ParseTreePart::Atom(atom) => {
+        //                 if let ParseAtomKind::MacroBinding(_) = atom.kind() {
+        //                     return true;
+        //                 }
+        //             }
+        //             ParseTreePart::Node { id, .. } => {
+        //                 if self.has_unexpanded_macro[*id] {
+        //                     return true;
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
-        false
+        // false
     }
 
-    pub fn get_or_insert(&mut self, tree: ParseTree) -> ParseTreeId {
-        if let Some(&id) = self.ids_by_tree.get(&tree) {
-            id
-        } else {
-            let has_unexpanded_macro = self.check_has_unexpanded_macro(&tree);
-            let id = self.trees.insert(tree.clone());
-            self.ids_by_tree.insert(tree, id);
-            self.has_unexpanded_macro.insert(id, has_unexpanded_macro);
-            id
-        }
+    pub fn intern(&'ctx self, tree: ParseTree<'ctx>) -> ParseTreeId {
+        self.trees.intern(tree)
     }
 
     pub fn has_unexpanded_macro(&self, tree: ParseTreeId) -> bool {
-        self.has_unexpanded_macro[tree]
+        todo!()
+        // self.has_unexpanded_macro[tree]
     }
 }
 
-impl Index<ParseTreeId> for ParseForest {
-    type Output = ParseTree;
-
-    fn index(&self, index: ParseTreeId) -> &Self::Output {
-        &self.trees[index]
-    }
-}
-
-new_key_type! { pub struct ParseTreeId; }
+declare_intern_handle!(ParseTreeId<'ctx> => ParseTree<'ctx>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ParseTree {
+pub struct ParseTree<'ctx> {
     span: Span,
-    cat: CategoryId,
-    possibilities: Vec<ParseTreeChildren>,
+    cat: CategoryId<'ctx>,
+    possibilities: Vec<ParseTreeChildren<'ctx>>,
 }
 
-impl ParseTree {
-    pub fn new(span: Span, cat: CategoryId, possibilities: Vec<ParseTreeChildren>) -> Self {
+impl<'ctx> ParseTree<'ctx> {
+    pub fn new(
+        span: Span,
+        cat: CategoryId<'ctx>,
+        possibilities: Vec<ParseTreeChildren<'ctx>>,
+    ) -> Self {
         Self {
             span,
             cat,
@@ -93,46 +83,46 @@ impl ParseTree {
         self.span
     }
 
-    pub fn cat(&self) -> CategoryId {
+    pub fn cat(&self) -> CategoryId<'ctx> {
         self.cat
     }
 
-    pub fn possibilities(&self) -> &[ParseTreeChildren] {
+    pub fn possibilities(&self) -> &[ParseTreeChildren<'ctx>] {
         &self.possibilities
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ParseTreeChildren {
-    rule: RuleId,
-    children: Vec<ParseTreePart>,
+pub struct ParseTreeChildren<'ctx> {
+    rule: RuleId<'ctx>,
+    children: Vec<ParseTreePart<'ctx>>,
 }
 
-impl ParseTreeChildren {
-    pub fn new(rule: RuleId, children: Vec<ParseTreePart>) -> Self {
+impl<'ctx> ParseTreeChildren<'ctx> {
+    pub fn new(rule: RuleId<'ctx>, children: Vec<ParseTreePart<'ctx>>) -> Self {
         Self { rule, children }
     }
 
-    pub fn rule(&self) -> RuleId {
+    pub fn rule(&self) -> RuleId<'ctx> {
         self.rule
     }
 
-    pub fn children(&self) -> &[ParseTreePart] {
+    pub fn children(&self) -> &[ParseTreePart<'ctx>] {
         &self.children
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ParseTreePart {
+pub enum ParseTreePart<'ctx> {
     Atom(ParseAtom),
     Node {
-        id: ParseTreeId,
+        id: ParseTreeId<'ctx>,
         span: Span,
-        cat: CategoryId,
+        cat: CategoryId<'ctx>,
     },
 }
 
-impl ParseTreePart {
+impl<'ctx> ParseTreePart<'ctx> {
     pub fn span(&self) -> Span {
         match self {
             Self::Atom(atom) => atom.span,
@@ -236,82 +226,84 @@ pub struct ParseMacroBinding {
 }
 
 pub fn _debug_parse_tree(tree: ParseTreeId, ctx: &Ctx) {
-    fn recurse(tree: ParseTreeId, ctx: &Ctx, indent: usize) {
-        let tree = &ctx.parse_forest[tree];
-        let indent_str = "│ ".repeat(indent);
+    todo!()
 
-        let possibilities = &tree.possibilities;
-        if possibilities.len() == 1 {
-            let possibility = &possibilities[0];
+    // fn recurse(tree: ParseTreeId, ctx: &Ctx, indent: usize) {
+    //     let tree = &ctx.parse_forest[tree];
+    //     let indent_str = "│ ".repeat(indent);
 
-            println!(
-                "{}ParseTree (cat: {:?}, rule: {:?}, span: {:?})",
-                indent_str,
-                ctx.parse_state[tree.cat()].name(),
-                ctx.parse_state[possibility.rule()].name(),
-                tree.span()
-            );
+    //     let possibilities = &tree.possibilities;
+    //     if possibilities.len() == 1 {
+    //         let possibility = &possibilities[0];
 
-            for child in possibility.children() {
-                match child {
-                    ParseTreePart::Atom(atom) => {
-                        println!(
-                            "{}│ Atom (kind: {:?}, span: {:?})",
-                            indent_str,
-                            atom.kind(),
-                            atom.span()
-                        );
-                    }
-                    ParseTreePart::Node { id, .. } => {
-                        recurse(*id, ctx, indent + 1);
-                    }
-                }
-            }
+    //         println!(
+    //             "{}ParseTree (cat: {:?}, rule: {:?}, span: {:?})",
+    //             indent_str,
+    //             ctx.parse_state[tree.cat()].name(),
+    //             ctx.parse_state[possibility.rule()].name(),
+    //             tree.span()
+    //         );
 
-            if possibility.children().is_empty() {
-                println!("{indent_str}  <empty>");
-            }
-        } else {
-            println!(
-                "{}ParseTree (cat: {:?}, span: {:?}) !AMBIGUOUS!",
-                indent_str,
-                ctx.parse_state[tree.cat()].name(),
-                tree.span()
-            );
+    //         for child in possibility.children() {
+    //             match child {
+    //                 ParseTreePart::Atom(atom) => {
+    //                     println!(
+    //                         "{}│ Atom (kind: {:?}, span: {:?})",
+    //                         indent_str,
+    //                         atom.kind(),
+    //                         atom.span()
+    //                     );
+    //                 }
+    //                 ParseTreePart::Node { id, .. } => {
+    //                     recurse(*id, ctx, indent + 1);
+    //                 }
+    //             }
+    //         }
 
-            for (i, possibility) in possibilities.iter().enumerate() {
-                println!(
-                    "{} • Possibility {} (rule: {:?})",
-                    indent_str,
-                    i + 1,
-                    ctx.parse_state[possibility.rule()].name()
-                );
-                for child in possibility.children() {
-                    match child {
-                        ParseTreePart::Atom(atom) => {
-                            println!(
-                                "{}    Atom (kind: {:?}, span: {:?})",
-                                indent_str,
-                                atom.kind(),
-                                atom.span()
-                            );
-                        }
-                        ParseTreePart::Node { id, .. } => {
-                            recurse(*id, ctx, indent + 2);
-                        }
-                    }
-                }
+    //         if possibility.children().is_empty() {
+    //             println!("{indent_str}  <empty>");
+    //         }
+    //     } else {
+    //         println!(
+    //             "{}ParseTree (cat: {:?}, span: {:?}) !AMBIGUOUS!",
+    //             indent_str,
+    //             ctx.parse_state[tree.cat()].name(),
+    //             tree.span()
+    //         );
 
-                if possibility.children().is_empty() {
-                    println!("{indent_str}    <empty>");
-                }
-            }
+    //         for (i, possibility) in possibilities.iter().enumerate() {
+    //             println!(
+    //                 "{} • Possibility {} (rule: {:?})",
+    //                 indent_str,
+    //                 i + 1,
+    //                 ctx.parse_state[possibility.rule()].name()
+    //             );
+    //             for child in possibility.children() {
+    //                 match child {
+    //                     ParseTreePart::Atom(atom) => {
+    //                         println!(
+    //                             "{}    Atom (kind: {:?}, span: {:?})",
+    //                             indent_str,
+    //                             atom.kind(),
+    //                             atom.span()
+    //                         );
+    //                     }
+    //                     ParseTreePart::Node { id, .. } => {
+    //                         recurse(*id, ctx, indent + 2);
+    //                     }
+    //                 }
+    //             }
 
-            if possibilities.is_empty() {
-                println!("{indent_str}    !!!!!!! POSSIBILITIES EMPTY");
-            }
-        }
-    }
+    //             if possibility.children().is_empty() {
+    //                 println!("{indent_str}    <empty>");
+    //             }
+    //         }
 
-    recurse(tree, ctx, 0);
+    //         if possibilities.is_empty() {
+    //             println!("{indent_str}    !!!!!!! POSSIBILITIES EMPTY");
+    //         }
+    //     }
+    // }
+
+    // recurse(tree, ctx, 0);
 }

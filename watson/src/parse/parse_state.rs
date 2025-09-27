@@ -1,33 +1,34 @@
 use crate::{
+    context::arena::NamedArena,
+    declare_intern_handle,
     parse::macros::MacroId,
     semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use slotmap::{SecondaryMap, SlotMap, new_key_type};
-use std::ops::Index;
+use std::ops::Deref;
+use typed_arena::Arena;
 use ustr::Ustr;
 
-pub struct ParseState {
-    categories: SlotMap<CategoryId, Category>,
-    categories_by_name: FxHashMap<Ustr, CategoryId>,
-    categories_by_formal_cat: FxHashMap<FormalSyntaxCatId, CategoryId>,
-    new_categories: Vec<CategoryId>,
+pub struct ParseState<'ctx> {
+    categories: NamedArena<Category<'ctx>, CategoryId<'ctx>>,
+    categories_by_formal_cat: FxHashMap<FormalSyntaxCatId<'ctx>, CategoryId<'ctx>>,
+    new_categories: Vec<CategoryId<'ctx>>,
 
-    rules: SlotMap<RuleId, Rule>,
-    rules_by_cat: SecondaryMap<CategoryId, Vec<RuleId>>,
+    rules: NamedArena<Rule<'ctx>, RuleId<'ctx>>,
+    rules_by_cat: SecondaryMap<CategoryId<'ctx>, Vec<RuleId<'ctx>>>,
 
-    can_be_empty: SecondaryMap<CategoryId, bool>,
-    initial_atoms: SecondaryMap<CategoryId, FxHashSet<ParseAtomPattern>>,
+    can_be_empty: SecondaryMap<CategoryId<'ctx>, bool>,
+    initial_atoms: SecondaryMap<CategoryId<'ctx>, FxHashSet<ParseAtomPattern>>,
 }
 
-impl ParseState {
+impl<'ctx> ParseState<'ctx> {
     pub fn new() -> Self {
         Self {
-            categories: SlotMap::default(),
-            categories_by_name: FxHashMap::default(),
+            categories: NamedArena::new(),
             categories_by_formal_cat: FxHashMap::default(),
             new_categories: Vec::new(),
-            rules: SlotMap::default(),
+            rules: NamedArena::new(),
             rules_by_cat: SecondaryMap::default(),
             can_be_empty: SecondaryMap::default(),
             initial_atoms: SecondaryMap::default(),
@@ -35,10 +36,8 @@ impl ParseState {
     }
 
     fn add_cat(&mut self, cat: Category) -> CategoryId {
-        let name = cat.name;
-        assert!(!self.categories_by_name.contains_key(&name));
-        let id = self.categories.insert(cat);
-        self.categories_by_name.insert(name, id);
+        assert!(self.categories.get(cat.name).is_none());
+        let id = self.categories.alloc(cat.name, cat);
         self.rules_by_cat.insert(id, Vec::new());
         self.can_be_empty.insert(id, false);
         self.initial_atoms.insert(id, FxHashSet::default());
@@ -68,9 +67,9 @@ impl ParseState {
         self.new_categories.pop()
     }
 
-    pub fn add_rule(&mut self, rule: Rule) -> RuleId {
+    pub fn add_rule(&'ctx mut self, rule: Rule) -> RuleId {
         let cat = rule.cat;
-        let id = self.rules.insert(rule);
+        let id = RuleId(self.rules.alloc(rule));
         self.rules_by_cat[cat].push(id);
         self.recompute_initial_atoms();
         id
@@ -146,31 +145,17 @@ impl ParseState {
     }
 }
 
-impl Index<CategoryId> for ParseState {
-    type Output = Category;
+declare_intern_handle!(CategoryId<'ctx> => Category<'ctx>);
 
-    fn index(&self, index: CategoryId) -> &Self::Output {
-        &self.categories[index]
-    }
-}
+declare_intern_handle!(RuleId<'ctx> => Rule<'ctx>);
 
-impl Index<RuleId> for ParseState {
-    type Output = Rule;
-
-    fn index(&self, index: RuleId) -> &Self::Output {
-        &self.rules[index]
-    }
-}
-
-new_key_type! { pub struct CategoryId; }
-new_key_type! { pub struct RuleId; }
-
-pub struct Category {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Category<'ctx> {
     name: Ustr,
-    source: SyntaxCategorySource,
+    source: SyntaxCategorySource<'ctx>,
 }
 
-impl Category {
+impl<'ctx> Category<'ctx> {
     pub fn name(&self) -> Ustr {
         self.name
     }
@@ -180,9 +165,10 @@ impl Category {
     }
 }
 
-pub enum SyntaxCategorySource {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyntaxCategorySource<'ctx> {
     Builtin,
-    FormalLang(FormalSyntaxCatId),
+    FormalLang(FormalSyntaxCatId<'ctx>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -202,19 +188,19 @@ pub enum Associativity {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Rule {
+pub struct Rule<'ctx> {
     name: Ustr,
-    cat: CategoryId,
-    source: ParseRuleSource,
-    pattern: RulePattern,
+    cat: CategoryId<'ctx>,
+    source: ParseRuleSource<'ctx>,
+    pattern: RulePattern<'ctx>,
 }
 
-impl Rule {
+impl<'ctx> Rule<'ctx> {
     pub fn new(
         name: impl AsRef<str>,
-        cat: CategoryId,
-        source: ParseRuleSource,
-        pattern: RulePattern,
+        cat: CategoryId<'ctx>,
+        source: ParseRuleSource<'ctx>,
+        pattern: RulePattern<'ctx>,
     ) -> Self {
         Self {
             name: name.as_ref().into(),
@@ -228,35 +214,35 @@ impl Rule {
         self.name
     }
 
-    pub fn cat(&self) -> CategoryId {
+    pub fn cat(&self) -> CategoryId<'ctx> {
         self.cat
     }
 
-    pub fn source(&self) -> &ParseRuleSource {
+    pub fn source(&self) -> &ParseRuleSource<'ctx> {
         &self.source
     }
 
-    pub fn pattern(&self) -> &RulePattern {
+    pub fn pattern(&self) -> &RulePattern<'ctx> {
         &self.pattern
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ParseRuleSource {
+pub enum ParseRuleSource<'ctx> {
     Builtin,
-    FormalLang(FormalSyntaxRuleId),
-    Macro(MacroId),
+    FormalLang(FormalSyntaxRuleId<'ctx>),
+    Macro(MacroId<'ctx>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct RulePattern {
-    parts: Vec<RulePatternPart>,
+pub struct RulePattern<'ctx> {
+    parts: Vec<RulePatternPart<'ctx>>,
     precedence: Precedence,
     associativity: Associativity,
 }
 
-impl RulePattern {
-    pub fn new(parts: Vec<RulePatternPart>) -> Self {
+impl<'ctx> RulePattern<'ctx> {
+    pub fn new(parts: Vec<RulePatternPart<'ctx>>) -> Self {
         Self {
             parts,
             precedence: Precedence(0),
@@ -278,9 +264,12 @@ impl RulePattern {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RulePatternPart {
+pub enum RulePatternPart<'ctx> {
     Atom(ParseAtomPattern),
-    Cat { id: CategoryId, template: bool },
+    Cat {
+        id: CategoryId<'ctx>,
+        template: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

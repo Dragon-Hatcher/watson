@@ -20,9 +20,9 @@ fn main() {
     let root_file = Path::new(&root_file);
 
     let (source_cache, root_id) = make_source_cache(root_file);
-    let mut ctx = Ctx::new(source_cache);
+    let ctx = Ctx::new(source_cache);
 
-    compile(root_id, &mut ctx);
+    compile(root_id, &ctx);
     display_report(&ctx);
 
     if ctx.diags.has_errors() {
@@ -44,7 +44,7 @@ fn make_source_cache(root_file: &Path) -> (SourceCache, SourceId) {
     (source_cache, root_id)
 }
 
-fn compile(root: SourceId, ctx: &mut Ctx) {
+fn compile<'ctx>(root: SourceId, ctx: &'ctx Ctx<'ctx>) {
     parse(root, ctx);
     check_proofs(ctx);
     ctx.proof_statuses.recompute_circular_dependencies();

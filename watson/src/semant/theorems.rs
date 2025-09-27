@@ -1,9 +1,8 @@
-use std::ops::Index;
-
-use rustc_hash::FxHashMap;
 use ustr::Ustr;
 
 use crate::{
+    context::arena::NamedArena,
+    declare_intern_handle,
     parse::parse_tree::ParseTreeId,
     semant::{
         formal_syntax::FormalSyntaxCatId,
@@ -11,67 +10,48 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TheoremId(Ustr);
-
-impl TheoremId {
-    pub fn new(name: Ustr) -> Self {
-        Self(name)
-    }
-
-    pub fn name(&self) -> Ustr {
-        self.0
-    }
+pub struct TheoremStatements<'ctx> {
+    theorems: NamedArena<TheoremStatement<'ctx>, TheoremId<'ctx>>,
 }
 
-pub struct TheoremStatements {
-    theorems: FxHashMap<TheoremId, TheoremStatement>,
-}
-
-impl TheoremStatements {
+impl<'ctx> TheoremStatements<'ctx> {
     pub fn new() -> Self {
         Self {
-            theorems: FxHashMap::default(),
+            theorems: NamedArena::new(),
         }
     }
 
-    pub fn get(&self, id: TheoremId) -> Option<&TheoremStatement> {
-        self.theorems.get(&id)
+    pub fn add(&'ctx self, statement: TheoremStatement<'ctx>) -> TheoremId<'ctx> {
+        assert!(self.theorems.get(statement.name).is_none());
+        self.theorems.alloc(statement.name, statement)
     }
 
-    pub fn add(&mut self, id: TheoremId, statement: TheoremStatement) {
-        self.theorems.insert(id, statement);
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (&TheoremId, &TheoremStatement)> {
-        self.theorems.iter()
+    pub fn get(&self, name: Ustr) -> Option<TheoremId> {
+        self.theorems.get(name)
     }
 }
 
-impl Index<TheoremId> for TheoremStatements {
-    type Output = TheoremStatement;
+declare_intern_handle!(TheoremId<'ctx> => TheoremStatement<'ctx>);
 
-    fn index(&self, index: TheoremId) -> &Self::Output {
-        &self.theorems[&index]
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TheoremStatement<'ctx> {
+    name: Ustr,
+    templates: Vec<Template<'ctx>>,
+    hypotheses: Vec<Fact<'ctx>>,
+    conclusion: FragmentId<'ctx>,
+    proof: UnresolvedProof<'ctx>,
 }
 
-#[derive(Debug, Clone)]
-pub struct TheoremStatement {
-    templates: Vec<Template>,
-    hypotheses: Vec<Fact>,
-    conclusion: FragmentId,
-    proof: UnresolvedProof,
-}
-
-impl TheoremStatement {
+impl<'ctx> TheoremStatement<'ctx> {
     pub fn new(
-        templates: Vec<Template>,
-        hypotheses: Vec<Fact>,
-        conclusion: FragmentId,
-        proof: UnresolvedProof,
+        name: Ustr,
+        templates: Vec<Template<'ctx>>,
+        hypotheses: Vec<Fact<'ctx>>,
+        conclusion: FragmentId<'ctx>,
+        proof: UnresolvedProof<'ctx>,
     ) -> Self {
         Self {
+            name,
             templates,
             hypotheses,
             conclusion,
@@ -79,38 +59,46 @@ impl TheoremStatement {
         }
     }
 
-    pub fn templates(&self) -> &[Template] {
+    pub fn name(&self) -> Ustr {
+        self.name
+    }
+
+    pub fn templates(&self) -> &[Template<'ctx>] {
         &self.templates
     }
 
-    pub fn hypotheses(&self) -> &[Fact] {
+    pub fn hypotheses(&self) -> &[Fact<'ctx>] {
         &self.hypotheses
     }
 
-    pub fn conclusion(&self) -> FragmentId {
+    pub fn conclusion(&self) -> FragmentId<'ctx> {
         self.conclusion
     }
 
-    pub fn proof(&self) -> &UnresolvedProof {
+    pub fn proof(&self) -> &UnresolvedProof<'ctx> {
         &self.proof
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum UnresolvedProof {
+pub enum UnresolvedProof<'ctx> {
     Axiom,
-    Theorem(ParseTreeId),
+    Theorem(ParseTreeId<'ctx>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Template {
+pub struct Template<'ctx> {
     name: Ustr,
-    cat: FormalSyntaxCatId,
-    params: Vec<FormalSyntaxCatId>,
+    cat: FormalSyntaxCatId<'ctx>,
+    params: Vec<FormalSyntaxCatId<'ctx>>,
 }
 
-impl Template {
-    pub fn new(name: Ustr, cat: FormalSyntaxCatId, params: Vec<FormalSyntaxCatId>) -> Self {
+impl<'ctx> Template<'ctx> {
+    pub fn new(
+        name: Ustr,
+        cat: FormalSyntaxCatId<'ctx>,
+        params: Vec<FormalSyntaxCatId<'ctx>>,
+    ) -> Self {
         Self { name, cat, params }
     }
 
@@ -128,24 +116,24 @@ impl Template {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Fact {
-    assumption: Option<FragmentId>,
-    conclusion: FragmentId,
+pub struct Fact<'ctx> {
+    assumption: Option<FragmentId<'ctx>>,
+    conclusion: FragmentId<'ctx>,
 }
 
-impl Fact {
-    pub fn new(assumption: Option<FragmentId>, conclusion: FragmentId) -> Self {
+impl<'ctx> Fact<'ctx> {
+    pub fn new(assumption: Option<FragmentId<'ctx>>, conclusion: FragmentId<'ctx>) -> Self {
         Self {
             assumption,
             conclusion,
         }
     }
 
-    pub fn assumption(&self) -> Option<FragmentId> {
+    pub fn assumption(&self) -> Option<FragmentId<'ctx>> {
         self.assumption
     }
 
-    pub fn conclusion(&self) -> FragmentId {
+    pub fn conclusion(&self) -> FragmentId<'ctx> {
         self.conclusion
     }
 }
@@ -154,11 +142,7 @@ pub fn _debug_theorem_statement(id: TheoremId, stmt: &TheoremStatement, ctx: &cr
     println!("Theorem {}:", id.name());
     for template in stmt.templates() {
         if template.params().is_empty() {
-            println!(
-                "  [{} : {}]",
-                template.name(),
-                ctx.formal_syntax[template.cat()].name(),
-            );
+            println!("  [{} : {}]", template.name(), template.cat().name(),);
         } else {
             println!(
                 "  [{}({}) : {}]",
@@ -166,10 +150,10 @@ pub fn _debug_theorem_statement(id: TheoremId, stmt: &TheoremStatement, ctx: &cr
                 template
                     .params()
                     .iter()
-                    .map(|cat| ctx.formal_syntax[*cat].name().as_str())
+                    .map(|cat| cat.name().as_str())
                     .collect::<Vec<_>>()
                     .join(", "),
-                ctx.formal_syntax[template.cat()].name(),
+                template.cat().name(),
             );
         }
     }

@@ -15,27 +15,29 @@ use crate::{
     },
 };
 
-pub struct Ctx {
+pub mod arena;
+
+pub struct Ctx<'ctx> {
     /// Macro definitions for use during parsing and elaboration.
-    pub macros: Macros,
+    pub macros: Macros<'ctx>,
 
     /// Stores all the parse trees created by parsing and macro expansion.
-    pub parse_forest: ParseForest,
+    pub parse_forest: ParseForest<'ctx>,
 
     /// Stores the current state of the parser.
-    pub parse_state: ParseState,
+    pub parse_state: ParseState<'ctx>,
 
     /// The syntax of the formal language. (Categories and rules.)
-    pub formal_syntax: FormalSyntax,
+    pub formal_syntax: FormalSyntax<'ctx>,
 
     /// Fragments of sentences in the formal language.
-    pub fragments: FragmentForest,
+    pub fragments: FragmentForest<'ctx>,
 
     /// All the existing theorems/axioms and what they state.
-    pub theorem_stmts: TheoremStatements,
+    pub theorem_stmts: TheoremStatements<'ctx>,
 
     /// The results of checking all proofs.
-    pub proof_statuses: ProofStatuses,
+    pub proof_statuses: ProofStatuses<'ctx>,
 
     /// Diagnostics manager for reporting errors and warnings.
     pub diags: DiagManager,
@@ -47,7 +49,7 @@ pub struct Ctx {
     pub builtin_rules: BuiltinRules,
 }
 
-impl Ctx {
+impl<'ctx> Ctx<'ctx> {
     pub fn new(source_cache: SourceCache) -> Self {
         let formal_syntax = FormalSyntax::new();
         let mut parse_state = ParseState::new();

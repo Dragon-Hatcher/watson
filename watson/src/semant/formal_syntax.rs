@@ -5,83 +5,56 @@ use slotmap::{SlotMap, new_key_type};
 use ustr::Ustr;
 
 use crate::{
+    context::arena::NamedArena,
+    declare_intern_handle,
     parse::parse_state::{Associativity, Precedence},
     strings,
 };
 
-#[derive(Debug, Clone)]
-pub struct FormalSyntax {
-    cats: SlotMap<FormalSyntaxCatId, FormalSyntaxCat>,
-    cats_by_name: FxHashMap<Ustr, FormalSyntaxCatId>,
-    sentence_cat: FormalSyntaxCatId,
-
-    rules: SlotMap<FormalSyntaxRuleId, FormalSyntaxRule>,
-    rules_by_name: FxHashMap<Ustr, FormalSyntaxRuleId>,
+pub struct FormalSyntax<'ctx> {
+    cats: NamedArena<FormalSyntaxCat, FormalSyntaxCatId<'ctx>>,
+    rules: NamedArena<FormalSyntaxRule<'ctx>, FormalSyntaxRuleId<'ctx>>,
+    sentence_cat: FormalSyntaxCatId<'ctx>,
 }
 
-impl FormalSyntax {
+impl<'ctx> FormalSyntax<'ctx> {
     pub fn new() -> Self {
-        let mut cats = SlotMap::default();
-        let sentence_cat = cats.insert(FormalSyntaxCat::new(*strings::SENTENCE));
-        let mut cats_by_name = FxHashMap::default();
-        cats_by_name.insert(*strings::SENTENCE, sentence_cat);
+        let cats = NamedArena::new();
+        let sentence_cat = FormalSyntaxCat::new(*strings::SENTENCE);
+        let sentence_cat = cats.alloc(sentence_cat.name, sentence_cat);
 
         Self {
             cats,
-            cats_by_name,
+            rules: NamedArena::new(),
             sentence_cat,
-            rules: SlotMap::default(),
-            rules_by_name: FxHashMap::default(),
         }
     }
 
-    pub fn add_cat(&mut self, cat: FormalSyntaxCat) -> FormalSyntaxCatId {
-        let name = cat.name;
-        assert!(!self.cats_by_name.contains_key(&name));
-        let id = self.cats.insert(cat);
-        self.cats_by_name.insert(name, id);
-        id
+    pub fn add_cat(&'ctx self, cat: FormalSyntaxCat) -> FormalSyntaxCatId {
+        assert!(self.cats.get(cat.name).is_none());
+        self.cats.alloc(cat.name, cat)
     }
 
     pub fn cat_by_name(&self, name: Ustr) -> Option<FormalSyntaxCatId> {
-        self.cats_by_name.get(&name).copied()
+        self.cats.get(name)
     }
 
     pub fn sentence_cat(&self) -> FormalSyntaxCatId {
         self.sentence_cat
     }
 
-    pub fn add_rule(&mut self, rule: FormalSyntaxRule) -> FormalSyntaxRuleId {
-        let name = rule.name;
-        assert!(!self.rules_by_name.contains_key(&name));
-        let id = self.rules.insert(rule);
-        self.rules_by_name.insert(name, id);
-        id
+    pub fn add_rule(&'ctx self, rule: FormalSyntaxRule<'ctx>) -> FormalSyntaxRuleId<'ctx> {
+        assert!(self.rules.get(rule.name).is_none());
+        self.rules.alloc(rule.name, rule)
     }
 
     pub fn rule_by_name(&self, name: Ustr) -> Option<FormalSyntaxRuleId> {
-        self.rules_by_name.get(&name).copied()
+        self.rules.get(name)
     }
 }
 
-impl Index<FormalSyntaxCatId> for FormalSyntax {
-    type Output = FormalSyntaxCat;
-
-    fn index(&self, index: FormalSyntaxCatId) -> &Self::Output {
-        &self.cats[index]
-    }
-}
-
-impl Index<FormalSyntaxRuleId> for FormalSyntax {
-    type Output = FormalSyntaxRule;
-
-    fn index(&self, index: FormalSyntaxRuleId) -> &Self::Output {
-        &self.rules[index]
-    }
-}
-
-new_key_type! { pub struct FormalSyntaxCatId; }
-new_key_type! { pub struct FormalSyntaxRuleId; }
+declare_intern_handle! { FormalSyntaxCatId => FormalSyntaxCat }
+declare_intern_handle! { FormalSyntaxRuleId<'ctx> => FormalSyntaxRule<'ctx> }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FormalSyntaxCat {
@@ -99,14 +72,14 @@ impl FormalSyntaxCat {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FormalSyntaxRule {
+pub struct FormalSyntaxRule<'ctx> {
     name: Ustr,
-    cat: FormalSyntaxCatId,
-    pat: FormalSyntaxPat,
+    cat: FormalSyntaxCatId<'ctx>,
+    pat: FormalSyntaxPat<'ctx>,
 }
 
-impl FormalSyntaxRule {
-    pub fn new(name: Ustr, cat: FormalSyntaxCatId, pat: FormalSyntaxPat) -> Self {
+impl<'ctx> FormalSyntaxRule<'ctx> {
+    pub fn new(name: Ustr, cat: FormalSyntaxCatId<'ctx>, pat: FormalSyntaxPat<'ctx>) -> Self {
         Self { name, cat, pat }
     }
 
@@ -124,14 +97,14 @@ impl FormalSyntaxRule {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FormalSyntaxPat {
-    parts: Vec<FormalSyntaxPatPart>,
+pub struct FormalSyntaxPat<'ctx> {
+    parts: Vec<FormalSyntaxPatPart<'ctx>>,
     precedence: Precedence,
     associativity: Associativity,
 }
 
-impl FormalSyntaxPat {
-    pub fn new(parts: Vec<FormalSyntaxPatPart>) -> Self {
+impl<'ctx> FormalSyntaxPat<'ctx> {
+    pub fn new(parts: Vec<FormalSyntaxPatPart<'ctx>>) -> Self {
         Self {
             parts,
             precedence: Precedence(0),
@@ -145,9 +118,9 @@ impl FormalSyntaxPat {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum FormalSyntaxPatPart {
-    Cat(FormalSyntaxCatId),
-    Binding(FormalSyntaxCatId),
-    Var(FormalSyntaxCatId),
+pub enum FormalSyntaxPatPart<'ctx> {
+    Cat(FormalSyntaxCatId<'ctx>),
+    Binding(FormalSyntaxCatId<'ctx>),
+    Var(FormalSyntaxCatId<'ctx>),
     Lit(Ustr),
 }

@@ -13,12 +13,12 @@ use ustr::Ustr;
 
 macro_rules! builtin_cats {
     ($struct_name:ident { $( $name:ident ),* $(,)? }) => {
-        pub struct $struct_name {
-            $( pub $name: $crate::parse::parse_state::CategoryId, )*
+        pub struct $struct_name<'ctx> {
+            $( pub $name: $crate::parse::parse_state::CategoryId<'ctx>, )*
         }
 
-        impl $struct_name {
-            pub fn new(ctx: &mut $crate::parse::parse_state::ParseState) -> Self {
+        impl<'ctx> $struct_name<'ctx> {
+            pub fn new(ctx: &mut $crate::parse::parse_state::ParseState<'ctx>) -> Self {
                 Self {
                     $( $name: ctx.new_builtin_cat(stringify!($name)), )*
                 }
@@ -29,8 +29,8 @@ macro_rules! builtin_cats {
 
 macro_rules! builtin_rules {
     ($struct_name:ident { $( $name:ident ),* $(,)? }) => {
-        pub struct $struct_name {
-            $( pub $name: $crate::parse::parse_state::RuleId, )*
+        pub struct $struct_name<'ctx> {
+            $( pub $name: $crate::parse::parse_state::RuleId<'ctx>, )*
         }
     };
 }
@@ -213,11 +213,11 @@ builtin_rules! {
     }
 }
 
-fn kw(kw: Ustr) -> RulePatternPart {
+fn kw(kw: Ustr) -> RulePatternPart<'static> {
     RulePatternPart::Atom(ParseAtomPattern::Kw(kw))
 }
 
-fn lit(lit: Ustr) -> RulePatternPart {
+fn lit(lit: Ustr) -> RulePatternPart<'static> {
     RulePatternPart::Atom(ParseAtomPattern::Lit(lit))
 }
 
@@ -235,11 +235,11 @@ fn cat_template(cat: CategoryId) -> RulePatternPart {
     }
 }
 
-pub fn add_builtin_rules(
-    parse_state: &mut ParseState,
-    formal_syntax: &FormalSyntax,
-    cats: &BuiltinCats,
-) -> BuiltinRules {
+pub fn add_builtin_rules<'ctx>(
+    parse_state: &ParseState<'ctx>,
+    formal_syntax: &FormalSyntax<'ctx>,
+    cats: &BuiltinCats<'ctx>,
+) -> BuiltinRules<'ctx> {
     let sentence_cat =
         parse_state.new_formal_lang_cat(*strings::SENTENCE, formal_syntax.sentence_cat());
 
@@ -601,13 +601,13 @@ pub fn add_builtin_rules(
     }
 }
 
-pub fn add_builtin_syntax_for_cat(for_cat: CategoryId, ctx: &mut Ctx) {
+pub fn add_builtin_syntax_for_cat(for_cat: CategoryId, ctx: &Ctx) {
     ctx.parse_state.add_rule(Rule::new(
         "macro_replacement",
         ctx.builtin_cats.macro_replacement,
         ParseRuleSource::Builtin,
         RulePattern::new(vec![
-            kw(ctx.parse_state[for_cat].name()),
+            kw(for_cat.name()),
             lit(*strings::BNF_REPLACE),
             cat(ctx.builtin_cats.macro_pat),
             lit(*strings::FAT_ARROW),
@@ -623,7 +623,7 @@ pub fn add_builtin_syntax_for_cat(for_cat: CategoryId, ctx: &mut Ctx) {
     ));
 }
 
-pub fn add_builtin_syntax_for_formal_cat(formal_cat: FormalSyntaxCatId, ctx: &mut Ctx) {
+pub fn add_builtin_syntax_for_formal_cat(formal_cat: FormalSyntaxCatId, ctx: &Ctx) {
     let macro_cat = ctx.parse_state.cat_for_formal_cat(formal_cat);
 
     ctx.parse_state.add_rule(Rule::new(
@@ -644,9 +644,7 @@ pub fn add_builtin_syntax_for_formal_cat(formal_cat: FormalSyntaxCatId, ctx: &mu
     ));
 }
 
-pub fn add_formal_syntax_rule(rule_id: FormalSyntaxRuleId, ctx: &mut Ctx) {
-    let rule = &ctx.formal_syntax[rule_id];
-
+pub fn add_formal_syntax_rule(rule: FormalSyntaxRuleId, ctx: &Ctx) {
     let mut parts = Vec::new();
     for formal_part in rule.pattern().parts() {
         let part = match formal_part {
@@ -670,7 +668,7 @@ pub fn add_formal_syntax_rule(rule_id: FormalSyntaxRuleId, ctx: &mut Ctx) {
     let parse_rule = Rule::new(
         "formal_syntax_rule",
         ctx.parse_state.cat_for_formal_cat(rule.cat()),
-        ParseRuleSource::FormalLang(rule_id),
+        ParseRuleSource::FormalLang(rule),
         parse_rule_pattern,
     );
 

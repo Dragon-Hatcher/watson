@@ -2,7 +2,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::semant::{proof_status::ProofStatuses, theorems::TheoremId};
 
-pub fn find_circular_dependency_groups(statuses: &ProofStatuses) -> Vec<Vec<TheoremId>> {
+pub fn find_circular_dependency_groups<'ctx>(
+    statuses: &'ctx ProofStatuses<'ctx>,
+) -> Vec<Vec<TheoremId<'ctx>>> {
     // To check for circularity, we find the strongly connected components of the
     // theorem dependency graph.
 
@@ -15,16 +17,16 @@ pub fn find_circular_dependency_groups(statuses: &ProofStatuses) -> Vec<Vec<Theo
     let mut sccs: Vec<Vec<TheoremId>> = Vec::new();
 
     #[allow(clippy::too_many_arguments)]
-    fn dfs(
-        at: TheoremId,
-        visited: &mut FxHashSet<TheoremId>,
-        stack: &mut Vec<TheoremId>,
-        on_stack: &mut FxHashSet<TheoremId>,
-        indices: &mut FxHashMap<TheoremId, usize>,
-        lowlinks: &mut FxHashMap<TheoremId, usize>,
+    fn dfs<'ctx>(
+        at: TheoremId<'ctx>,
+        visited: &mut FxHashSet<TheoremId<'ctx>>,
+        stack: &mut Vec<TheoremId<'ctx>>,
+        on_stack: &mut FxHashSet<TheoremId<'ctx>>,
+        indices: &mut FxHashMap<TheoremId<'ctx>, usize>,
+        lowlinks: &mut FxHashMap<TheoremId<'ctx>, usize>,
         index: &mut usize,
-        sccs: &mut Vec<Vec<TheoremId>>,
-        statuses: &ProofStatuses,
+        sccs: &mut Vec<Vec<TheoremId<'ctx>>>,
+        statuses: &'ctx ProofStatuses<'ctx>,
     ) {
         // Place the current theorem on the stack
         stack.push(at);

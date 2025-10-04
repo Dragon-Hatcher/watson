@@ -359,8 +359,8 @@ fn maybe_parse_fragment<'ctx>(
 fn parse_hole_name(name: &str) -> Option<usize> {
     if name == "_" {
         Some(0)
-    } else if name.starts_with('_') {
-        name[1..].parse().ok()
+    } else if let Some(idx) = name.strip_prefix('_') {
+        idx.parse().ok()
     } else {
         None
     }

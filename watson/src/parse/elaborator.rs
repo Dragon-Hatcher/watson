@@ -168,7 +168,7 @@ fn elaborate_syntax<'ctx>(syntax: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WRe
                 return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat.span());
             };
 
-            if let Some(_) = ctx.arenas.formal_syntax.rule_by_name(rule_name) {
+            if ctx.arenas.formal_syntax.rule_by_name(rule_name).is_some() {
                 return ctx.diags.err_duplicate_formal_syntax_rule();
             }
 
@@ -1006,7 +1006,7 @@ pub fn reduce_to_builtin<'ctx>(
             continue;
         };
 
-        let bindings = macro_.collect_macro_bindings(&possibility);
+        let bindings = macro_.collect_macro_bindings(possibility);
         let tree_id = do_macro_replacement(macro_.replacement(), &bindings, ctx);
 
         for new_possibility in tree_id.possibilities() {

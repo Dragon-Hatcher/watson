@@ -99,7 +99,7 @@ impl<'ctx> ParseState<'ctx> {
                                 }
                             }
 
-                            if !self.can_be_empty[&id] {
+                            if !self.can_be_empty[id] {
                                 break;
                             }
                         }

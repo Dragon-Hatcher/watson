@@ -282,7 +282,7 @@ fn instantiate_fragment_with_templates<'ctx>(
             let replacement = templates[&temp.name()];
             let args: Vec<_> = temp
                 .args()
-                .into_iter()
+                .iter()
                 .map(|&arg| instantiate_fragment_with_templates(arg, templates, ctx))
                 .collect();
             fill_template_holes(replacement, &args, 0, ctx)

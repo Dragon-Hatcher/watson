@@ -82,7 +82,7 @@ macro_rules! declare_intern_handle {
 
         impl<$ctx> std::cmp::PartialOrd for $handle<$ctx> {
             fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                (self.0 as *const $data as usize).partial_cmp(&(other.0 as *const $data as usize))
+                Some(self.cmp(other))
             }
         }
 
@@ -106,7 +106,7 @@ macro_rules! declare_intern_handle {
             }
         }
 
-        impl<$ctx> crate::context::arena::InternerHandle<$ctx, $data> for $handle<$ctx> {
+        impl<$ctx> $crate::context::arena::InternerHandle<$ctx, $data> for $handle<$ctx> {
             fn from_ref(r: &'ctx $data) -> Self {
                 Self(r)
             }

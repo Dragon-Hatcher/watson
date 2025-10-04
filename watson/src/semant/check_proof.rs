@@ -1,5 +1,5 @@
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::{ops::Deref, vec};
+use std::vec;
 use ustr::Ustr;
 
 use crate::{
@@ -7,27 +7,30 @@ use crate::{
     diagnostics::WResult,
     parse::{Span, elaborator::elaborate_tactic, parse_tree::ParseTreeId},
     semant::{
-        formal_syntax::FormalSyntaxRuleId,
         fragment::{
             _debug_fact, _debug_fragment, FragData, FragPart, FragRuleApplication, FragTemplateRef,
             Fragment, FragmentId,
         },
         parse_fragment::{NameCtx, UnresolvedFact, parse_any_fragment, parse_fragment},
-        proof_status::ProofStatus,
-        theorems::{Fact, TheoremId, TheoremStatement, UnresolvedProof},
+        proof_status::{ProofStatus, ProofStatuses},
+        theorems::{Fact, TheoremId, UnresolvedProof},
     },
 };
 
-pub fn check_proofs<'ctx>(ctx: &'ctx Ctx<'ctx>) {
-    let theorem_ids: Vec<TheoremId> = ctx.theorem_stmts.iter().map(|(id, _)| *id).collect();
-
-    for id in theorem_ids {
+pub fn check_proofs<'ctx>(
+    theorems: &[TheoremId<'ctx>],
+    ctx: &mut Ctx<'ctx>,
+) -> ProofStatuses<'ctx> {
+    let mut statuses = ProofStatuses::new();
+    for &id in theorems {
         let Ok(status) = check_proof(id, ctx) else {
             continue;
         };
 
-        ctx.proof_statuses.add(id, status);
+        statuses.add(id, status);
     }
+
+    statuses
 }
 
 #[derive(Debug, Clone)]
@@ -39,7 +42,7 @@ struct ProofState<'ctx> {
 
 fn check_proof<'ctx>(
     theorem_smt: TheoremId<'ctx>,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &mut Ctx<'ctx>,
 ) -> WResult<ProofStatus<'ctx>> {
     let proof = match theorem_smt.proof() {
         UnresolvedProof::Axiom => return Ok(ProofStatus::new_axiom()),
@@ -77,7 +80,7 @@ fn check_proof<'ctx>(
                 let assumption = if let Some(assumption) = tactic.fact.assumption() {
                     let Ok(assumption) = parse_fragment(
                         assumption,
-                        ctx.formal_syntax.sentence_cat(),
+                        ctx.sentence_formal_cat,
                         &mut sub_state.names,
                         ctx,
                     ) else {
@@ -100,7 +103,7 @@ fn check_proof<'ctx>(
 
                 let Ok(conclusion) = parse_fragment(
                     tactic.fact.conclusion(),
-                    ctx.formal_syntax.sentence_cat(),
+                    ctx.sentence_formal_cat,
                     &mut state.names,
                     ctx,
                 ) else {
@@ -120,7 +123,7 @@ fn check_proof<'ctx>(
                 proof_states.push((state, tactic.continuation));
             }
             UnresolvedTactic::By(tactic) => {
-                let Some(theorem) = ctx.theorem_stmts.get(tactic.theorem_name) else {
+                let Some(theorem) = ctx.arenas.theorem_stmts.get(tactic.theorem_name) else {
                     // The theorem doesn't exist.
                     eprintln!(
                         "[{}] Proof incorrect from non-existent theorem.",
@@ -237,7 +240,7 @@ fn check_proof<'ctx>(
 fn instantiate_fact_with_templates<'ctx>(
     fact: Fact<'ctx>,
     templates: &FxHashMap<Ustr, FragmentId<'ctx>>,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &Ctx<'ctx>,
 ) -> Fact<'ctx> {
     let assumption = fact
         .assumption()
@@ -249,7 +252,7 @@ fn instantiate_fact_with_templates<'ctx>(
 fn instantiate_fragment_with_templates<'ctx>(
     frag: FragmentId<'ctx>,
     templates: &FxHashMap<Ustr, FragmentId<'ctx>>,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &Ctx<'ctx>,
 ) -> FragmentId<'ctx> {
     match frag.0.data() {
         FragData::Rule(rule) => {
@@ -273,7 +276,7 @@ fn instantiate_fragment_with_templates<'ctx>(
                 new_parts,
                 bindings_added,
             ));
-            ctx.fragments.get_or_insert(Fragment::new(frag.cat(), data))
+            ctx.arenas.fragments.intern(Fragment::new(frag.cat(), data))
         }
         FragData::Template(temp) => {
             let replacement = templates[&temp.name()];
@@ -292,7 +295,7 @@ fn fill_template_holes<'ctx>(
     frag: FragmentId<'ctx>,
     args: &[FragmentId<'ctx>],
     debruijn_shift: usize,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &Ctx<'ctx>,
 ) -> FragmentId<'ctx> {
     match frag.0.data() {
         FragData::Rule(rule_app) => {
@@ -314,7 +317,7 @@ fn fill_template_holes<'ctx>(
                 new_children,
                 rule_app.bindings_added(),
             ));
-            ctx.fragments.get_or_insert(Fragment::new(frag.cat(), data))
+            ctx.arenas.fragments.intern(Fragment::new(frag.cat(), data))
         }
         FragData::Template(template) => {
             let new_args = template
@@ -323,7 +326,7 @@ fn fill_template_holes<'ctx>(
                 .map(|arg| fill_template_holes(*arg, args, debruijn_shift, ctx))
                 .collect();
             let data = FragData::Template(FragTemplateRef::new(template.name(), new_args));
-            ctx.fragments.get_or_insert(Fragment::new(frag.cat(), data))
+            ctx.arenas.fragments.intern(Fragment::new(frag.cat(), data))
         }
         FragData::Hole(idx) => {
             let replacement = args[*idx];
@@ -335,7 +338,7 @@ fn fill_template_holes<'ctx>(
 fn fix_debruijn_indices<'ctx>(
     frag: FragmentId<'ctx>,
     shift: usize,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &Ctx<'ctx>,
 ) -> FragmentId<'ctx> {
     if shift == 0 {
         return frag;
@@ -358,7 +361,7 @@ fn fix_debruijn_indices<'ctx>(
                 new_children,
                 rule_app.bindings_added(),
             ));
-            ctx.fragments.get_or_insert(Fragment::new(frag.cat(), data))
+            ctx.arenas.fragments.intern(Fragment::new(frag.cat(), data))
         }
         FragData::Template(template) => {
             let new_args = template
@@ -367,7 +370,7 @@ fn fix_debruijn_indices<'ctx>(
                 .map(|&arg| fix_debruijn_indices(arg, shift, ctx))
                 .collect();
             let data = FragData::Template(FragTemplateRef::new(template.name(), new_args));
-            ctx.fragments.get_or_insert(Fragment::new(frag.cat(), data))
+            ctx.arenas.fragments.intern(Fragment::new(frag.cat(), data))
         }
         FragData::Hole(_) => frag,
     }

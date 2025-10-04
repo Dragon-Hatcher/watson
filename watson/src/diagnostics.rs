@@ -12,15 +12,11 @@ pub type WResult<T> = Result<T, ()>;
 
 pub struct DiagManager {
     diags: Vec<Diagnostic>,
-    has_fatal: bool,
 }
 
 impl DiagManager {
     pub fn new() -> Self {
-        Self {
-            diags: Vec::new(),
-            has_fatal: false,
-        }
+        Self { diags: Vec::new() }
     }
 
     pub fn print_errors(&self, ctx: &Ctx) {
@@ -34,10 +30,6 @@ impl DiagManager {
 
     pub fn has_errors(&self) -> bool {
         !self.diags.is_empty()
-    }
-
-    pub fn has_fatal_errors(&self) -> bool {
-        self.has_fatal
     }
 }
 
@@ -86,7 +78,7 @@ impl Diagnostic {
 
         for (source, parts) in &self.parts.iter().chunk_by(|p| p.span().map(|s| s.source())) {
             let path = source.map(|s| s.name()).unwrap();
-            let source = source.map(|s| sources.get_text(s)).unwrap();
+            let source = source.map(|s| sources.get_text(s).as_str()).unwrap();
             let mut snippet = Snippet::source(source).origin(path.as_str()).fold(true);
 
             for part in parts {
@@ -139,7 +131,7 @@ impl DiagManager {
         Err(())
     }
 
-    pub fn err_elaboration_infinite_recursion<T>(&mut self, span: Span) -> WResult<T> {
+    pub fn _err_elaboration_infinite_recursion<T>(&mut self, span: Span) -> WResult<T> {
         let diag = Diagnostic::new("infinite recursion while expanding").with_error("", span);
 
         self.add_diag(diag);

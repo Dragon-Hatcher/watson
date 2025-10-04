@@ -67,14 +67,6 @@ impl Location {
     pub fn forward(&self, bytes: usize) -> Self {
         Self::new(self.source, self.offset.forward(bytes))
     }
-
-    pub fn max(&self, other: &Self) -> Self {
-        if self.byte_offset() > other.byte_offset() {
-            *self
-        } else {
-            *other
-        }
-    }
 }
 
 impl Debug for Location {
@@ -117,11 +109,6 @@ impl Span {
 
     pub fn bytes(&self) -> Range<usize> {
         self.start().byte_offset()..self.end().byte_offset()
-    }
-
-    pub fn union(&self, end: Span) -> Span {
-        assert_eq!(self.source(), end.source());
-        Span::new(self.start(), end.end())
     }
 }
 

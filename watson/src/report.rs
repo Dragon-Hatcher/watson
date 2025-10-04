@@ -1,9 +1,18 @@
-use crate::context::Ctx;
+use crate::semant::proof_status::ProofStatuses;
+use crate::semant::theorems::TheoremId;
 use crate::util::ansi::{ANSI_BOLD, ANSI_GREEN, ANSI_RED, ANSI_RESET, ANSI_YELLOW};
 use crate::util::plural;
 
-pub fn display_report(ctx: &Ctx) -> bool {
-    let statuses = &ctx.proof_statuses;
+pub struct ProofReport<'ctx> {
+    pub statuses: ProofStatuses<'ctx>,
+    pub circularities: Vec<Vec<TheoremId<'ctx>>>,
+}
+
+pub fn display_report(report: &ProofReport) -> bool {
+    let ProofReport {
+        statuses,
+        circularities,
+    } = report;
 
     println!(
         "Checked {} theorem{} ({} axiom{}, {} theorem{}):",
@@ -35,14 +44,14 @@ pub fn display_report(ctx: &Ctx) -> bool {
         );
     }
 
-    if !statuses.circular_dependencies().is_empty() {
+    if !circularities.is_empty() {
         println!(
             " {ANSI_RED}✗{ANSI_RESET} {ANSI_BOLD}{}{ANSI_RESET} circular dependency group{} detected.",
-            statuses.circular_dependencies().len(),
-            plural(statuses.circular_dependencies().len())
+            circularities.len(),
+            plural(circularities.len())
         );
 
-        for group in statuses.circular_dependencies() {
+        for group in circularities {
             print!("     -");
             for (i, thm) in group.iter().enumerate() {
                 if i > 0 {
@@ -54,7 +63,7 @@ pub fn display_report(ctx: &Ctx) -> bool {
         }
     }
 
-    let all_ok = statuses.error_cnt() == 0 && statuses.circular_dependencies().is_empty();
+    let all_ok = statuses.error_cnt() == 0 && circularities.is_empty();
 
     if all_ok {
         println!();

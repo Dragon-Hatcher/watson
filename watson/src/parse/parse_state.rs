@@ -5,86 +5,48 @@ use crate::{
     semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
-use slotmap::{SecondaryMap, SlotMap, new_key_type};
-use std::ops::Deref;
-use typed_arena::Arena;
 use ustr::Ustr;
 
 pub struct ParseState<'ctx> {
-    categories: NamedArena<Category<'ctx>, CategoryId<'ctx>>,
-    categories_by_formal_cat: FxHashMap<FormalSyntaxCatId<'ctx>, CategoryId<'ctx>>,
+    // Category info
     new_categories: Vec<CategoryId<'ctx>>,
+    categories_by_formal_cat: FxHashMap<FormalSyntaxCatId<'ctx>, CategoryId<'ctx>>,
 
-    rules: NamedArena<Rule<'ctx>, RuleId<'ctx>>,
-    rules_by_cat: SecondaryMap<CategoryId<'ctx>, Vec<RuleId<'ctx>>>,
+    // Rule info
+    all_rules: FxHashSet<RuleId<'ctx>>,
+    rules_by_cat: FxHashMap<CategoryId<'ctx>, Vec<RuleId<'ctx>>>,
 
-    can_be_empty: SecondaryMap<CategoryId<'ctx>, bool>,
-    initial_atoms: SecondaryMap<CategoryId<'ctx>, FxHashSet<ParseAtomPattern>>,
+    // Grammar information
+    can_be_empty: FxHashMap<CategoryId<'ctx>, bool>,
+    initial_atoms: FxHashMap<CategoryId<'ctx>, FxHashSet<ParseAtomPattern>>,
 }
 
 impl<'ctx> ParseState<'ctx> {
     pub fn new() -> Self {
         Self {
-            categories: NamedArena::new(),
-            categories_by_formal_cat: FxHashMap::default(),
             new_categories: Vec::new(),
-            rules: NamedArena::new(),
-            rules_by_cat: SecondaryMap::default(),
-            can_be_empty: SecondaryMap::default(),
-            initial_atoms: SecondaryMap::default(),
+            categories_by_formal_cat: FxHashMap::default(),
+            all_rules: FxHashSet::default(),
+            rules_by_cat: FxHashMap::default(),
+            can_be_empty: FxHashMap::default(),
+            initial_atoms: FxHashMap::default(),
         }
     }
 
-    fn add_cat(&mut self, cat: Category) -> CategoryId {
-        assert!(self.categories.get(cat.name).is_none());
-        let id = self.categories.alloc(cat.name, cat);
-        self.rules_by_cat.insert(id, Vec::new());
-        self.can_be_empty.insert(id, false);
-        self.initial_atoms.insert(id, FxHashSet::default());
-        self.new_categories.push(id);
-        id
+    pub fn use_cat(&mut self, cat: CategoryId<'ctx>) {
+        self.rules_by_cat.insert(cat, Vec::new());
+        self.can_be_empty.insert(cat, false);
+        self.initial_atoms.insert(cat, FxHashSet::default());
+        self.new_categories.push(cat);
+        if let SyntaxCategorySource::FormalLang(formal) = cat.source() {
+            self.categories_by_formal_cat.insert(formal, cat);
+        }
     }
 
-    pub fn new_builtin_cat(&mut self, name: impl AsRef<str>) -> CategoryId {
-        let cat = Category {
-            name: name.as_ref().into(),
-            source: SyntaxCategorySource::Builtin,
-        };
-        self.add_cat(cat)
-    }
-
-    pub fn new_formal_lang_cat(&mut self, name: Ustr, source: FormalSyntaxCatId) -> CategoryId {
-        let cat = Category {
-            name,
-            source: SyntaxCategorySource::FormalLang(source),
-        };
-        let id = self.add_cat(cat);
-        self.categories_by_formal_cat.insert(source, id);
-        id
-    }
-
-    pub fn pop_new_categories(&mut self) -> Option<CategoryId> {
-        self.new_categories.pop()
-    }
-
-    pub fn add_rule(&'ctx mut self, rule: Rule) -> RuleId {
-        let cat = rule.cat;
-        let id = RuleId(self.rules.alloc(rule));
-        self.rules_by_cat[cat].push(id);
+    pub fn use_rule(&mut self, rule: RuleId<'ctx>) {
+        self.all_rules.insert(rule);
+        self.rules_by_cat.get_mut(&rule.cat()).unwrap().push(rule);
         self.recompute_initial_atoms();
-        id
-    }
-
-    pub fn rules_for_cat(&self, cat: CategoryId) -> &[RuleId] {
-        &self.rules_by_cat[cat]
-    }
-
-    pub fn cat_by_name(&self, name: Ustr) -> Option<CategoryId> {
-        self.categories_by_name.get(&name).copied()
-    }
-
-    pub fn cat_for_formal_cat(&self, formal_cat: FormalSyntaxCatId) -> CategoryId {
-        self.categories_by_formal_cat[&formal_cat]
     }
 
     fn recompute_initial_atoms(&mut self) {
@@ -92,14 +54,14 @@ impl<'ctx> ParseState<'ctx> {
         let mut changed = true;
         while changed {
             changed = false;
-            for (_, rule) in &self.rules {
-                if !self.can_be_empty[rule.cat]
+            for rule in &self.all_rules {
+                if !self.can_be_empty[&rule.cat()]
                     && rule.pattern().parts().iter().all(|part| match part {
                         RulePatternPart::Atom(_) => false,
-                        RulePatternPart::Cat { id, .. } => self.can_be_empty[*id],
+                        RulePatternPart::Cat { id, .. } => self.can_be_empty[id],
                     })
                 {
-                    self.can_be_empty[rule.cat] = true;
+                    self.can_be_empty.insert(rule.cat(), true);
                     changed = true;
                 }
             }
@@ -109,24 +71,35 @@ impl<'ctx> ParseState<'ctx> {
         let mut changed = true;
         while changed {
             changed = false;
-            for (_, rule) in &self.rules {
-                for part in rule.pattern().parts() {
+            for &rule in &self.all_rules {
+                for part in rule.0.pattern().parts() {
                     match part {
                         RulePatternPart::Atom(atom) => {
-                            if self.initial_atoms[rule.cat].insert(*atom) {
+                            if self
+                                .initial_atoms
+                                .get_mut(&rule.cat())
+                                .unwrap()
+                                .insert(*atom)
+                            {
                                 changed = true;
                             }
                             break;
                         }
                         RulePatternPart::Cat { id, .. } => {
-                            let initials = self.initial_atoms[*id].clone();
-                            for initial in initials {
-                                if self.initial_atoms[rule.cat].insert(initial) {
-                                    changed = true;
+                            if *id != rule.cat() {
+                                let [from, to] =
+                                    self.initial_atoms.get_disjoint_mut([id, &rule.cat()]);
+                                let from = from.unwrap();
+                                let to = to.unwrap();
+
+                                for &initial in from.iter() {
+                                    if to.insert(initial) {
+                                        changed = true;
+                                    }
                                 }
                             }
 
-                            if !self.can_be_empty[*id] {
+                            if !self.can_be_empty[&id] {
                                 break;
                             }
                         }
@@ -136,12 +109,71 @@ impl<'ctx> ParseState<'ctx> {
         }
     }
 
-    pub fn initial_atoms(&self, cat: CategoryId) -> &FxHashSet<ParseAtomPattern> {
-        &self.initial_atoms[cat]
+    pub fn rules_for_cat(&self, cat: CategoryId<'ctx>) -> &[RuleId<'ctx>] {
+        &self.rules_by_cat[&cat]
     }
 
-    pub fn can_be_empty(&self, cat: CategoryId) -> bool {
-        self.can_be_empty[cat]
+    pub fn cat_for_formal_cat(&self, formal_cat: FormalSyntaxCatId<'ctx>) -> CategoryId<'ctx> {
+        self.categories_by_formal_cat[&formal_cat]
+    }
+
+    pub fn initial_atoms(&self, cat: CategoryId<'ctx>) -> &FxHashSet<ParseAtomPattern> {
+        &self.initial_atoms[&cat]
+    }
+
+    pub fn can_be_empty(&self, cat: CategoryId<'ctx>) -> bool {
+        self.can_be_empty[&cat]
+    }
+
+    pub fn pop_new_categories(&mut self) -> Option<CategoryId<'ctx>> {
+        self.new_categories.pop()
+    }
+}
+
+pub struct ParseRules<'ctx> {
+    categories: NamedArena<Category<'ctx>, CategoryId<'ctx>>,
+    rules: NamedArena<Rule<'ctx>, RuleId<'ctx>>,
+}
+
+impl<'ctx> ParseRules<'ctx> {
+    pub fn new() -> Self {
+        Self {
+            categories: NamedArena::new(),
+            rules: NamedArena::new(),
+        }
+    }
+
+    fn add_cat(&'ctx self, cat: Category<'ctx>) -> CategoryId<'ctx> {
+        assert!(self.categories.get(cat.name).is_none());
+        self.categories.alloc(cat.name, cat)
+    }
+
+    pub fn add_builtin_cat(&'ctx self, name: impl AsRef<str>) -> CategoryId<'ctx> {
+        let cat = Category {
+            name: name.as_ref().into(),
+            source: SyntaxCategorySource::Builtin,
+        };
+        self.add_cat(cat)
+    }
+
+    pub fn add_formal_lang_cat(
+        &'ctx self,
+        name: Ustr,
+        source: FormalSyntaxCatId<'ctx>,
+    ) -> CategoryId<'ctx> {
+        let cat = Category {
+            name,
+            source: SyntaxCategorySource::FormalLang(source),
+        };
+        self.add_cat(cat)
+    }
+
+    pub fn add_rule(&'ctx self, rule: Rule<'ctx>) -> RuleId<'ctx> {
+        self.rules.alloc(rule.name, rule)
+    }
+
+    pub fn cat_by_name(&self, name: Ustr) -> Option<CategoryId<'ctx>> {
+        self.categories.get(name)
     }
 }
 
@@ -160,8 +192,8 @@ impl<'ctx> Category<'ctx> {
         self.name
     }
 
-    pub fn source(&self) -> &SyntaxCategorySource {
-        &self.source
+    pub fn source(&self) -> SyntaxCategorySource<'ctx> {
+        self.source
     }
 }
 
@@ -175,15 +207,15 @@ pub enum SyntaxCategorySource<'ctx> {
 pub struct Precedence(pub usize);
 
 impl Precedence {
-    pub fn new(level: usize) -> Self {
+    pub fn _new(level: usize) -> Self {
         Self(level)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Associativity {
-    Left,
-    Right,
+    _Left,
+    _Right,
     NonAssoc,
 }
 
@@ -250,7 +282,7 @@ impl<'ctx> RulePattern<'ctx> {
         }
     }
 
-    pub fn parts(&self) -> &[RulePatternPart] {
+    pub fn parts(&self) -> &[RulePatternPart<'ctx>] {
         &self.parts
     }
 

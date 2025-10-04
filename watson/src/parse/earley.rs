@@ -16,7 +16,7 @@ use std::{char, cmp::Reverse, collections::VecDeque};
 pub fn parse<'ctx>(
     start: Location,
     category: CategoryId<'ctx>,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &mut Ctx<'ctx>,
 ) -> WResult<ParseTreeId<'ctx>> {
     let chart = build_chart(start, category, ctx);
     let trimmed = trim_chart(&chart);
@@ -31,9 +31,9 @@ pub fn parse<'ctx>(
 fn build_chart<'ctx>(
     start: Location,
     category: CategoryId<'ctx>,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &mut Ctx<'ctx>,
 ) -> Chart<'ctx> {
-    let text = ctx.sources.get_text(start.source());
+    let text = ctx.sources.get_text(start.source()).as_str();
     let mut chart = Chart::new(start.offset());
 
     // Add all the start rules for the category we are parsing.
@@ -245,7 +245,7 @@ impl<'ctx> Chart<'ctx> {
     }
 }
 
-fn make_parse_error<'ctx, T>(chart: &Chart, source: SourceId, ctx: &'ctx Ctx<'ctx>) -> WResult<T> {
+fn make_parse_error<'ctx, T>(chart: &Chart, source: SourceId, ctx: &mut Ctx<'ctx>) -> WResult<T> {
     let latest_pos = chart.start_offset.forward(chart.items_at_offset.len() - 1);
     let latest_items = chart.items_at_offset.last().unwrap();
 
@@ -258,7 +258,8 @@ fn make_parse_error<'ctx, T>(chart: &Chart, source: SourceId, ctx: &'ctx Ctx<'ct
         }
     }
 
-    let location = skip_ws_and_comments(ctx.sources.get_text(source), latest_pos);
+    let text = ctx.sources.get_text(source).as_str();
+    let location = skip_ws_and_comments(text, latest_pos);
     let location = Location::new(source, location);
 
     let mut possible_atoms = possible_next_atoms.into_iter().collect::<Vec<_>>();
@@ -271,7 +272,7 @@ fn read_chart<'ctx>(
     start: Location,
     cat: CategoryId<'ctx>,
     chart: &TrimmedChart<'ctx>,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &mut Ctx<'ctx>,
 ) -> WResult<ParseTreeId<'ctx>> {
     // First we are going to find the length of the longest parse. Our recursive
     // function needs to know the full span so we assume the longest span is the
@@ -288,8 +289,10 @@ fn read_chart<'ctx>(
         span: Span,
         cat: CategoryId<'ctx>,
         chart: &TrimmedChart<'ctx>,
-        ctx: &'ctx Ctx<'ctx>,
+        ctx: &mut Ctx<'ctx>,
     ) -> WResult<ParseTreeId<'ctx>> {
+        let text = ctx.sources.get_text(span.source()).as_str();
+
         // The idea here is to check which rules we have for the given span and
         // category. We then choose which among those rules is best. If there
         // is still a tie the parse is ambiguous.
@@ -303,7 +306,6 @@ fn read_chart<'ctx>(
         // into parts. We then recursively search for each part.
         let mut possibilities = Vec::new();
         for &rule in &best_rules {
-            let text = ctx.sources.get_text(span.source());
             let split = split_with_pattern(
                 text,
                 span,
@@ -334,7 +336,7 @@ fn read_chart<'ctx>(
         }
 
         let tree = ParseTree::new(span, cat, possibilities);
-        Ok(ctx.parse_forest.intern(tree))
+        Ok(ctx.arenas.parse_forest.intern(tree))
     }
 
     fn split_to_children<'ctx>(
@@ -342,14 +344,15 @@ fn read_chart<'ctx>(
         offsets: &[SourceOffset],
         start: Location,
         chart: &TrimmedChart<'ctx>,
-        ctx: &'ctx Ctx<'ctx>,
+        ctx: &mut Ctx<'ctx>,
     ) -> WResult<Vec<ParseTreePart<'ctx>>> {
         debug_assert_eq!(pattern.len(), offsets.len());
+
+        let text = ctx.sources.get_text(start.source()).as_str();
 
         let mut start = start;
         let mut parts = Vec::new();
         for (pat, offset) in pattern.iter().zip(offsets.iter()) {
-            let text = ctx.sources.get_text(start.source());
             let span = Span::new(start, Location::new(start.source(), *offset));
 
             match pat {
@@ -467,8 +470,8 @@ fn split_with_pattern(
             // try the shortest continuations first. If it is non-associative we
             // try them in the order they appear.
             match associativity {
-                Associativity::Left => continuations.sort_by_key(|c| c.1),
-                Associativity::Right => continuations.sort_by_key(|c| Reverse(c.1)),
+                Associativity::_Left => continuations.sort_by_key(|c| c.1),
+                Associativity::_Right => continuations.sort_by_key(|c| Reverse(c.1)),
                 Associativity::NonAssoc => {}
             }
 
@@ -528,7 +531,7 @@ fn trim_chart<'ctx>(chart: &Chart<'ctx>) -> TrimmedChart<'ctx> {
     trimmed
 }
 
-fn _debug_trimmed_chart<'ctx>(trimmed: &TrimmedChart<'ctx>, ctx: &'ctx Ctx<'ctx>) {
+fn _debug_trimmed_chart<'ctx>(trimmed: &TrimmedChart<'ctx>) {
     let mut trimmed: Vec<_> = trimmed.iter().collect();
     trimmed.sort_by_key(|(key, _)| *key);
 

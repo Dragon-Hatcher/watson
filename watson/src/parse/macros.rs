@@ -20,7 +20,7 @@ impl<'ctx> Macros<'ctx> {
         }
     }
 
-    pub fn get_by_name(&self, name: Ustr) -> Option<MacroId<'ctx>> {
+    pub fn _get_by_name(&self, name: Ustr) -> Option<MacroId<'ctx>> {
         self.macros.get(name)
     }
 
@@ -54,25 +54,25 @@ impl<'ctx> Macro<'ctx> {
         }
     }
 
-    pub fn name(&self) -> Ustr {
+    pub fn _name(&self) -> Ustr {
         self.name
     }
 
-    pub fn cat(&self) -> CategoryId {
+    pub fn _cat(&self) -> CategoryId<'ctx> {
         self.cat
     }
 
-    pub fn pat(&self) -> &MacroPat {
+    pub fn pat(&self) -> &MacroPat<'ctx> {
         &self.pat
     }
 
-    pub fn replacement(&self) -> ParseTreeId {
+    pub fn replacement(&self) -> ParseTreeId<'ctx> {
         self.replacement
     }
 
     pub fn collect_macro_bindings(
         &self,
-        tree: &'ctx ParseTreeChildren<'ctx>,
+        tree: &ParseTreeChildren<'ctx>,
     ) -> FxHashMap<Ustr, ParseTreeId<'ctx>> {
         let mut map = FxHashMap::default();
         for (&name, &idx) in self.pat.keys() {
@@ -85,7 +85,7 @@ impl<'ctx> Macro<'ctx> {
 pub fn do_macro_replacement<'ctx>(
     replace_in: ParseTreeId<'ctx>,
     bindings: &FxHashMap<Ustr, ParseTreeId<'ctx>>,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &mut Ctx<'ctx>,
 ) -> ParseTreeId<'ctx> {
     let mut new_possibilities = Vec::new();
 
@@ -119,7 +119,7 @@ pub fn do_macro_replacement<'ctx>(
     }
 
     let new_tree = ParseTree::new(replace_in.span(), replace_in.cat(), new_possibilities);
-    ctx.parse_forest.intern(new_tree)
+    ctx.arenas.parse_forest.intern(new_tree)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -133,7 +133,7 @@ impl<'ctx> MacroPat<'ctx> {
         Self { parts, keys }
     }
 
-    pub fn parts(&self) -> &[RulePatternPart] {
+    pub fn parts(&self) -> &[RulePatternPart<'ctx>] {
         &self.parts
     }
 
@@ -141,7 +141,7 @@ impl<'ctx> MacroPat<'ctx> {
         &self.keys
     }
 
-    pub fn to_parse_rule(&self) -> RulePattern {
+    pub fn to_parse_rule(&self) -> RulePattern<'ctx> {
         RulePattern::new(self.parts.clone())
     }
 }

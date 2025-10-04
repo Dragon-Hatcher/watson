@@ -8,13 +8,12 @@ use crate::{
         elaborator::{elaborate_maybe_shorthand_args, elaborate_name, reduce_to_builtin},
         macros::do_macro_replacement,
         parse_state::{ParseRuleSource, SyntaxCategorySource},
-        parse_tree::{_debug_parse_tree, ParseTreeId},
+        parse_tree::ParseTreeId,
     },
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart},
         fragment::{
-            _debug_fragment, FragData, FragPart, FragRuleApplication, FragTemplateRef, Fragment,
-            FragmentId,
+            FragData, FragPart, FragRuleApplication, FragTemplateRef, Fragment, FragmentId,
         },
         theorems::{Fact, Template},
     },
@@ -77,9 +76,9 @@ impl<'ctx> NameCtx<'ctx> {
 pub fn parse_fact<'ctx>(
     fact: UnresolvedFact<'ctx>,
     names: &mut NameCtx<'ctx>,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &mut Ctx<'ctx>,
 ) -> WResult<Fact<'ctx>> {
-    let sentence_cat = ctx.formal_syntax.sentence_cat();
+    let sentence_cat = ctx.sentence_formal_cat;
 
     let assumption = if let Some(assumption_tree) = fact.assumption {
         Some(parse_fragment(assumption_tree, sentence_cat, names, ctx)?)
@@ -95,7 +94,7 @@ pub fn parse_any_fragment<'ctx>(
     tree: ParseTreeId<'ctx>,
     expected_cat: FormalSyntaxCatId<'ctx>,
     names: &mut NameCtx<'ctx>,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &mut Ctx<'ctx>,
 ) -> WResult<FragmentId<'ctx>> {
     let Some(frag) = maybe_parse_any_fragment(tree, expected_cat, names, ctx)? else {
         // TODO: actual error message
@@ -109,7 +108,7 @@ pub fn parse_fragment<'ctx>(
     tree: ParseTreeId<'ctx>,
     expected_cat: FormalSyntaxCatId<'ctx>,
     names: &mut NameCtx<'ctx>,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &mut Ctx<'ctx>,
 ) -> WResult<FragmentId<'ctx>> {
     let Some(frag) = maybe_parse_fragment(tree, expected_cat, names, ctx)? else {
         // TODO: actual error message
@@ -123,7 +122,7 @@ fn maybe_parse_any_fragment<'ctx>(
     tree: ParseTreeId<'ctx>,
     expected_cat: FormalSyntaxCatId<'ctx>,
     names: &mut NameCtx<'ctx>,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &mut Ctx<'ctx>,
 ) -> WResult<Option<FragmentId<'ctx>>> {
     debug_assert!(tree.cat() == ctx.builtin_cats.any_fragment);
 
@@ -135,12 +134,12 @@ fn maybe_parse_any_fragment<'ctx>(
         // a single node of a formal fragment.
         let frag = possibility.children()[0].as_node().unwrap();
 
-        let SyntaxCategorySource::FormalLang(formal_cat) = frag.cat().source() else {
+        let SyntaxCategorySource::FormalLang(formal_cat) = frag.cat().0.source() else {
             panic!("Expected formal syntax category");
         };
 
         // This isn't the right formal category.
-        if *formal_cat != expected_cat {
+        if formal_cat != expected_cat {
             continue;
         }
 
@@ -159,7 +158,7 @@ fn maybe_parse_fragment<'ctx>(
     tree: ParseTreeId<'ctx>,
     expected_cat: FormalSyntaxCatId<'ctx>,
     names: &mut NameCtx<'ctx>,
-    ctx: &'ctx Ctx<'ctx>,
+    ctx: &mut Ctx<'ctx>,
 ) -> WResult<Option<FragmentId<'ctx>>> {
     debug_assert!(matches!(
         tree.cat().source(),
@@ -200,7 +199,7 @@ fn maybe_parse_fragment<'ctx>(
 
                     let frag_data = FragData::Hole(hole);
                     let frag = Fragment::new(expected_cat, frag_data);
-                    let frag_id = ctx.fragments.get_or_insert(frag);
+                    let frag_id = ctx.arenas.fragments.intern(frag);
                     successful_fragments.push(frag_id);
                     continue;
                 } else if let Some(replacement) = names.shorthands.get(&name) {
@@ -250,7 +249,7 @@ fn maybe_parse_fragment<'ctx>(
                     if template_success {
                         let frag_data = FragData::Template(FragTemplateRef::new(name, arg_frags));
                         let frag = Fragment::new(template_cat, frag_data);
-                        let frag_id = ctx.fragments.get_or_insert(frag);
+                        let frag_id = ctx.arenas.fragments.intern(frag);
                         successful_fragments.push(frag_id);
                     }
                 } else {
@@ -330,7 +329,7 @@ fn maybe_parse_fragment<'ctx>(
                         binding_count,
                     ));
                     let frag = Fragment::new(formal_rule.cat(), frag_data);
-                    let frag_id = ctx.fragments.get_or_insert(frag);
+                    let frag_id = ctx.arenas.fragments.intern(frag);
                     successful_fragments.push(frag_id);
                 }
 

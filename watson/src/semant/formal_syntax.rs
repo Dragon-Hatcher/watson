@@ -1,46 +1,31 @@
-use std::ops::Index;
-
-use rustc_hash::FxHashMap;
-use slotmap::{SlotMap, new_key_type};
 use ustr::Ustr;
 
 use crate::{
     context::arena::NamedArena,
     declare_intern_handle,
     parse::parse_state::{Associativity, Precedence},
-    strings,
 };
 
 pub struct FormalSyntax<'ctx> {
     cats: NamedArena<FormalSyntaxCat, FormalSyntaxCatId<'ctx>>,
     rules: NamedArena<FormalSyntaxRule<'ctx>, FormalSyntaxRuleId<'ctx>>,
-    sentence_cat: FormalSyntaxCatId<'ctx>,
 }
 
 impl<'ctx> FormalSyntax<'ctx> {
     pub fn new() -> Self {
-        let cats = NamedArena::new();
-        let sentence_cat = FormalSyntaxCat::new(*strings::SENTENCE);
-        let sentence_cat = cats.alloc(sentence_cat.name, sentence_cat);
-
         Self {
-            cats,
+            cats: NamedArena::new(),
             rules: NamedArena::new(),
-            sentence_cat,
         }
     }
 
-    pub fn add_cat(&'ctx self, cat: FormalSyntaxCat) -> FormalSyntaxCatId {
+    pub fn add_cat(&'ctx self, cat: FormalSyntaxCat) -> FormalSyntaxCatId<'ctx> {
         assert!(self.cats.get(cat.name).is_none());
         self.cats.alloc(cat.name, cat)
     }
 
-    pub fn cat_by_name(&self, name: Ustr) -> Option<FormalSyntaxCatId> {
+    pub fn cat_by_name(&self, name: Ustr) -> Option<FormalSyntaxCatId<'ctx>> {
         self.cats.get(name)
-    }
-
-    pub fn sentence_cat(&self) -> FormalSyntaxCatId {
-        self.sentence_cat
     }
 
     pub fn add_rule(&'ctx self, rule: FormalSyntaxRule<'ctx>) -> FormalSyntaxRuleId<'ctx> {
@@ -48,7 +33,7 @@ impl<'ctx> FormalSyntax<'ctx> {
         self.rules.alloc(rule.name, rule)
     }
 
-    pub fn rule_by_name(&self, name: Ustr) -> Option<FormalSyntaxRuleId> {
+    pub fn rule_by_name(&self, name: Ustr) -> Option<FormalSyntaxRuleId<'ctx>> {
         self.rules.get(name)
     }
 }
@@ -66,7 +51,7 @@ impl FormalSyntaxCat {
         Self { name }
     }
 
-    pub fn name(&self) -> Ustr {
+    pub fn _name(&self) -> Ustr {
         self.name
     }
 }
@@ -83,15 +68,15 @@ impl<'ctx> FormalSyntaxRule<'ctx> {
         Self { name, cat, pat }
     }
 
-    pub fn name(&self) -> Ustr {
+    pub fn _name(&self) -> Ustr {
         self.name
     }
 
-    pub fn cat(&self) -> FormalSyntaxCatId {
+    pub fn cat(&self) -> FormalSyntaxCatId<'ctx> {
         self.cat
     }
 
-    pub fn pattern(&self) -> &FormalSyntaxPat {
+    pub fn pattern(&self) -> &FormalSyntaxPat<'ctx> {
         &self.pat
     }
 }
@@ -112,7 +97,7 @@ impl<'ctx> FormalSyntaxPat<'ctx> {
         }
     }
 
-    pub fn parts(&self) -> &[FormalSyntaxPatPart] {
+    pub fn parts(&self) -> &[FormalSyntaxPatPart<'ctx>] {
         &self.parts
     }
 }

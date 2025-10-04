@@ -1,8 +1,8 @@
 use crate::{
-    context::Ctx,
+    context::{Arenas, Ctx},
     parse::{SourceCache, SourceId, parse, source_cache::SourceDecl},
-    report::display_report,
-    semant::check_proof::check_proofs,
+    report::{ProofReport, display_report},
+    semant::{check_circularity::find_circular_dependency_groups, check_proof::check_proofs},
 };
 use std::path::Path;
 use ustr::Ustr;
@@ -20,10 +20,11 @@ fn main() {
     let root_file = Path::new(&root_file);
 
     let (source_cache, root_id) = make_source_cache(root_file);
-    let ctx = Ctx::new(source_cache);
+    let arenas = Arenas::new();
+    let mut ctx = Ctx::new(source_cache, &arenas);
 
-    compile(root_id, &ctx);
-    display_report(&ctx);
+    let report = compile(root_id, &mut ctx);
+    display_report(&report);
 
     if ctx.diags.has_errors() {
         ctx.diags.print_errors(&ctx);
@@ -34,7 +35,7 @@ fn main() {
 fn make_source_cache(root_file: &Path) -> (SourceCache, SourceId) {
     let root_dir = root_file.parent().unwrap().to_path_buf();
     let root_dir = root_dir.canonicalize().unwrap();
-    let mut source_cache = SourceCache::new(root_dir);
+    let source_cache = SourceCache::new(root_dir);
 
     let text = std::fs::read_to_string(root_file).unwrap();
     let root_id = Ustr::from(&root_file.file_stem().unwrap().to_string_lossy());
@@ -44,8 +45,13 @@ fn make_source_cache(root_file: &Path) -> (SourceCache, SourceId) {
     (source_cache, root_id)
 }
 
-fn compile<'ctx>(root: SourceId, ctx: &'ctx Ctx<'ctx>) {
-    parse(root, ctx);
-    check_proofs(ctx);
-    ctx.proof_statuses.recompute_circular_dependencies();
+fn compile<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> ProofReport<'ctx> {
+    let theorems = parse(root, ctx);
+    let statuses = check_proofs(&theorems, ctx);
+    let circularities = find_circular_dependency_groups(&statuses);
+
+    ProofReport {
+        statuses,
+        circularities,
+    }
 }

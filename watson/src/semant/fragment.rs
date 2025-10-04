@@ -1,5 +1,3 @@
-use std::ops::Index;
-
 use crate::{
     context::{Ctx, arena::InternedArena},
     declare_intern_handle,
@@ -8,8 +6,6 @@ use crate::{
         theorems::Fact,
     },
 };
-use rustc_hash::FxHashMap;
-use slotmap::{SlotMap, new_key_type};
 use ustr::Ustr;
 
 pub struct FragmentForest<'ctx> {
@@ -23,7 +19,7 @@ impl<'ctx> FragmentForest<'ctx> {
         }
     }
 
-    pub fn get_or_insert(&'ctx self, frag: Fragment<'ctx>) -> FragmentId<'ctx> {
+    pub fn intern(&'ctx self, frag: Fragment<'ctx>) -> FragmentId<'ctx> {
         self.fragments.intern(frag)
     }
 }
@@ -111,7 +107,7 @@ impl<'ctx> FragTemplateRef<'ctx> {
         self.name
     }
 
-    pub fn args(&self) -> &[FragmentId] {
+    pub fn args(&self) -> &[FragmentId<'ctx>] {
         &self.args
     }
 }

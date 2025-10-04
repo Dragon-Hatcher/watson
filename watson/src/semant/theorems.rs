@@ -4,10 +4,7 @@ use crate::{
     context::arena::NamedArena,
     declare_intern_handle,
     parse::parse_tree::ParseTreeId,
-    semant::{
-        formal_syntax::FormalSyntaxCatId,
-        fragment::{_debug_fragment, FragmentId},
-    },
+    semant::{formal_syntax::FormalSyntaxCatId, fragment::FragmentId},
 };
 
 pub struct TheoremStatements<'ctx> {
@@ -26,7 +23,7 @@ impl<'ctx> TheoremStatements<'ctx> {
         self.theorems.alloc(statement.name, statement)
     }
 
-    pub fn get(&self, name: Ustr) -> Option<TheoremId> {
+    pub fn get(&self, name: Ustr) -> Option<TheoremId<'ctx>> {
         self.theorems.get(name)
     }
 }
@@ -106,11 +103,11 @@ impl<'ctx> Template<'ctx> {
         self.name
     }
 
-    pub fn cat(&self) -> FormalSyntaxCatId {
+    pub fn cat(&self) -> FormalSyntaxCatId<'ctx> {
         self.cat
     }
 
-    pub fn params(&self) -> &[FormalSyntaxCatId] {
+    pub fn params(&self) -> &[FormalSyntaxCatId<'ctx>] {
         &self.params
     }
 }
@@ -136,37 +133,4 @@ impl<'ctx> Fact<'ctx> {
     pub fn conclusion(&self) -> FragmentId<'ctx> {
         self.conclusion
     }
-}
-
-pub fn _debug_theorem_statement(id: TheoremId, stmt: &TheoremStatement, ctx: &crate::Ctx) {
-    println!("Theorem {}:", id.name());
-    for template in stmt.templates() {
-        if template.params().is_empty() {
-            println!("  [{} : {}]", template.name(), template.cat().name(),);
-        } else {
-            println!(
-                "  [{}({}) : {}]",
-                template.name(),
-                template
-                    .params()
-                    .iter()
-                    .map(|cat| cat.name().as_str())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                template.cat().name(),
-            );
-        }
-    }
-    for fact in stmt.hypotheses() {
-        if let Some(assump) = fact.assumption() {
-            println!(
-                "  (assume {} |- {})",
-                _debug_fragment(assump, ctx),
-                _debug_fragment(fact.conclusion(), ctx)
-            );
-        } else {
-            println!("  ({})", _debug_fragment(fact.conclusion(), ctx));
-        }
-    }
-    println!("  |- {}", _debug_fragment(stmt.conclusion(), ctx));
 }

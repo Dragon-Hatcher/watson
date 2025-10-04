@@ -2,12 +2,11 @@ use std::ops::Index;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::semant::{check_circularity::find_circular_dependency_groups, theorems::TheoremId};
+use crate::semant::theorems::TheoremId;
 
 #[derive(Debug)]
 pub struct ProofStatuses<'ctx> {
     statuses: FxHashMap<TheoremId<'ctx>, ProofStatus<'ctx>>,
-    circulars: Vec<Vec<TheoremId<'ctx>>>,
     theorem_cnt: usize,
     axiom_cnt: usize,
     correct_cnt: usize,
@@ -18,7 +17,6 @@ impl<'ctx> ProofStatuses<'ctx> {
     pub fn new() -> Self {
         Self {
             statuses: FxHashMap::default(),
-            circulars: Vec::new(),
             theorem_cnt: 0,
             axiom_cnt: 0,
             correct_cnt: 0,
@@ -32,10 +30,6 @@ impl<'ctx> ProofStatuses<'ctx> {
         self.correct_cnt += status.correct as usize;
         self.todo_cnt += status.todo_used as usize;
         self.statuses.insert(theorem, status);
-    }
-
-    pub fn recompute_circular_dependencies(&mut self) {
-        self.circulars = find_circular_dependency_groups(self);
     }
 
     pub fn total_cnt(&self) -> usize {
@@ -62,12 +56,8 @@ impl<'ctx> ProofStatuses<'ctx> {
         self.total_cnt() - self.correct_cnt()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&TheoremId, &ProofStatus)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&TheoremId<'ctx>, &ProofStatus<'ctx>)> {
         self.statuses.iter()
-    }
-
-    pub fn circular_dependencies(&self) -> &[Vec<TheoremId>] {
-        &self.circulars
     }
 }
 
@@ -110,19 +100,19 @@ impl<'ctx> ProofStatus<'ctx> {
         }
     }
 
-    pub fn correct(&self) -> bool {
+    pub fn _correct(&self) -> bool {
         self.correct
     }
 
-    pub fn todo_used(&self) -> bool {
+    pub fn _todo_used(&self) -> bool {
         self.todo_used
     }
 
-    pub fn is_axiom(&self) -> bool {
+    pub fn _is_axiom(&self) -> bool {
         self.is_axiom
     }
 
-    pub fn theorems_used(&self) -> &FxHashSet<TheoremId> {
+    pub fn theorems_used(&self) -> &FxHashSet<TheoremId<'ctx>> {
         &self.theorems_used
     }
 }

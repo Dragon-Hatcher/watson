@@ -1,5 +1,4 @@
 use crate::{
-    context::Ctx,
     generate_arena_handle,
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
@@ -96,23 +95,23 @@ impl<'ctx> FragTemplateRef<'ctx> {
     }
 }
 
-pub fn _debug_fact(fact: Fact, ctx: &Ctx) -> String {
+pub fn _debug_fact(fact: Fact) -> String {
     if let Some(assumption) = fact.assumption() {
         format!(
             "assume {} |- {}",
-            _debug_fragment(assumption, ctx),
-            _debug_fragment(fact.conclusion(), ctx)
+            _debug_fragment(assumption),
+            _debug_fragment(fact.conclusion())
         )
     } else {
-        _debug_fragment(fact.conclusion(), ctx)
+        _debug_fragment(fact.conclusion())
     }
 }
 
-pub fn _debug_fragment(frag: FragmentId, ctx: &Ctx) -> String {
-    fn recurse(frag: FragmentId, ctx: &Ctx, mut bound_count: usize) -> String {
-        fn print_part(part: &FragPart, ctx: &Ctx, bound_count: usize) -> String {
+pub fn _debug_fragment(frag: FragmentId) -> String {
+    fn recurse(frag: FragmentId, mut bound_count: usize) -> String {
+        fn print_part(part: &FragPart, bound_count: usize) -> String {
             match part {
-                FragPart::Fragment(frag) => recurse(*frag, ctx, bound_count),
+                FragPart::Fragment(frag) => recurse(*frag, bound_count),
                 FragPart::Variable(_cat, idx) => {
                     format!("?{}", bound_count - idx - 1)
                 }
@@ -145,7 +144,7 @@ pub fn _debug_fragment(frag: FragmentId, ctx: &Ctx) -> String {
                             bind_offset += 1;
                         }
                         FormalSyntaxPatPart::Cat(_) | FormalSyntaxPatPart::Var(_) => {
-                            let part = print_part(&rule_app.children[child_idx], ctx, bound_count);
+                            let part = print_part(&rule_app.children[child_idx], bound_count);
                             str.push_str(&part);
                             str.push(' ');
 
@@ -178,7 +177,7 @@ pub fn _debug_fragment(frag: FragmentId, ctx: &Ctx) -> String {
                         template
                             .args
                             .iter()
-                            .map(|arg| recurse(*arg, ctx, bound_count))
+                            .map(|arg| recurse(*arg, bound_count))
                             .collect::<Vec<_>>()
                             .join(", ")
                     )
@@ -188,5 +187,5 @@ pub fn _debug_fragment(frag: FragmentId, ctx: &Ctx) -> String {
         }
     }
 
-    recurse(frag, ctx, 0)
+    recurse(frag, 0)
 }

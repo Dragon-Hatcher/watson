@@ -40,11 +40,29 @@ pub struct ProofState<'ctx> {
     goal: FragmentId<'ctx>,
     templates: FxHashMap<Ustr, Template<'ctx>>,
     shorthands: FxHashMap<Ustr, FragmentId<'ctx>>,
+
+    reasoning_chain: Vec<ReasoningStep<'ctx>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReasoningStep<'ctx> {
+    Hypothesis(Fact<'ctx>),
+    Deduce(Fact<'ctx>),
+    Assume(Fact<'ctx>),
+    _Shorthand(Ustr, FragmentId<'ctx>),
 }
 
 impl<'ctx> ProofState<'ctx> {
     fn name_ctx<'a>(&'a self) -> NameCtx<'ctx, 'a> {
         NameCtx::new(&self.templates, &self.shorthands)
+    }
+
+    pub fn reasoning_chain(&self) -> &[ReasoningStep<'ctx>] {
+        &self.reasoning_chain
+    }
+
+    pub fn goal(&self) -> FragmentId<'ctx> {
+        self.goal
     }
 }
 
@@ -60,6 +78,11 @@ fn check_proof<'ctx>(
     };
     let start_state = ctx.arenas.proof_states.alloc(ProofState {
         knowns: theorem_smt.hypotheses().iter().cloned().collect(),
+        reasoning_chain: theorem_smt
+            .hypotheses()
+            .iter()
+            .map(|h| ReasoningStep::Hypothesis(*h))
+            .collect(),
         goal: theorem_smt.conclusion(),
         templates: theorem_smt
             .templates()
@@ -81,10 +104,8 @@ fn check_proof<'ctx>(
             UnresolvedTactic::None => {
                 let goal_fact = Fact::new(None, state.goal);
                 if !state.knowns.contains(&goal_fact) {
-                    eprintln!(
-                        "[{}] Proof incorrect from missing goal.",
-                        theorem_smt.name()
-                    );
+                    ctx.diags
+                        .err_missing_goal((theorem_smt, state), proof.span());
                     proof_correct = false;
                 }
             }
@@ -111,6 +132,9 @@ fn check_proof<'ctx>(
 
                     let assumption_fact = Fact::new(None, assumption);
                     sub_state.knowns.insert(assumption_fact);
+                    sub_state
+                        .reasoning_chain
+                        .push(ReasoningStep::Assume(assumption_fact));
                     Some(assumption)
                 } else {
                     None
@@ -138,6 +162,9 @@ fn check_proof<'ctx>(
 
                 let mut state = state.0.clone();
                 state.knowns.insert(conclusion_fact);
+                state
+                    .reasoning_chain
+                    .push(ReasoningStep::Deduce(conclusion_fact));
                 let state = ctx.arenas.proof_states.alloc(state);
                 proof_states.push((state, tactic.continuation));
             }
@@ -219,11 +246,11 @@ fn check_proof<'ctx>(
                     let instantiated = instantiate_fact_with_templates(hypothesis, &templates, ctx);
 
                     if !state.knowns.contains(&instantiated) {
-                        dbg!(_debug_fragment(theorem.conclusion(), ctx));
+                        dbg!(_debug_fragment(theorem.conclusion()));
                         eprintln!(
                             "[{}] Proof incorrect from missing hypothesis {}.",
                             theorem_smt.name(),
-                            _debug_fact(instantiated, ctx)
+                            _debug_fact(instantiated)
                         );
                         proof_correct = false;
                         // TODO: error message.
@@ -237,8 +264,8 @@ fn check_proof<'ctx>(
                     eprintln!(
                         "[{}] Proof incorrect from theorem {} mismatch goal {}.",
                         theorem_smt.name(),
-                        _debug_fragment(conclusion, ctx),
-                        _debug_fragment(state.goal, ctx),
+                        _debug_fragment(conclusion),
+                        _debug_fragment(state.goal),
                     );
                     proof_correct = false;
                     // TODO: error message.

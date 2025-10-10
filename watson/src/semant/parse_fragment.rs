@@ -66,10 +66,6 @@ impl<'ctx, 'a> NameCtx<'ctx, 'a> {
     pub fn add_hole(&mut self, cat: FormalSyntaxCatId<'ctx>) {
         self.holes.push(cat);
     }
-
-    pub fn clear_holes(&mut self) {
-        self.holes.clear();
-    }
 }
 
 pub fn parse_fact<'ctx>(

@@ -28,7 +28,7 @@ impl<'ctx> ProofStatuses<'ctx> {
         self.theorem_cnt += !status.is_axiom as usize;
         self.axiom_cnt += status.is_axiom as usize;
         self.correct_cnt += status.correct as usize;
-        self.todo_cnt += status.todo_used as usize;
+        self.todo_cnt += (status.correct && status.todo_used) as usize;
         self.statuses.insert(theorem, status);
     }
 

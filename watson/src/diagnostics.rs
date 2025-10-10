@@ -2,6 +2,8 @@ use crate::context::Ctx;
 use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
+use crate::semant::check_proof::{ProofStateKey, ReasoningStep};
+use crate::semant::fragment::{_debug_fact, _debug_fragment};
 use crate::semant::theorems::TheoremId;
 use crate::util::plural;
 use annotate_snippets::{Level, Message, Renderer, Snippet};
@@ -24,8 +26,8 @@ impl<'ctx> DiagManager<'ctx> {
         let renderer = Renderer::styled();
         for diag in &self.diags {
             let msg = diag.to_message(&ctx.sources);
-            println!("{}", renderer.render(msg));
             println!();
+            println!("{}", renderer.render(msg));
         }
     }
 
@@ -37,7 +39,21 @@ impl<'ctx> DiagManager<'ctx> {
 struct Diagnostic<'ctx> {
     title: &'static str,
     parts: Vec<DiagnosticPart>,
-    theorem: Option<TheoremId<'ctx>>,
+    in_proof: Option<InProof<'ctx>>,
+}
+
+pub struct InProof<'ctx> {
+    theorem: TheoremId<'ctx>,
+    proof_state: ProofStateKey<'ctx>,
+}
+
+impl<'ctx> From<(TheoremId<'ctx>, ProofStateKey<'ctx>)> for InProof<'ctx> {
+    fn from(value: (TheoremId<'ctx>, ProofStateKey<'ctx>)) -> Self {
+        Self {
+            theorem: value.0,
+            proof_state: value.1,
+        }
+    }
 }
 
 enum DiagnosticPart {
@@ -60,12 +76,12 @@ impl<'ctx> Diagnostic<'ctx> {
         Self {
             title,
             parts: Vec::new(),
-            theorem: None,
+            in_proof: None,
         }
     }
 
-    fn for_theorem(mut self, theorem: TheoremId<'ctx>) -> Self {
-        self.theorem = Some(theorem);
+    fn in_proof(mut self, in_proof: InProof<'ctx>) -> Self {
+        self.in_proof = Some(in_proof);
         self
     }
 
@@ -103,8 +119,46 @@ impl<'ctx> Diagnostic<'ctx> {
             msg = msg.snippet(snippet);
         }
 
+        if let Some(in_proof) = &self.in_proof {
+            let title = format!("While checking theorem `{}`", in_proof.theorem.name());
+            let title = Ustr::from(&title);
+            msg = msg.footer(Level::Help.title(title.as_str()));
+
+            let title = render_proof_state(in_proof.proof_state);
+            let title = Ustr::from(&title);
+            msg = msg.footer(Level::Help.title(title.as_str()));
+        }
+
         msg
     }
+}
+
+fn render_proof_state<'ctx>(state: ProofStateKey<'ctx>) -> String {
+    let mut res = String::new();
+
+    res += "Proof state:\n";
+
+    for &step in state.reasoning_chain() {
+        res += "  ";
+
+        match step {
+            ReasoningStep::Hypothesis(fact) => res += &_debug_fact(fact),
+            ReasoningStep::Deduce(fact) => res += &_debug_fact(fact),
+            ReasoningStep::Assume(fact) => res += &_debug_fact(fact),
+            ReasoningStep::_Shorthand(name, frag) => {
+                res += &name;
+                res += " := ";
+                res += &_debug_fragment(frag);
+            }
+        }
+
+        res += "\n";
+    }
+
+    res += "|- ";
+    res += &_debug_fragment(state.goal());
+
+    res
 }
 
 impl<'ctx> DiagManager<'ctx> {
@@ -277,7 +331,16 @@ impl<'ctx> DiagManager<'ctx> {
         self.add_diag(diag);
     }
 
-    pub fn err_missing_goal(&mut self, theorem: TheoremId<'ctx>) {}
+    pub fn err_missing_goal(&mut self, in_proof: impl Into<InProof<'ctx>>, at: Span) {
+        let in_proof = in_proof.into();
+        let goal_txt = _debug_fragment(in_proof.proof_state.goal());
+
+        let diag = Diagnostic::new(&format!("missing goal `{goal_txt}`"))
+            .with_error("goal unproved at end of section", at)
+            .in_proof(in_proof);
+
+        self.add_diag(diag);
+    }
 }
 
 // impl DiagManager {

@@ -1,6 +1,6 @@
 use crate::{
-    context::{Ctx, arena::InternedArena},
-    declare_intern_handle,
+    context::Ctx,
+    generate_arena_handle,
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
         theorems::Fact,
@@ -8,23 +8,7 @@ use crate::{
 };
 use ustr::Ustr;
 
-pub struct FragmentForest<'ctx> {
-    fragments: InternedArena<Fragment<'ctx>, FragmentId<'ctx>>,
-}
-
-impl<'ctx> FragmentForest<'ctx> {
-    pub fn new() -> Self {
-        Self {
-            fragments: InternedArena::new(),
-        }
-    }
-
-    pub fn intern(&'ctx self, frag: Fragment<'ctx>) -> FragmentId<'ctx> {
-        self.fragments.intern(frag)
-    }
-}
-
-declare_intern_handle! { FragmentId<'ctx> => Fragment<'ctx> }
+generate_arena_handle! { FragmentId<'ctx> => Fragment<'ctx> }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Fragment<'ctx> {

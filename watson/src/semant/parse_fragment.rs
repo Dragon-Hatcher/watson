@@ -42,26 +42,25 @@ impl<'ctx> UnresolvedFact<'ctx> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct NameCtx<'ctx> {
-    templates: FxHashMap<Ustr, Template<'ctx>>,
-    shorthands: FxHashMap<Ustr, FragmentId<'ctx>>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NameCtx<'ctx, 'a> {
+    templates: &'a FxHashMap<Ustr, Template<'ctx>>,
+    shorthands: &'a FxHashMap<Ustr, FragmentId<'ctx>>,
     bindings: Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
     holes: Vec<FormalSyntaxCatId<'ctx>>,
 }
 
-impl<'ctx> NameCtx<'ctx> {
-    pub fn new() -> Self {
+impl<'ctx, 'a> NameCtx<'ctx, 'a> {
+    pub fn new(
+        templates: &'a FxHashMap<Ustr, Template<'ctx>>,
+        shorthands: &'a FxHashMap<Ustr, FragmentId<'ctx>>,
+    ) -> Self {
         Self {
-            templates: FxHashMap::default(),
-            shorthands: FxHashMap::default(),
+            templates,
+            shorthands,
             bindings: Vec::new(),
             holes: Vec::new(),
         }
-    }
-
-    pub fn add_template(&mut self, name: Ustr, template: Template<'ctx>) {
-        self.templates.insert(name, template);
     }
 
     pub fn add_hole(&mut self, cat: FormalSyntaxCatId<'ctx>) {
@@ -75,7 +74,7 @@ impl<'ctx> NameCtx<'ctx> {
 
 pub fn parse_fact<'ctx>(
     fact: UnresolvedFact<'ctx>,
-    names: &mut NameCtx<'ctx>,
+    names: &mut NameCtx<'ctx, '_>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<Fact<'ctx>> {
     let sentence_cat = ctx.sentence_formal_cat;
@@ -93,7 +92,7 @@ pub fn parse_fact<'ctx>(
 pub fn parse_any_fragment<'ctx>(
     tree: ParseTreeId<'ctx>,
     expected_cat: FormalSyntaxCatId<'ctx>,
-    names: &mut NameCtx<'ctx>,
+    names: &mut NameCtx<'ctx, '_>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<FragmentId<'ctx>> {
     let Some(frag) = maybe_parse_any_fragment(tree, expected_cat, names, ctx)? else {
@@ -107,7 +106,7 @@ pub fn parse_any_fragment<'ctx>(
 pub fn parse_fragment<'ctx>(
     tree: ParseTreeId<'ctx>,
     expected_cat: FormalSyntaxCatId<'ctx>,
-    names: &mut NameCtx<'ctx>,
+    names: &mut NameCtx<'ctx, '_>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<FragmentId<'ctx>> {
     let Some(frag) = maybe_parse_fragment(tree, expected_cat, names, ctx)? else {
@@ -121,7 +120,7 @@ pub fn parse_fragment<'ctx>(
 fn maybe_parse_any_fragment<'ctx>(
     tree: ParseTreeId<'ctx>,
     expected_cat: FormalSyntaxCatId<'ctx>,
-    names: &mut NameCtx<'ctx>,
+    names: &mut NameCtx<'ctx, '_>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<Option<FragmentId<'ctx>>> {
     debug_assert!(tree.cat() == ctx.builtin_cats.any_fragment);
@@ -157,7 +156,7 @@ fn maybe_parse_any_fragment<'ctx>(
 fn maybe_parse_fragment<'ctx>(
     tree: ParseTreeId<'ctx>,
     expected_cat: FormalSyntaxCatId<'ctx>,
-    names: &mut NameCtx<'ctx>,
+    names: &mut NameCtx<'ctx, '_>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<Option<FragmentId<'ctx>>> {
     debug_assert!(matches!(

@@ -1,6 +1,6 @@
 use crate::{
-    context::{Ctx, arena::NamedArena},
-    declare_intern_handle,
+    context::Ctx,
+    generate_arena_handle,
     parse::{
         parse_state::{CategoryId, RulePattern, RulePatternPart},
         parse_tree::{ParseTree, ParseTreeChildren, ParseTreeId, ParseTreePart},
@@ -9,27 +9,7 @@ use crate::{
 use rustc_hash::FxHashMap;
 use ustr::Ustr;
 
-pub struct Macros<'ctx> {
-    macros: NamedArena<Macro<'ctx>, MacroId<'ctx>>,
-}
-
-impl<'ctx> Macros<'ctx> {
-    pub fn new() -> Self {
-        Self {
-            macros: NamedArena::new(),
-        }
-    }
-
-    pub fn _get_by_name(&self, name: Ustr) -> Option<MacroId<'ctx>> {
-        self.macros.get(name)
-    }
-
-    pub fn add_macro(&'ctx self, mac: Macro<'ctx>) -> MacroId<'ctx> {
-        self.macros.alloc(mac.name, mac)
-    }
-}
-
-declare_intern_handle!(MacroId<'ctx> => Macro<'ctx>);
+generate_arena_handle!(MacroId<'ctx> => Macro<'ctx>);
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Macro<'ctx> {

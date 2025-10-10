@@ -1,8 +1,11 @@
 use crate::{
-    context::Ctx,
+    context::{
+        Ctx,
+        arena::{NamedArena, PlainArena},
+    },
     parse::parse_state::{
-        CategoryId, ParseAtomPattern, ParseRuleSource, ParseRules, ParseState, Rule, RulePattern,
-        RulePatternPart,
+        Category, CategoryId, ParseAtomPattern, ParseRuleSource, ParseState, Rule, RuleId,
+        RulePattern, RulePatternPart, SyntaxCategorySource,
     },
     semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
     strings,
@@ -22,7 +25,9 @@ macro_rules! builtin_cats {
             ) -> Self {
                 Self {
                     $( $name: {
-                        let cat = arenas.parse_rules.add_builtin_cat(stringify!($name));
+                        let name = ustr::Ustr::from(stringify!($name));
+                        let cat = $crate::parse::parse_state::Category::new(name, $crate::parse::parse_state::SyntaxCategorySource::Builtin);
+                        let cat = arenas.parse_cats.alloc(name, cat);
                         state.use_cat(cat);
                         cat
                     }, )*
@@ -241,16 +246,21 @@ fn cat_template(cat: CategoryId) -> RulePatternPart {
 }
 
 pub fn add_builtin_rules<'ctx>(
-    rules: &'ctx ParseRules<'ctx>,
+    rules: &'ctx PlainArena<Rule<'ctx>, RuleId<'ctx>>,
+    categories: &'ctx NamedArena<Category<'ctx>, CategoryId<'ctx>>,
     state: &mut ParseState<'ctx>,
     formal_sentence_cat: FormalSyntaxCatId<'ctx>,
     cats: &BuiltinCats<'ctx>,
 ) -> BuiltinRules<'ctx> {
-    let sentence_cat = rules.add_formal_lang_cat(*strings::SENTENCE, formal_sentence_cat);
+    let sentence_cat = Category::new(
+        *strings::SENTENCE,
+        SyntaxCategorySource::FormalLang(formal_sentence_cat),
+    );
+    let sentence_cat = categories.alloc(*strings::SENTENCE, sentence_cat);
     state.use_cat(sentence_cat);
 
     let mut rule = |name: &str, cat, parts| {
-        let rule = rules.add_rule(Rule::new(
+        let rule = rules.alloc(Rule::new(
             name,
             cat,
             ParseRuleSource::Builtin,
@@ -610,7 +620,7 @@ pub fn add_builtin_rules<'ctx>(
 }
 
 pub fn add_builtin_syntax_for_cat<'ctx>(for_cat: CategoryId<'ctx>, ctx: &mut Ctx<'ctx>) {
-    let rule = ctx.arenas.parse_rules.add_rule(Rule::new(
+    let rule = ctx.arenas.parse_rules.alloc(Rule::new(
         "macro_replacement",
         ctx.builtin_cats.macro_replacement,
         ParseRuleSource::Builtin,
@@ -624,7 +634,7 @@ pub fn add_builtin_syntax_for_cat<'ctx>(for_cat: CategoryId<'ctx>, ctx: &mut Ctx
     ));
     ctx.parse_state.use_rule(rule);
 
-    let rule = ctx.arenas.parse_rules.add_rule(Rule::new(
+    let rule = ctx.arenas.parse_rules.alloc(Rule::new(
         "macro_binding",
         for_cat,
         ParseRuleSource::Builtin,
@@ -639,7 +649,7 @@ pub fn add_builtin_syntax_for_formal_cat<'ctx>(
 ) {
     let macro_cat = ctx.parse_state.cat_for_formal_cat(formal_cat);
 
-    let rule = ctx.arenas.parse_rules.add_rule(Rule::new(
+    let rule = ctx.arenas.parse_rules.alloc(Rule::new(
         "template_instantiation",
         macro_cat,
         ParseRuleSource::Builtin,
@@ -650,7 +660,7 @@ pub fn add_builtin_syntax_for_formal_cat<'ctx>(
     ));
     ctx.parse_state.use_rule(rule);
 
-    let rule = ctx.arenas.parse_rules.add_rule(Rule::new(
+    let rule = ctx.arenas.parse_rules.alloc(Rule::new(
         "any_fragment",
         ctx.builtin_cats.any_fragment,
         ParseRuleSource::Builtin,
@@ -687,6 +697,6 @@ pub fn add_formal_syntax_rule<'ctx>(rule: FormalSyntaxRuleId<'ctx>, ctx: &mut Ct
         parse_rule_pattern,
     );
 
-    let rule = ctx.arenas.parse_rules.add_rule(parse_rule);
+    let rule = ctx.arenas.parse_rules.alloc(parse_rule);
     ctx.parse_state.use_rule(rule);
 }

@@ -1,6 +1,5 @@
 use crate::{
-    context::arena::NamedArena,
-    declare_intern_handle,
+    generate_arena_handle,
     parse::macros::MacroId,
     semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
 };
@@ -130,56 +129,9 @@ impl<'ctx> ParseState<'ctx> {
     }
 }
 
-pub struct ParseRules<'ctx> {
-    categories: NamedArena<Category<'ctx>, CategoryId<'ctx>>,
-    rules: NamedArena<Rule<'ctx>, RuleId<'ctx>>,
-}
+generate_arena_handle!(CategoryId<'ctx> => Category<'ctx>);
 
-impl<'ctx> ParseRules<'ctx> {
-    pub fn new() -> Self {
-        Self {
-            categories: NamedArena::new(),
-            rules: NamedArena::new(),
-        }
-    }
-
-    fn add_cat(&'ctx self, cat: Category<'ctx>) -> CategoryId<'ctx> {
-        assert!(self.categories.get(cat.name).is_none());
-        self.categories.alloc(cat.name, cat)
-    }
-
-    pub fn add_builtin_cat(&'ctx self, name: impl AsRef<str>) -> CategoryId<'ctx> {
-        let cat = Category {
-            name: name.as_ref().into(),
-            source: SyntaxCategorySource::Builtin,
-        };
-        self.add_cat(cat)
-    }
-
-    pub fn add_formal_lang_cat(
-        &'ctx self,
-        name: Ustr,
-        source: FormalSyntaxCatId<'ctx>,
-    ) -> CategoryId<'ctx> {
-        let cat = Category {
-            name,
-            source: SyntaxCategorySource::FormalLang(source),
-        };
-        self.add_cat(cat)
-    }
-
-    pub fn add_rule(&'ctx self, rule: Rule<'ctx>) -> RuleId<'ctx> {
-        self.rules.alloc(rule.name, rule)
-    }
-
-    pub fn cat_by_name(&self, name: Ustr) -> Option<CategoryId<'ctx>> {
-        self.categories.get(name)
-    }
-}
-
-declare_intern_handle!(CategoryId<'ctx> => Category<'ctx>);
-
-declare_intern_handle!(RuleId<'ctx> => Rule<'ctx>);
+generate_arena_handle!(RuleId<'ctx> => Rule<'ctx>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Category<'ctx> {
@@ -188,6 +140,10 @@ pub struct Category<'ctx> {
 }
 
 impl<'ctx> Category<'ctx> {
+    pub fn new(name: Ustr, source: SyntaxCategorySource<'ctx>) -> Self {
+        Self { name, source }
+    }
+
     pub fn name(&self) -> Ustr {
         self.name
     }

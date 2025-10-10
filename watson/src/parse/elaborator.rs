@@ -8,7 +8,10 @@ use crate::{
         SourceId,
         grammar::{self, add_builtin_syntax_for_formal_cat},
         macros::{Macro, MacroPat, do_macro_replacement},
-        parse_state::{ParseAtomPattern, ParseRuleSource, Rule, RulePatternPart},
+        parse_state::{
+            Category, ParseAtomPattern, ParseRuleSource, Rule, RulePatternPart,
+            SyntaxCategorySource,
+        },
         parse_tree::{ParseTree, ParseTreeChildren, ParseTreeId, ParseTreePart},
         source_cache::{SourceDecl, source_id_to_path},
     },
@@ -137,12 +140,13 @@ fn elaborate_syntax_cat<'ctx>(cat: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WR
             debug_assert!(syntax_kw.is_kw(*strings::SYNTAX_CAT));
             let cat_name = elaborate_name(cat_name.as_node().unwrap(), ctx)?;
 
-            if ctx.arenas.formal_syntax.cat_by_name(cat_name).is_some() {
+            if ctx.arenas.formal_cats.get(cat_name).is_some() {
                 return ctx.diags.err_duplicate_formal_syntax_cat();
             }
 
-            let formal_cat = ctx.arenas.formal_syntax.add_cat(FormalSyntaxCat::new(cat_name));
-            let parse_rule = ctx.arenas.parse_rules.add_formal_lang_cat(cat_name, formal_cat);
+            let formal_cat = ctx.arenas.formal_cats.alloc(cat_name, FormalSyntaxCat::new(cat_name));
+            let parse_cat = Category::new(cat_name, SyntaxCategorySource::FormalLang(formal_cat));
+            let parse_rule = ctx.arenas.parse_cats.alloc(cat_name, parse_cat);
             ctx.parse_state.use_cat(parse_rule);
             add_builtin_syntax_for_formal_cat(formal_cat, ctx);
 
@@ -164,16 +168,16 @@ fn elaborate_syntax<'ctx>(syntax: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WRe
             let cat_name = elaborate_name(cat.as_node().unwrap(), ctx)?;
             let pat = elaborate_syntax_pat(pat_list.as_node().unwrap(), ctx)?;
 
-            let Some(cat) = ctx.arenas.formal_syntax.cat_by_name(cat_name) else {
+            let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
                 return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat.span());
             };
 
-            if ctx.arenas.formal_syntax.rule_by_name(rule_name).is_some() {
+            if ctx.arenas.formal_rules.get(rule_name).is_some() {
                 return ctx.diags.err_duplicate_formal_syntax_rule();
             }
 
             let rule = FormalSyntaxRule::new(rule_name, cat, pat);
-            let rule_id = ctx.arenas.formal_syntax.add_rule(rule);
+            let rule_id = ctx.arenas.formal_rules.alloc(rule_name, rule);
 
             grammar::add_formal_syntax_rule(rule_id, ctx);
 
@@ -223,7 +227,7 @@ fn elaborate_syntax_pat_part<'ctx>(
         syntax_pat_part_cat ::= [cat_name_node] => {
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
 
-            let Some(cat) = ctx.arenas.formal_syntax.cat_by_name(cat_name) else {
+            let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
                 return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
@@ -236,7 +240,7 @@ fn elaborate_syntax_pat_part<'ctx>(
             debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
 
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
-            let Some(cat) = ctx.arenas.formal_syntax.cat_by_name(cat_name) else {
+            let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
                 return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
@@ -249,7 +253,7 @@ fn elaborate_syntax_pat_part<'ctx>(
             debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
 
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
-            let Some(cat) = ctx.arenas.formal_syntax.cat_by_name(cat_name) else {
+            let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
                 return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
@@ -280,11 +284,11 @@ fn elaborate_macro<'ctx>(macro_cmd: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> W
                 // TODO: correct error type.
                 return ctx.diags.err_ambiguous_parse(replacement.span());
             };
-            let mac = ctx.arenas.macros.add_macro(Macro::new(macro_name, cat, pat, replacement));
+            let mac = ctx.arenas.macros.alloc(macro_name, Macro::new(macro_name, cat, pat, replacement));
 
             let rule_pat = mac.pat().to_parse_rule();
             let rule = Rule::new(macro_name, cat, ParseRuleSource::Macro(mac), rule_pat);
-            let rule = ctx.arenas.parse_rules.add_rule(rule);
+            let rule = ctx.arenas.parse_rules.alloc(rule);
             ctx.parse_state.use_rule(rule);
 
             Ok(())
@@ -518,7 +522,7 @@ fn elaborate_macro_pat_kind<'ctx>(
         macro_pat_kind_cat ::= [cat_name_node] => {
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
 
-            let Some(cat) = ctx.arenas.parse_rules.cat_by_name(cat_name) else {
+            let Some(cat) = ctx.arenas.parse_cats.get(cat_name) else {
                 return ctx.diags.err_non_existent_syntax_category(cat_name, cat_name_node.span());
             };
 
@@ -531,7 +535,7 @@ fn elaborate_macro_pat_kind<'ctx>(
             debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
 
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
-            let Some(cat) = ctx.arenas.parse_rules.cat_by_name(cat_name) else {
+            let Some(cat) = ctx.arenas.parse_cats.get(cat_name) else {
                 return ctx.diags.err_non_existent_syntax_category(cat_name, cat_name_node.span());
             };
 
@@ -557,7 +561,10 @@ fn elaborate_axiom<'ctx>(
             let name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
             let templates = elaborate_templates(templates.as_node().unwrap(), ctx)?;
 
-            let mut name_ctx = make_name_ctx(&templates);
+            let templates_map = templates.iter().map(|t| (t.name(), t.clone())).collect();
+            let shorthands = FxHashMap::default();
+            let mut name_ctx = NameCtx::new(&templates_map, &shorthands);
+
             let hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
             let hypotheses = hypotheses.into_iter().map(|h| parse_fact(h, &mut name_ctx, ctx)).collect::<WResult<Vec<_>>>()?;
             let conclusion = parse_fragment(sentence.as_node().unwrap(), ctx.sentence_formal_cat, &mut name_ctx, ctx)?;
@@ -568,7 +575,7 @@ fn elaborate_axiom<'ctx>(
                 return ctx.diags.err_duplicate_theorem(name, name_node.span());
             }
 
-            let thm_id = ctx.arenas.theorem_stmts.add(theorem_stmt);
+            let thm_id = ctx.arenas.theorem_stmts.alloc(name, theorem_stmt);
             Ok(thm_id)
         }
     }
@@ -591,7 +598,10 @@ fn elaborate_theorem<'ctx>(
             let name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
             let templates = elaborate_templates(templates.as_node().unwrap(), ctx)?;
 
-            let mut name_ctx = make_name_ctx(&templates);
+            let templates_map = templates.iter().map(|t| (t.name(), t.clone())).collect();
+            let shorthands = FxHashMap::default();
+            let mut name_ctx = NameCtx::new(&templates_map, &shorthands);
+
             let hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
             let hypotheses = hypotheses.into_iter().map(|h| parse_fact(h, &mut name_ctx, ctx)).collect::<WResult<Vec<_>>>()?;
             let conclusion = parse_fragment(sentence.as_node().unwrap(), ctx.sentence_formal_cat, &mut name_ctx, ctx)?;
@@ -603,18 +613,10 @@ fn elaborate_theorem<'ctx>(
                 return ctx.diags.err_duplicate_theorem(name, name_node.span());
             }
 
-            let thm_id = ctx.arenas.theorem_stmts.add(theorem_stmt);
+            let thm_id = ctx.arenas.theorem_stmts.alloc(name, theorem_stmt);
             Ok(thm_id)
         }
     }
-}
-
-fn make_name_ctx<'ctx>(templates: &[Template<'ctx>]) -> NameCtx<'ctx> {
-    let mut names = NameCtx::new();
-    for template in templates {
-        names.add_template(template.name(), template.clone());
-    }
-    names
 }
 
 fn elaborate_templates<'ctx>(
@@ -655,7 +657,7 @@ fn elaborate_template<'ctx>(
 
             let name = elaborate_name(name.as_node().unwrap(), ctx)?;
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
-            let Some(cat) = ctx.arenas.formal_syntax.cat_by_name(cat_name) else {
+            let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
                 return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
             let params = elaborate_maybe_template_params(maybe_params.as_node().unwrap(), ctx)?;
@@ -727,7 +729,7 @@ fn elaborate_template_param<'ctx>(
         template_param ::= [cat_name_node] => {
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
 
-            let Some(cat) = ctx.arenas.formal_syntax.cat_by_name(cat_name) else {
+            let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
                 return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 

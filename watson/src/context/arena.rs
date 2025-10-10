@@ -1,7 +1,30 @@
 use rustc_hash::FxHashMap;
-use std::{hash::Hash, sync::Mutex};
+use std::{hash::Hash, marker::PhantomData, sync::Mutex};
 use typed_arena::Arena;
 use ustr::Ustr;
+
+pub struct PlainArena<Data, Handle> {
+    arena: Arena<Data>,
+    handle: PhantomData<Handle>,
+}
+
+impl<'ctx, Data, Handle> PlainArena<Data, Handle> {
+    pub fn new() -> Self {
+        Self {
+            arena: Arena::new(),
+            handle: PhantomData::default(),
+        }
+    }
+
+    pub fn alloc(&'ctx self, data: Data) -> Handle
+    where
+        Handle: InternerHandle<'ctx, Data> + Copy,
+    {
+        let ptr = self.arena.alloc(data);
+        let handle = InternerHandle::from_ref(ptr);
+        handle
+    }
+}
 
 pub struct InternedArena<Data, Handle> {
     arena: Arena<Data>,
@@ -69,7 +92,7 @@ pub trait InternerHandle<'ctx, Data> {
 }
 
 #[macro_export]
-macro_rules! declare_intern_handle {
+macro_rules! generate_arena_handle {
     ($handle:ident<$ctx:lifetime> => $data:ty) => {
         #[derive(std::fmt::Debug, std::clone::Clone, std::marker::Copy, std::cmp::Eq)]
         pub struct $handle<$ctx>(pub &$ctx $data);
@@ -113,6 +136,6 @@ macro_rules! declare_intern_handle {
         }
     };
     ($handle:ident => $data:ident) => {
-        declare_intern_handle!($handle<'ctx> => $data);
+        generate_arena_handle!($handle<'ctx> => $data);
     };
 }

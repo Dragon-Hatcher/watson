@@ -5,6 +5,7 @@ use ustr::Ustr;
 use crate::{
     context::Ctx,
     diagnostics::WResult,
+    generate_arena_handle,
     parse::{Span, elaborator::elaborate_tactic, parse_tree::ParseTreeId},
     semant::{
         fragment::{
@@ -13,7 +14,7 @@ use crate::{
         },
         parse_fragment::{NameCtx, UnresolvedFact, parse_any_fragment, parse_fragment},
         proof_status::{ProofStatus, ProofStatuses},
-        theorems::{Fact, TheoremId, UnresolvedProof},
+        theorems::{Fact, Template, TheoremId, UnresolvedProof},
     },
 };
 
@@ -33,12 +34,21 @@ pub fn check_proofs<'ctx>(
     statuses
 }
 
-#[derive(Debug, Clone)]
-struct ProofState<'ctx> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProofState<'ctx> {
     knowns: FxHashSet<Fact<'ctx>>,
     goal: FragmentId<'ctx>,
-    names: NameCtx<'ctx>,
+    templates: FxHashMap<Ustr, Template<'ctx>>,
+    shorthands: FxHashMap<Ustr, FragmentId<'ctx>>,
 }
+
+impl<'ctx> ProofState<'ctx> {
+    fn name_ctx<'a>(&'a self) -> NameCtx<'ctx, 'a> {
+        NameCtx::new(&self.templates, &self.shorthands)
+    }
+}
+
+generate_arena_handle!(ProofStateKey<'ctx> => ProofState<'ctx>);
 
 fn check_proof<'ctx>(
     theorem_smt: TheoremId<'ctx>,
@@ -48,18 +58,23 @@ fn check_proof<'ctx>(
         UnresolvedProof::Axiom => return Ok(ProofStatus::new_axiom()),
         UnresolvedProof::Theorem(proof) => *proof,
     };
-    let start_state = ProofState {
+    let start_state = ctx.arenas.proof_states.alloc(ProofState {
         knowns: theorem_smt.hypotheses().iter().cloned().collect(),
         goal: theorem_smt.conclusion(),
-        names: name_ctx_from_smt(theorem_smt),
-    };
+        templates: theorem_smt
+            .templates()
+            .iter()
+            .map(|t| (t.name(), t.clone()))
+            .collect(),
+        shorthands: FxHashMap::default(),
+    });
 
     let mut proof_states = vec![(start_state, proof)];
     let mut proof_correct = true;
     let mut todo_used = false;
     let mut theorems_used = FxHashSet::default();
 
-    while let Some((mut state, proof)) = proof_states.pop() {
+    while let Some((state, proof)) = proof_states.pop() {
         let tactic = elaborate_tactic(proof, ctx)?;
 
         match tactic {
@@ -74,14 +89,14 @@ fn check_proof<'ctx>(
                 }
             }
             UnresolvedTactic::Have(tactic) => {
-                let mut sub_state = state.clone();
+                let mut sub_state = state.0.clone();
 
                 // Add the assumption to the sub-state if there is one.
                 let assumption = if let Some(assumption) = tactic.fact.assumption() {
                     let Ok(assumption) = parse_fragment(
                         assumption,
                         ctx.sentence_formal_cat,
-                        &mut sub_state.names,
+                        &mut sub_state.name_ctx(),
                         ctx,
                     ) else {
                         // There isn't much we can do if the assumption doesn't parse
@@ -104,7 +119,7 @@ fn check_proof<'ctx>(
                 let Ok(conclusion) = parse_fragment(
                     tactic.fact.conclusion(),
                     ctx.sentence_formal_cat,
-                    &mut state.names,
+                    &mut state.name_ctx(),
                     ctx,
                 ) else {
                     eprintln!(
@@ -116,10 +131,14 @@ fn check_proof<'ctx>(
                 };
                 sub_state.goal = conclusion;
 
+                let sub_state = ctx.arenas.proof_states.alloc(sub_state);
                 proof_states.push((sub_state, tactic.proof));
 
                 let conclusion_fact = Fact::new(assumption, conclusion);
+
+                let mut state = state.0.clone();
                 state.knowns.insert(conclusion_fact);
+                let state = ctx.arenas.proof_states.alloc(state);
                 proof_states.push((state, tactic.continuation));
             }
             UnresolvedTactic::By(tactic) => {
@@ -166,12 +185,14 @@ fn check_proof<'ctx>(
                 for (template, instantiation) in
                     theorem.0.templates().iter().zip(tactic.templates.iter())
                 {
+                    let mut names = state.name_ctx();
+
                     for &param_cat in template.params() {
-                        state.names.add_hole(param_cat)
+                        names.add_hole(param_cat)
                     }
 
                     let Ok(instantiation) =
-                        parse_any_fragment(*instantiation, template.cat(), &mut state.names, ctx)
+                        parse_any_fragment(*instantiation, template.cat(), &mut names, ctx)
                     else {
                         eprintln!(
                             "[{}] Proof incorrect from parse failure.",
@@ -181,7 +202,6 @@ fn check_proof<'ctx>(
                         continue;
                     };
 
-                    state.names.clear_holes();
                     template_instantiations.push(instantiation);
                 }
 
@@ -374,14 +394,6 @@ fn fix_debruijn_indices<'ctx>(
         }
         FragData::Hole(_) => frag,
     }
-}
-
-fn name_ctx_from_smt(smt: TheoremId) -> NameCtx {
-    let mut names = NameCtx::new();
-    for template in smt.templates() {
-        names.add_template(template.name(), template.clone());
-    }
-    names
 }
 
 #[derive(Debug, Clone)]

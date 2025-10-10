@@ -1,34 +1,12 @@
 use ustr::Ustr;
 
 use crate::{
-    context::arena::NamedArena,
-    declare_intern_handle,
+    generate_arena_handle,
     parse::parse_tree::ParseTreeId,
     semant::{formal_syntax::FormalSyntaxCatId, fragment::FragmentId},
 };
 
-pub struct TheoremStatements<'ctx> {
-    theorems: NamedArena<TheoremStatement<'ctx>, TheoremId<'ctx>>,
-}
-
-impl<'ctx> TheoremStatements<'ctx> {
-    pub fn new() -> Self {
-        Self {
-            theorems: NamedArena::new(),
-        }
-    }
-
-    pub fn add(&'ctx self, statement: TheoremStatement<'ctx>) -> TheoremId<'ctx> {
-        assert!(self.theorems.get(statement.name).is_none());
-        self.theorems.alloc(statement.name, statement)
-    }
-
-    pub fn get(&self, name: Ustr) -> Option<TheoremId<'ctx>> {
-        self.theorems.get(name)
-    }
-}
-
-declare_intern_handle!(TheoremId<'ctx> => TheoremStatement<'ctx>);
+generate_arena_handle!(TheoremId<'ctx> => TheoremStatement<'ctx>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TheoremStatement<'ctx> {

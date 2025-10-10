@@ -2,6 +2,7 @@ use crate::context::Ctx;
 use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
+use crate::semant::theorems::TheoremId;
 use crate::util::plural;
 use annotate_snippets::{Level, Message, Renderer, Snippet};
 use itertools::Itertools;
@@ -10,11 +11,11 @@ use ustr::Ustr;
 
 pub type WResult<T> = Result<T, ()>;
 
-pub struct DiagManager {
-    diags: Vec<Diagnostic>,
+pub struct DiagManager<'ctx> {
+    diags: Vec<Diagnostic<'ctx>>,
 }
 
-impl DiagManager {
+impl<'ctx> DiagManager<'ctx> {
     pub fn new() -> Self {
         Self { diags: Vec::new() }
     }
@@ -33,9 +34,10 @@ impl DiagManager {
     }
 }
 
-struct Diagnostic {
+struct Diagnostic<'ctx> {
     title: &'static str,
     parts: Vec<DiagnosticPart>,
+    theorem: Option<TheoremId<'ctx>>,
 }
 
 enum DiagnosticPart {
@@ -52,13 +54,19 @@ impl DiagnosticPart {
     }
 }
 
-impl Diagnostic {
+impl<'ctx> Diagnostic<'ctx> {
     fn new(title: &str) -> Self {
         let title = Ustr::from(title).as_str();
         Self {
             title,
             parts: Vec::new(),
+            theorem: None,
         }
+    }
+
+    fn for_theorem(mut self, theorem: TheoremId<'ctx>) -> Self {
+        self.theorem = Some(theorem);
+        self
     }
 
     fn with_error(mut self, msg: &str, span: Span) -> Self {
@@ -99,13 +107,13 @@ impl Diagnostic {
     }
 }
 
-impl DiagManager {
-    fn add_diag(&mut self, diag: Diagnostic) {
+impl<'ctx> DiagManager<'ctx> {
+    fn add_diag(&mut self, diag: Diagnostic<'ctx>) {
         self.diags.push(diag);
     }
 }
 
-impl DiagManager {
+impl<'ctx> DiagManager<'ctx> {
     pub fn err_module_redeclaration<T>(
         &mut self,
         source_id: SourceId,
@@ -240,7 +248,7 @@ impl DiagManager {
 
 // Below are errors relating specifically to proofs.
 
-impl DiagManager {
+impl<'ctx> DiagManager<'ctx> {
     pub fn err_non_existent_theorem(&mut self, name: Ustr, span: Span) {
         let diag = Diagnostic::new(&format!("unknown theorem `{name}`")).with_error("", span);
 
@@ -268,6 +276,8 @@ impl DiagManager {
 
         self.add_diag(diag);
     }
+
+    pub fn err_missing_goal(&mut self, theorem: TheoremId<'ctx>) {}
 }
 
 // impl DiagManager {

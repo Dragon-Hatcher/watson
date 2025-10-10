@@ -1,6 +1,5 @@
 use crate::{
-    context::arena::InternedArena,
-    declare_intern_handle,
+    generate_arena_handle,
     parse::{
         Span,
         parse_state::{CategoryId, RuleId},
@@ -9,23 +8,7 @@ use crate::{
 use std::hash::Hash;
 use ustr::Ustr;
 
-pub struct ParseForest<'ctx> {
-    trees: InternedArena<ParseTree<'ctx>, ParseTreeId<'ctx>>,
-}
-
-impl<'ctx> ParseForest<'ctx> {
-    pub fn new() -> Self {
-        Self {
-            trees: InternedArena::new(),
-        }
-    }
-
-    pub fn intern(&'ctx self, tree: ParseTree<'ctx>) -> ParseTreeId<'ctx> {
-        self.trees.intern(tree)
-    }
-}
-
-declare_intern_handle!(ParseTreeId<'ctx> => ParseTree<'ctx>);
+generate_arena_handle!(ParseTreeId<'ctx> => ParseTree<'ctx>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ParseTree<'ctx> {

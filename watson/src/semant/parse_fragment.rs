@@ -214,35 +214,32 @@ impl<'ctx> PartialPresentation<'ctx> {
             parse_nodes: &[ParseTreeId<'ctx>],
             idx: &mut usize,
         ) {
-            match pres {
-                Presentation::Rule(rule) => {
-                    for part in &mut rule.parts {
-                        match part {
-                            PresPart::Subpart(v) => {
-                                let tree = parse_nodes[*idx];
-                                if v.len() > 0 {
-                                    *part = PresPart::Chain(Box::new(alt.clone()));
-                                } else if let Some(path) = map.frags.get(&tree) {
-                                    *part = PresPart::Subpart(PartialPresentation::fix_path(
-                                        base_path, path,
-                                    ));
-                                } else if let Some(bind) = map.bindings.get(&tree) {
-                                    *part = PresPart::Binding(*bind)
-                                } else if let Some(var) = map.vars.get(&tree) {
-                                    *part = PresPart::Variable(*var)
-                                } else {
-                                    *part = PresPart::Str(Ustr::from("?"))
-                                }
-                                *idx += 1;
+            if let Presentation::Rule(rule) = pres {
+                for part in &mut rule.parts {
+                    match part {
+                        PresPart::Subpart(v) => {
+                            let tree = parse_nodes[*idx];
+                            if !v.is_empty() {
+                                *part = PresPart::Chain(Box::new(alt.clone()));
+                            } else if let Some(path) = map.frags.get(&tree) {
+                                *part = PresPart::Subpart(PartialPresentation::fix_path(
+                                    base_path, path,
+                                ));
+                            } else if let Some(bind) = map.bindings.get(&tree) {
+                                *part = PresPart::Binding(*bind)
+                            } else if let Some(var) = map.vars.get(&tree) {
+                                *part = PresPart::Variable(*var)
+                            } else {
+                                *part = PresPart::Str(Ustr::from("?"))
                             }
-                            PresPart::Chain(chain) => {
-                                update(chain, base_path, map, alt, parse_nodes, idx);
-                            }
-                            _ => {}
+                            *idx += 1;
                         }
+                        PresPart::Chain(chain) => {
+                            update(chain, base_path, map, alt, parse_nodes, idx);
+                        }
+                        _ => {}
                     }
                 }
-                _ => {}
             }
         }
 
@@ -262,7 +259,7 @@ impl<'ctx> PartialPresentation<'ctx> {
             let mut passed = 0;
             for part in r.parts.iter_mut() {
                 if let PresPart::Subpart(v) = part {
-                    if v.len() > 0 {
+                    if !v.is_empty() {
                         *part = PresPart::Chain(Box::new(with.pres.clone()));
                         self.parse_nodes
                             .splice(passed..passed, with.parse_nodes.iter().copied());
@@ -411,7 +408,7 @@ fn maybe_parse_fragment<'ctx>(
                         let new_pres = Presentation::Template(new_pres);
 
                         let pres = match macro_pres {
-                            Some(pres) => pres.complete(&cur_path, &mapping, &new_pres),
+                            Some(pres) => pres.complete(cur_path, &mapping, &new_pres),
                             None => new_pres,
                         };
                         let pres = ctx.arenas.presentations.intern(pres);
@@ -530,7 +527,7 @@ fn maybe_parse_fragment<'ctx>(
 
                     let new_pres = Presentation::Rule(PresRuleApplication::new(pres_parts));
                     let pres = match macro_pres {
-                        Some(pres) => pres.complete(&cur_path, &mapping, &new_pres),
+                        Some(pres) => pres.complete(cur_path, &mapping, &new_pres),
                         None => new_pres,
                     };
                     let pres = ctx.arenas.presentations.intern(pres);

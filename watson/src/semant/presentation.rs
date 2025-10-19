@@ -209,7 +209,7 @@ impl<'ctx> PresTemplate<'ctx> {
         Self { name, args }
     }
 
-    pub fn name(&self) -> Ustr {
+    pub fn _name(&self) -> Ustr {
         self.name
     }
 

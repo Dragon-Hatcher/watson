@@ -12,7 +12,7 @@ impl<'ctx, Data, Handle> PlainArena<Data, Handle> {
     pub fn new() -> Self {
         Self {
             arena: Arena::new(),
-            handle: PhantomData::default(),
+            handle: PhantomData,
         }
     }
 
@@ -21,8 +21,7 @@ impl<'ctx, Data, Handle> PlainArena<Data, Handle> {
         Handle: InternerHandle<'ctx, Data> + Copy,
     {
         let ptr = self.arena.alloc(data);
-        let handle = InternerHandle::from_ref(ptr);
-        handle
+        InternerHandle::from_ref(ptr)
     }
 }
 

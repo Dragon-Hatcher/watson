@@ -264,7 +264,7 @@ fn check_proof<'ctx>(
                 let conclusion =
                     instantiate_fragment_with_templates(theorem.conclusion(), &templates, ctx);
 
-                if conclusion != state.goal {
+                if conclusion.0 != state.goal.0 {
                     ctx.diags.err_goal_conclusion_mismatch(
                         (theorem_smt, state),
                         proof.span(),

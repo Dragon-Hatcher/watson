@@ -131,6 +131,11 @@ proof
     
 qed
 
+theorem fake [schema p] [schema q(term)] :
+    |- (p ∧ (∃x, q(x))) → ∀y, p
+proof
+qed
+
 -- definition if
     @kw"if" $p:sentence @kw"then" $t:term @kw"else" $f:term =>
         {x : x ∈ $t ∧ $p} ∪ {x : x ∈ $f ∧ ¬$p}

@@ -88,7 +88,7 @@ impl<'ctx> PresTreeData<'ctx> {
                 PresTreeData::Template(temp) => temp.args()[*idx],
                 PresTreeData::Hole => unreachable!(),
             },
-            _ => todo!(),
+            _ => unreachable!(),
         };
 
         match path {
@@ -137,7 +137,7 @@ pub enum PresTreeChild<'ctx> {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Presentation<'ctx> {
-    Rule(PresRuleApplication),
+    Rule(PresRuleApplication<'ctx>),
     Template(PresTemplate<'ctx>),
     Hole(usize),
 }
@@ -155,16 +155,16 @@ impl<'ctx> Presentation<'ctx> {
 generate_arena_handle! { PresentationId<'ctx> => Presentation<'ctx> }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PresRuleApplication {
-    parts: Vec<PresPart>,
+pub struct PresRuleApplication<'ctx> {
+    pub parts: Vec<PresPart<'ctx>>,
 }
 
-impl PresRuleApplication {
-    pub fn new(parts: Vec<PresPart>) -> Self {
+impl<'ctx> PresRuleApplication<'ctx> {
+    pub fn new(parts: Vec<PresPart<'ctx>>) -> Self {
         Self { parts }
     }
 
-    pub fn parts(&self) -> &[PresPart] {
+    pub fn parts(&self) -> &[PresPart<'ctx>] {
         &self.parts
     }
 
@@ -182,6 +182,7 @@ impl PresRuleApplication {
                     let target = tree.child_on_path(path);
                     str += &target.render_str();
                 }
+                PresPart::Chain(pres) => str += &pres.render_str(tree)
             }
         }
         str
@@ -189,11 +190,12 @@ impl PresRuleApplication {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PresPart {
+pub enum PresPart<'ctx> {
     Str(Ustr),
     Binding(Ustr),
     Variable(Ustr),
     Subpart(Vec<usize>),
+    Chain(Box<Presentation<'ctx>>)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

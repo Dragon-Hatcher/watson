@@ -3,6 +3,6 @@ pub mod check_proof;
 pub mod formal_syntax;
 pub mod fragment;
 pub mod parse_fragment;
+pub mod presentation;
 pub mod proof_status;
 pub mod theorems;
-pub mod presentation;

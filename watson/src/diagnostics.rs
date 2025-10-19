@@ -254,6 +254,19 @@ impl<'ctx> DiagManager<'ctx> {
         Err(())
     }
 
+    pub fn err_duplicate_template_name<T>(
+        &mut self,
+        name: Ustr,
+        _old: Span,
+        new: Span,
+    ) -> WResult<T> {
+        let diag = Diagnostic::new(&format!("redeclaration of template name `{name}`"))
+            .with_error("redeclared here", new);
+
+        self.add_diag(diag);
+        Err(())
+    }
+
     pub fn err_duplicate_theorem<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
         let diag = Diagnostic::new("err_duplicate_theorem")
             .with_error(&format!("theorem `{name}` declared again here"), span);
@@ -325,8 +338,7 @@ impl<'ctx> DiagManager<'ctx> {
         span: Span,
         cat: FormalSyntaxCatId<'ctx>,
     ) {
-        let diag = Diagnostic::new(&format!("failed to parse {}", cat.name()))
-            .with_error("", span);
+        let diag = Diagnostic::new(&format!("failed to parse {}", cat.name())).with_error("", span);
 
         self.add_diag(diag);
     }

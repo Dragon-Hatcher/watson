@@ -1,6 +1,6 @@
 use crate::semant::proof_status::ProofStatuses;
 use crate::semant::theorems::TheoremId;
-use crate::util::ansi::{ANSI_BOLD, ANSI_GREEN, ANSI_GRAY, ANSI_RED, ANSI_RESET, ANSI_YELLOW};
+use crate::util::ansi::{ANSI_BOLD, ANSI_GRAY, ANSI_GREEN, ANSI_RED, ANSI_RESET, ANSI_YELLOW};
 use crate::util::plural;
 
 pub struct ProofReport<'ctx> {

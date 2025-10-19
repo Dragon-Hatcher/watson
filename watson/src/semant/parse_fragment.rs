@@ -18,11 +18,10 @@ use crate::{
             FragData, FragPart, FragRuleApplication, FragTemplateRef, Fragment, FragmentId,
         },
         presentation::{
-            FactPresentation, PresPart, PresRuleApplication, PresTemplate, PresTreeChild,
-            PresTreeData, PresTreeRuleApp, PresTreeTemplate, Presentation, PresentationTree,
-            PresentationTreeId,
+            PresPart, PresRuleApplication, PresTemplate, PresTreeChild, PresTreeData,
+            PresTreeRuleApp, PresTreeTemplate, Presentation, PresentationTree, PresentationTreeId,
         },
-        theorems::{Fact, Template},
+        theorems::Template,
     },
 };
 
@@ -73,27 +72,6 @@ impl<'ctx, 'a> NameCtx<'ctx, 'a> {
     pub fn add_hole(&mut self, cat: FormalSyntaxCatId<'ctx>) {
         self.holes.push(cat);
     }
-}
-
-pub fn parse_fact<'ctx>(
-    fact: UnresolvedFact<'ctx>,
-    names: &mut NameCtx<'ctx, '_>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<(Fact<'ctx>, FactPresentation<'ctx>)> {
-    let sentence_cat = ctx.sentence_formal_cat;
-
-    let (assumption, assumption_pres) = if let Some(assumption_tree) = fact.assumption {
-        let (frag, pres) = parse_fragment(assumption_tree, sentence_cat, names, ctx)?;
-        (Some(frag), Some(pres))
-    } else {
-        (None, None)
-    };
-    let (conclusion, conclusion_pres) = parse_fragment(fact.conclusion, sentence_cat, names, ctx)?;
-
-    Ok((
-        Fact::new(assumption, conclusion),
-        FactPresentation::new(assumption_pres, conclusion_pres),
-    ))
 }
 
 pub fn parse_any_fragment<'ctx>(

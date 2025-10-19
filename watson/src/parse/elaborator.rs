@@ -5,7 +5,7 @@ use crate::{
     context::Ctx,
     diagnostics::WResult,
     parse::{
-        SourceId,
+        SourceId, Span,
         grammar::{self, add_builtin_syntax_for_formal_cat},
         macros::{Macro, MacroPat, do_macro_replacement},
         parse_state::{
@@ -671,6 +671,7 @@ fn elaborate_templates<'ctx>(
     // templates ::= (template_none)
     //             | (template_many) template templates
 
+    let mut seen_names = FxHashMap::default();
     let mut templates_list = Vec::new();
 
     loop {
@@ -681,7 +682,14 @@ fn elaborate_templates<'ctx>(
             template_many ::= [template, rest] => {
                 let template = template.as_node().unwrap();
 
-                templates_list.extend(elaborate_template(template, ctx)?);
+                for (temp, span) in elaborate_template(template, ctx)? {
+                    if let Some(old) = seen_names.get(&temp.name()) {
+                        return ctx.diags.err_duplicate_template_name(temp.name(), *old, span);
+                    }
+
+                    seen_names.insert(temp.name(), span);
+                    templates_list.push(temp);
+                }
                 templates = rest.as_node().unwrap();
             }
         }
@@ -691,7 +699,7 @@ fn elaborate_templates<'ctx>(
 fn elaborate_template<'ctx>(
     template: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<Vec<Template<'ctx>>> {
+) -> WResult<Vec<(Template<'ctx>, Span)>> {
     // template ::= (template) "[" name maybe_template_params ":" name "]"
 
     match_rule! { (ctx, template) =>
@@ -707,8 +715,8 @@ fn elaborate_template<'ctx>(
             };
 
             let mut templates = Vec::new();
-            for (name, params) in names {
-                templates.push(Template::new(name, cat, params));
+            for (name, params, span) in names {
+                templates.push((Template::new(name, cat, params), span));
             }
             Ok(templates)
         }
@@ -718,7 +726,7 @@ fn elaborate_template<'ctx>(
 fn elaborate_template_names<'ctx>(
     mut names: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<Vec<(Ustr, Vec<FormalSyntaxCatId<'ctx>>)>> {
+) -> WResult<Vec<(Ustr, Vec<FormalSyntaxCatId<'ctx>>, Span)>> {
     // template_names ::= (template_names_none)
     //                  | (template_names_many) template_name template_names
 
@@ -742,14 +750,15 @@ fn elaborate_template_names<'ctx>(
 fn elaborate_template_name<'ctx>(
     name: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<(Ustr, Vec<FormalSyntaxCatId<'ctx>>)> {
+) -> WResult<(Ustr, Vec<FormalSyntaxCatId<'ctx>>, Span)> {
     // template_name ::= (template_name) name maybe_template_params
 
     match_rule! { (ctx, name) =>
-        template_name ::= [name, maybe_params] => {
-            let name = elaborate_name(name.as_node().unwrap(), ctx)?;
+        template_name ::= [name_node, maybe_params] => {
+            let name_node = name_node.as_node().unwrap();
+            let name = elaborate_name(name_node, ctx)?;
             let params = elaborate_maybe_template_params(maybe_params.as_node().unwrap(), ctx)?;
-            Ok((name, params))
+            Ok((name, params, name_node.span()))
         }
     }
 }

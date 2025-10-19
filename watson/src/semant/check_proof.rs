@@ -13,8 +13,8 @@ use crate::{
         },
         parse_fragment::{NameCtx, UnresolvedFact, parse_any_fragment, parse_fragment},
         presentation::{
-            FactPresentation, PresTreeChild, PresTreeData, PresTreeRuleApp,
-            PresTreeTemplate, Presentation, PresentationId, PresentationTree, PresentationTreeId,
+            FactPresentation, PresTreeChild, PresTreeData, PresTreeRuleApp, PresTreeTemplate,
+            Presentation, PresentationId, PresentationTree, PresentationTreeId,
         },
         proof_status::{ProofStatus, ProofStatuses},
         theorems::{Fact, Template, TheoremId, UnresolvedProof},

@@ -2,12 +2,20 @@ use crate::{
     context::arena::{InternedArena, NamedArena, PlainArena},
     diagnostics::DiagManager,
     parse::{
+        SourceCache,
         grammar::{
-            add_builtin_rules, add_builtin_syntax_for_formal_cat, BuiltinCats, BuiltinRules
-        }, macros::{Macro, MacroId}, parse_state::{Category, CategoryId, ParseState, Rule, RuleId}, parse_tree::{ParseTree, ParseTreeId}, SourceCache
+            BuiltinCats, BuiltinRules, add_builtin_rules, add_builtin_syntax_for_formal_cat,
+        },
+        macros::{Macro, MacroId},
+        parse_state::{Category, CategoryId, ParseState, Rule, RuleId},
+        parse_tree::{ParseTree, ParseTreeId},
     },
     semant::{
-        check_proof::{ProofState, ProofStateKey}, formal_syntax::{FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxRule, FormalSyntaxRuleId}, fragment::{Fragment, FragmentId}, presentation::{Presentation, PresentationId, PresentationTree, PresentationTreeId}, theorems::{TheoremId, TheoremStatement}
+        check_proof::{ProofState, ProofStateKey},
+        formal_syntax::{FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxRule, FormalSyntaxRuleId},
+        fragment::{Fragment, FragmentId},
+        presentation::{Presentation, PresentationId, PresentationTree, PresentationTreeId},
+        theorems::{TheoremId, TheoremStatement},
     },
     strings,
 };
@@ -91,7 +99,7 @@ impl<'ctx> Arenas<'ctx> {
             theorem_stmts: NamedArena::new(),
             proof_states: PlainArena::new(),
             presentations: InternedArena::new(),
-            presentation_trees: InternedArena::new()
+            presentation_trees: InternedArena::new(),
         }
     }
 }

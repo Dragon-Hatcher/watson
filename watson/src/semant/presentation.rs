@@ -182,7 +182,7 @@ impl<'ctx> PresRuleApplication<'ctx> {
                     let target = tree.child_on_path(path);
                     str += &target.render_str();
                 }
-                PresPart::Chain(pres) => str += &pres.render_str(tree)
+                PresPart::Chain(pres) => str += &pres.render_str(tree),
             }
         }
         str
@@ -195,7 +195,7 @@ pub enum PresPart<'ctx> {
     Binding(Ustr),
     Variable(Ustr),
     Subpart(Vec<usize>),
-    Chain(Box<Presentation<'ctx>>)
+    Chain(Box<Presentation<'ctx>>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

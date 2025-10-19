@@ -381,8 +381,8 @@ fn fill_template_holes<'ctx>(
     debruijn_shift: usize,
     ctx: &Ctx<'ctx>,
 ) -> (FragmentId<'ctx>, PresentationTreeId<'ctx>) {
-    match (frag.0.0.data(), frag.1.data(), frag.1.pres().0) {
-        (FragData::Rule(rule_app), PresTreeData::Rule(pres_tree), Presentation::Rule(_)) => {
+    match (frag.0.0.data(), frag.1.data()) {
+        (FragData::Rule(rule_app), PresTreeData::Rule(pres_tree)) => {
             let (new_children, new_children_pres): (Vec<_>, Vec<_>) = rule_app
                 .children()
                 .iter()
@@ -419,11 +419,7 @@ fn fill_template_holes<'ctx>(
 
             (new_frag, new_pres_tree)
         }
-        (
-            FragData::Template(template),
-            PresTreeData::Template(pres_tree),
-            Presentation::Template(pres),
-        ) => {
+        (FragData::Template(template), PresTreeData::Template(pres_tree)) => {
             let (new_args, new_pres_args): (Vec<_>, Vec<_>) = template
                 .args()
                 .iter()
@@ -436,20 +432,13 @@ fn fill_template_holes<'ctx>(
                 .fragments
                 .intern(Fragment::new(frag.0.cat(), data));
 
-            let new_pres = PresTemplate::new(
-                pres.name(),
-                new_pres_args.iter().map(|a| a.pres()).collect(),
-            );
-            let new_pres = Presentation::Template(new_pres);
-            let new_pres = ctx.arenas.presentations.intern(new_pres);
-
             let new_pres_tree = PresTreeData::Template(PresTreeTemplate::new(new_pres_args));
-            let new_pres_tree = PresentationTree::new(new_pres, new_pres_tree);
+            let new_pres_tree = PresentationTree::new(frag.1.pres(), new_pres_tree);
             let new_pres_tree = ctx.arenas.presentation_trees.intern(new_pres_tree);
 
             (new_frag, new_pres_tree)
         }
-        (FragData::Hole(idx), PresTreeData::Hole, Presentation::Hole(_)) => {
+        (FragData::Hole(idx), PresTreeData::Hole) => {
             let (replacement, replacement_pres) = args[*idx];
             let replacement = fix_debruijn_indices(replacement, debruijn_shift, ctx);
             (replacement, replacement_pres)

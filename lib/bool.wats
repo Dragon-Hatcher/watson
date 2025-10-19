@@ -1,0 +1,199 @@
+syntax implication
+    sentence ::= sentence "->" sentence
+end
+
+syntax false
+    sentence ::= "false"
+end
+
+axiom imp.intro [p q : sentence] : (assume p |- q)
+    |- p -> q
+end
+
+axiom imp.elim [p q : sentence] : (p -> q) (p)
+    |- q
+end
+
+macro parens
+    sentence ::= "(" $p:sentence ")" => $p
+end
+
+theorem imp.refl [p : sentence] :
+    |- p -> p
+proof
+    have assume p |- p;
+    by imp.intro [p] [p]
+qed
+
+macro not
+    sentence ::= "~" $p:sentence => $p -> false
+end
+
+theorem not.intro [p : sentence] : (assume p |- false)
+    |- ~p
+proof
+    by imp.intro [p] [false]
+qed
+
+axiom false.elim [p : sentence] : (false)
+    |- p
+end
+
+theorem contradiction [p : sentence] : (p) (~p)
+    |- false
+proof
+    by imp.elim [p] [false]
+qed
+
+axiom dne [p : sentence] : (~~p)
+    |- p
+end
+
+macro or
+    sentence ::= $p:sentence "or" $q:sentence => (~$p) -> $q 
+end
+
+macro and
+    sentence ::= $p:sentence "and" $q:sentence => ~((~$p) or (~$q))
+end
+
+theorem or.intro_right [p q : sentence] : (q)
+    |- p or q
+proof
+    have assume ~p |- q;
+    have (~p) -> q by imp.intro [~p] [q];
+qed
+
+theorem or.intro_left [p q : sentence] : (p)
+    |- p or q
+proof
+    have assume ~p |- q
+        have false by contradiction [p];
+        have q by false.elim [q];
+    ;
+    have (~p) -> q by imp.intro [~p] [q];
+qed
+
+theorem or.elim [p q r : sentence] :
+    (p -> r) (q -> r) (p or q)
+    |- r
+proof
+    have assume ~r |- false
+        have assume p |- false
+            have r by imp.elim [p] [r];
+            have false by contradiction [r];
+        ;
+        have ~p by not.intro [p];
+        have  q by imp.elim [~p] [q];
+        have  r by imp.elim  [q] [r];
+        have false by contradiction [r]; 
+    ;
+    have ~~r by not.intro [~r];
+    have r by dne [r];
+qed
+
+theorem or.comm [p q : sentence] : (p or q)
+    |- q or p
+proof
+    have assume p |- q or p by or.intro_right [q] [p];
+    have p -> (q or p) by imp.intro [p] [q or p];
+
+    have assume q |- q or p by or.intro_left [q] [p];
+    have q -> (q or p) by imp.intro [q] [q or p];
+
+    by or.elim [p] [q] [q or p] 
+qed
+
+theorem em [p : sentence] :
+    |- p or ~p
+proof
+    by imp.refl [~p]
+qed
+
+theorem and.intro [p q : sentence] : (p) (q)
+    |- p and q
+proof
+    have assume (~p) or (~q) |- false
+        have assume ~p |- false by contradiction [p];
+        have (~p) -> false by imp.intro [~p] [false];
+
+        have assume ~q |- false by contradiction [q];
+        have (~q) -> false by imp.intro [~q] [false];
+
+        by or.elim [~p] [~q] [false]
+    ;
+    have p and q by not.intro [(~p) or (~q)];
+qed
+
+theorem and.elim_left [p q : sentence] : (p and q)
+    |- p
+proof
+    have assume ~p |- false
+        have (~p) or (~q) by or.intro_left [~p] [~q];
+        by contradiction [(~p) or (~q)]
+    ;
+    have ~~p by not.intro [~p];
+    have   p by dne [p];
+qed
+
+theorem and.elim_right [p q : sentence] : (p and q)
+    |- q
+proof
+    have assume ~q |- false
+        have (~p) or (~q) by or.intro_right [~p] [~q];
+        by contradiction [(~p) or (~q)]
+    ;
+    have ~~q by not.intro [~q];
+    have   q by dne [q];
+qed
+
+theorem and.comm [p q : sentence] : (p and q)
+    |- q and p
+proof
+    have p by and.elim_left [p] [q];
+    have q by and.elim_right [p] [q];
+    by and.intro [q] [p]
+qed
+
+macro iff
+    sentence ::= $p:sentence @kw"iff" $q:sentence => ($p -> $q) and ($q -> $p)
+end
+
+theorem iff.fwd [p q : sentence] : (p iff q)
+    |- p -> q
+proof
+    have p -> q by and.elim_left [p -> q] [q -> p];
+qed
+
+theorem iff.rev [p q : sentence] : (p iff q)
+    |- q -> p
+proof
+    have q -> p by and.elim_right [p -> q] [q -> p];
+qed
+
+theorem iff.trans [p q r : sentence] :
+    (p iff q) (q iff r)
+    |- p iff r
+proof
+    have p -> q by iff.fwd [p] [q];
+    have q -> r by iff.fwd [q] [r];
+    have p -> r
+        have assume p |- r
+            have q by imp.elim [p] [q];
+            have r by imp.elim [q] [r];
+        ;
+        by imp.intro [p] [r]
+    ;
+
+    have r -> q by iff.rev [q] [r];
+    have q -> p by iff.rev [p] [q];
+    have r -> p
+        have assume r |- p
+            have q by imp.elim [r] [q];
+            have p by imp.elim [q] [p];
+        ;
+        by imp.intro [r] [p]
+    ;
+
+    by and.intro [p -> r] [r -> p]
+qed

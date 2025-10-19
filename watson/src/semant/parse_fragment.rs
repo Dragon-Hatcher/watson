@@ -284,7 +284,6 @@ fn maybe_parse_fragment<'ctx>(
         SyntaxCategorySource::FormalLang(_)
     ));
 
-    // let mut possibilities_todo = tree.possibilities().to_vec();
     let mut possibilities_todo: Vec<(ParseTreeChildren<'ctx>, Option<PartialPresentation<'ctx>>)> =
         tree.possibilities()
             .iter()

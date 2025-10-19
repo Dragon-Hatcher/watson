@@ -164,7 +164,6 @@ fn check_proof<'ctx>(
                 sub_state.goal = conclusion;
 
                 let sub_state = ctx.arenas.proof_states.alloc(sub_state);
-                proof_states.push((sub_state, tactic.proof));
 
                 let conclusion_fact = Fact::new(assumption.map(|a| a.0), conclusion.0);
                 let conclusion_fact_pres =
@@ -178,6 +177,7 @@ fn check_proof<'ctx>(
                 )));
                 let state = ctx.arenas.proof_states.alloc(state);
                 proof_states.push((state, tactic.continuation));
+                proof_states.push((sub_state, tactic.proof));
             }
             UnresolvedTactic::By(tactic) => {
                 let Some(theorem) = ctx.arenas.theorem_stmts.get(tactic.theorem_name) else {
@@ -196,10 +196,6 @@ fn check_proof<'ctx>(
 
                 if theorem.templates().len() != tactic.templates.len() {
                     // The number of templates doesn't match.
-                    eprintln!(
-                        "[{}] Proof incorrect from template count mismatch.",
-                        theorem.name()
-                    );
                     proof_correct = false;
                     if theorem.templates().len() > tactic.templates.len() {
                         ctx.diags.err_missing_tactic_templates(
@@ -272,14 +268,12 @@ fn check_proof<'ctx>(
                     instantiate_fragment_with_templates(theorem.conclusion(), &templates, ctx);
 
                 if conclusion != state.goal {
-                    // eprintln!(
-                    //     "[{}] Proof incorrect from theorem {} mismatch goal {}.",
-                    //     theorem_smt.name(),
-                    //     _debug_fragment(conclusion),
-                    //     _debug_fragment(state.goal),
-                    // );
+                    ctx.diags.err_goal_conclusion_mismatch(
+                        (theorem_smt, state),
+                        proof.span(),
+                        conclusion.1,
+                    );
                     proof_correct = false;
-                    // TODO: error message.
                 }
             }
             UnresolvedTactic::Todo => {

@@ -3,6 +3,7 @@ use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
 use crate::semant::check_proof::{ProofStateKey, ReasoningStep};
+use crate::semant::presentation::PresentationTreeId;
 use crate::semant::theorems::TheoremId;
 use crate::util::plural;
 use annotate_snippets::{Level, Message, Renderer, Snippet};
@@ -337,6 +338,25 @@ impl<'ctx> DiagManager<'ctx> {
         let diag = Diagnostic::new(&format!("missing goal `{goal_txt}`"))
             .with_error("goal unproved at end of section", at)
             .in_proof(in_proof);
+
+        self.add_diag(diag);
+    }
+
+    pub fn err_goal_conclusion_mismatch(
+        &mut self,
+        in_proof: impl Into<InProof<'ctx>>,
+        at: Span,
+        conclusion: PresentationTreeId<'ctx>,
+    ) {
+        let in_proof = in_proof.into();
+        let goal_txt = in_proof.proof_state.goal().1.render_str();
+        let conclusion_txt = conclusion.render_str();
+
+        let diag = Diagnostic::new(&format!(
+            "mismatch between goal `{goal_txt}` and conclusion `{conclusion_txt}`"
+        ))
+        .with_error("", at)
+        .in_proof(in_proof);
 
         self.add_diag(diag);
     }

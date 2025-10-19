@@ -56,7 +56,7 @@ fn main() {
             // Clear the screen to print the new info
             _ = execute!(io::stdout(), Clear(ClearType::Purge), MoveTo(0, 0));
 
-            display_report(&report, Some(i));
+            display_report(&report, ctx.diags.has_errors(), Some(i));
             if ctx.diags.has_errors() {
                 ctx.diags.print_errors(&ctx);
             }
@@ -71,7 +71,7 @@ fn main() {
         let arenas = Arenas::new();
         let (ctx, report) = run(&args, &arenas);
 
-        display_report(&report, None);
+        display_report(&report, ctx.diags.has_errors(), None);
 
         if ctx.diags.has_errors() {
             ctx.diags.print_errors(&ctx);

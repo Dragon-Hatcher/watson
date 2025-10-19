@@ -8,7 +8,7 @@ pub struct ProofReport<'ctx> {
     pub circularities: Vec<Vec<TheoremId<'ctx>>>,
 }
 
-pub fn display_report(report: &ProofReport, iteration: Option<usize>) -> bool {
+pub fn display_report(report: &ProofReport, errors: bool, iteration: Option<usize>) -> bool {
     let ProofReport {
         statuses,
         circularities,
@@ -69,7 +69,7 @@ pub fn display_report(report: &ProofReport, iteration: Option<usize>) -> bool {
         }
     }
 
-    let all_ok = statuses.error_cnt() == 0 && circularities.is_empty();
+    let all_ok = statuses.error_cnt() == 0 && circularities.is_empty() && !errors;
 
     if all_ok {
         println!();

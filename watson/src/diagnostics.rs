@@ -319,6 +319,18 @@ impl<'ctx> DiagManager<'ctx> {
         self.add_diag(diag);
     }
 
+    pub fn err_failed_to_parse_fragment_in_stmt(
+        &mut self,
+        _theorem_name: Ustr,
+        span: Span,
+        cat: FormalSyntaxCatId<'ctx>,
+    ) {
+        let diag = Diagnostic::new(&format!("failed to parse {}", cat.name()))
+            .with_error("", span);
+
+        self.add_diag(diag);
+    }
+
     pub fn err_non_existent_theorem(&mut self, name: Ustr, span: Span) {
         let diag = Diagnostic::new(&format!("unknown theorem `{name}`")).with_error("", span);
 

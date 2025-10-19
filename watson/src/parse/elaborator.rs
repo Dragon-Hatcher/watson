@@ -21,8 +21,9 @@ use crate::{
             FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxPat, FormalSyntaxPatPart,
             FormalSyntaxRule,
         },
-        parse_fragment::{NameCtx, UnresolvedFact, parse_fact, parse_fragment},
-        theorems::{Template, TheoremId, TheoremStatement, UnresolvedProof},
+        parse_fragment::{NameCtx, UnresolvedFact, parse_fragment},
+        presentation::FactPresentation,
+        theorems::{Fact, Template, TheoremId, TheoremStatement, UnresolvedProof},
     },
     strings,
 };
@@ -552,7 +553,7 @@ fn elaborate_axiom<'ctx>(
     // axiom_command ::= (axiom) kw"axiom" name templates ":" hypotheses "|-" sentence kw"end"
 
     match_rule! { (ctx, axiom) =>
-        axiom ::= [axiom_kw, name_node, templates, colon, hypotheses, turnstile, sentence, end_kw] => {
+        axiom ::= [axiom_kw, name_node, templates, colon, hypotheses, turnstile, conclusion, end_kw] => {
             debug_assert!(axiom_kw.is_kw(*strings::AXIOM));
             debug_assert!(colon.is_lit(*strings::COLON));
             debug_assert!(turnstile.is_lit(*strings::TURNSTILE));
@@ -565,9 +566,31 @@ fn elaborate_axiom<'ctx>(
             let shorthands = FxHashMap::default();
             let mut name_ctx = NameCtx::new(&templates_map, &shorthands);
 
-            let hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
-            let hypotheses = hypotheses.into_iter().map(|h| parse_fact(h, &mut name_ctx, ctx)).collect::<WResult<Vec<_>>>()?;
-            let conclusion = parse_fragment(sentence.as_node().unwrap(), ctx.sentence_formal_cat, &mut name_ctx, ctx)?;
+            let un_hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
+            let mut hypotheses = Vec::new();
+            for un_h in  un_hypotheses.into_iter() {
+                let (a, a_pres) = if let Some(un_a) = un_h.assumption() {
+                    let Ok((a, a_pres)) = parse_fragment(un_a, ctx.sentence_formal_cat, &mut name_ctx, ctx) else {
+                        ctx.diags.err_failed_to_parse_fragment_in_stmt(name, un_a.span(), ctx.sentence_formal_cat);
+                        return Err(());
+                    };
+                    (Some(a), Some(a_pres))
+                } else {
+                    (None, None)
+                };
+
+                let Ok((c, c_pres)) = parse_fragment(un_h.conclusion(), ctx.sentence_formal_cat, &mut name_ctx, ctx) else {
+                    ctx.diags.err_failed_to_parse_fragment_in_stmt(name, un_h.conclusion().span(), ctx.sentence_formal_cat);
+                    return Err(());
+                };
+                hypotheses.push((Fact::new(a, c), FactPresentation::new(a_pres, c_pres)));
+            }
+
+            let conclusion = conclusion.as_node().unwrap();
+            let Ok(conclusion) = parse_fragment(conclusion, ctx.sentence_formal_cat, &mut name_ctx, ctx) else {
+                ctx.diags.err_failed_to_parse_fragment_in_stmt(name, conclusion.span(), ctx.sentence_formal_cat);
+                return Err(());
+            };
 
             let theorem_stmt = TheoremStatement::new(name, templates, hypotheses, conclusion, UnresolvedProof::Axiom);
 
@@ -588,7 +611,7 @@ fn elaborate_theorem<'ctx>(
     // theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactic kw"qed"
 
     match_rule! { (ctx, theorem) =>
-        theorem ::= [theorem_kw, name_node, templates, colon, hypotheses, turnstile, sentence, proof_kw, tactic, qed_kw] => {
+        theorem ::= [theorem_kw, name_node, templates, colon, hypotheses, turnstile, conclusion, proof_kw, tactic, qed_kw] => {
             debug_assert!(theorem_kw.is_kw(*strings::THEOREM));
             debug_assert!(colon.is_lit(*strings::COLON));
             debug_assert!(turnstile.is_lit(*strings::TURNSTILE));
@@ -602,9 +625,31 @@ fn elaborate_theorem<'ctx>(
             let shorthands = FxHashMap::default();
             let mut name_ctx = NameCtx::new(&templates_map, &shorthands);
 
-            let hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
-            let hypotheses = hypotheses.into_iter().map(|h| parse_fact(h, &mut name_ctx, ctx)).collect::<WResult<Vec<_>>>()?;
-            let conclusion = parse_fragment(sentence.as_node().unwrap(), ctx.sentence_formal_cat, &mut name_ctx, ctx)?;
+            let un_hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
+            let mut hypotheses = Vec::new();
+            for un_h in  un_hypotheses.into_iter() {
+                let (a, a_pres) = if let Some(un_a) = un_h.assumption() {
+                    let Ok((a, a_pres)) = parse_fragment(un_a, ctx.sentence_formal_cat, &mut name_ctx, ctx) else {
+                        ctx.diags.err_failed_to_parse_fragment_in_stmt(name, un_a.span(), ctx.sentence_formal_cat);
+                        return Err(());
+                    };
+                    (Some(a), Some(a_pres))
+                } else {
+                    (None, None)
+                };
+
+                let Ok((c, c_pres)) = parse_fragment(un_h.conclusion(), ctx.sentence_formal_cat, &mut name_ctx, ctx) else {
+                    ctx.diags.err_failed_to_parse_fragment_in_stmt(name, un_h.conclusion().span(), ctx.sentence_formal_cat);
+                    return Err(());
+                };
+                hypotheses.push((Fact::new(a, c), FactPresentation::new(a_pres, c_pres)));
+            }
+
+            let conclusion = conclusion.as_node().unwrap();
+            let Ok(conclusion) = parse_fragment(conclusion, ctx.sentence_formal_cat, &mut name_ctx, ctx) else {
+                ctx.diags.err_failed_to_parse_fragment_in_stmt(name, conclusion.span(), ctx.sentence_formal_cat);
+                return Err(());
+            };
 
             let tactic = tactic.as_node().unwrap();
             let theorem_stmt = TheoremStatement::new(name, templates, hypotheses, conclusion, UnresolvedProof::Theorem(tactic));
@@ -692,13 +737,15 @@ fn elaborate_template_names<'ctx>(
             }
         }
     }
-
 }
 
-fn elaborate_template_name<'ctx>(name: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WResult<(Ustr, Vec<FormalSyntaxCatId<'ctx>>)> {
+fn elaborate_template_name<'ctx>(
+    name: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<(Ustr, Vec<FormalSyntaxCatId<'ctx>>)> {
     // template_name ::= (template_name) name maybe_template_params
 
-    match_rule! { (ctx, name) => 
+    match_rule! { (ctx, name) =>
         template_name ::= [name, maybe_params] => {
             let name = elaborate_name(name.as_node().unwrap(), ctx)?;
             let params = elaborate_maybe_template_params(maybe_params.as_node().unwrap(), ctx)?;

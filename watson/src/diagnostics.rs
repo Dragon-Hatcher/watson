@@ -352,7 +352,7 @@ impl<'ctx> DiagManager<'ctx> {
         let goal_txt = in_proof.proof_state.goal().1.render_str();
 
         let diag = Diagnostic::new(&format!("missing goal `{goal_txt}`"))
-            .with_error("goal unproved at end of section", at)
+            .with_error("goal unproved at end of proof", at)
             .in_proof(in_proof);
 
         self.add_diag(diag);

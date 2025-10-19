@@ -90,7 +90,12 @@ theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sen
 templates ::= (template_none)
             | (template_many) template templates
 
-template ::= (template) "[" name maybe_template_params ":" name "]"
+template ::= (template) "[" template_names ":" name "]"
+
+template_names ::= (template_names_none)
+                 | (template_names_many) template_name template_names
+
+template_name ::= (template_name) name maybe_template_params
 
 maybe_template_params ::= (maybe_template_params_none)
                         | (maybe_template_params_some) "(" template_params ")"
@@ -146,6 +151,8 @@ builtin_cats! {
         macro_pat_kind,
         templates,
         template,
+        template_names,
+        template_name,
         maybe_template_params,
         template_params,
         template_param,
@@ -198,6 +205,9 @@ builtin_rules! {
         template_none,
         template_many,
         template,
+        template_names_none,
+        template_names_many,
+        template_name,
         maybe_template_params_none,
         maybe_template_params_some,
         template_params_one,
@@ -471,12 +481,24 @@ pub fn add_builtin_rules<'ctx>(
             cats.template,
             vec![
                 lit(*strings::LEFT_BRACKET),
-                cat(cats.name),
-                cat(cats.maybe_template_params),
+                cat(cats.template_names),
                 lit(*strings::COLON),
                 cat(cats.name),
                 lit(*strings::RIGHT_BRACKET),
             ],
+        ),
+
+        template_names_none: rule("template_names_none", cats.template_names, vec![]),
+        template_names_many: rule(
+            "template_names_many",
+            cats.template_names,
+            vec![cat(cats.template_name), cat(cats.template_names)],
+        ),
+
+        template_name: rule(
+            "template_name",
+            cats.template_name,
+            vec![cat(cats.name), cat(cats.maybe_template_params)],
         ),
 
         maybe_template_params_none: rule(

@@ -636,7 +636,7 @@ fn elaborate_templates<'ctx>(
             template_many ::= [template, rest] => {
                 let template = template.as_node().unwrap();
 
-                templates_list.push(elaborate_template(template, ctx)?);
+                templates_list.extend(elaborate_template(template, ctx)?);
                 templates = rest.as_node().unwrap();
             }
         }
@@ -646,23 +646,63 @@ fn elaborate_templates<'ctx>(
 fn elaborate_template<'ctx>(
     template: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<Template<'ctx>> {
+) -> WResult<Vec<Template<'ctx>>> {
     // template ::= (template) "[" name maybe_template_params ":" name "]"
 
     match_rule! { (ctx, template) =>
-        template ::= [l_brack, name, maybe_params, colon, cat_name_node, r_brack] => {
+        template ::= [l_brack, names, colon, cat_name_node, r_brack] => {
             debug_assert!(l_brack.is_lit(*strings::LEFT_BRACKET));
             debug_assert!(colon.is_lit(*strings::COLON));
             debug_assert!(r_brack.is_lit(*strings::RIGHT_BRACKET));
 
-            let name = elaborate_name(name.as_node().unwrap(), ctx)?;
+            let names = elaborate_template_names(names.as_node().unwrap(), ctx)?;
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
             let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
                 return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
-            let params = elaborate_maybe_template_params(maybe_params.as_node().unwrap(), ctx)?;
 
-            Ok(Template::new(name, cat, params))
+            let mut templates = Vec::new();
+            for (name, params) in names {
+                templates.push(Template::new(name, cat, params));
+            }
+            Ok(templates)
+        }
+    }
+}
+
+fn elaborate_template_names<'ctx>(
+    mut names: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<Vec<(Ustr, Vec<FormalSyntaxCatId<'ctx>>)>> {
+    // template_names ::= (template_names_none)
+    //                  | (template_names_many) template_name template_names
+
+    let mut names_list = Vec::new();
+
+    loop {
+        match_rule! { (ctx, names) =>
+            template_names_none ::= [] => {
+                return Ok(names_list);
+            },
+            template_names_many ::= [name, rest] => {
+                let name = name.as_node().unwrap();
+
+                names_list.push(elaborate_template_name(name, ctx)?);
+                names = rest.as_node().unwrap();
+            }
+        }
+    }
+
+}
+
+fn elaborate_template_name<'ctx>(name: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WResult<(Ustr, Vec<FormalSyntaxCatId<'ctx>>)> {
+    // template_name ::= (template_name) name maybe_template_params
+
+    match_rule! { (ctx, name) => 
+        template_name ::= [name, maybe_params] => {
+            let name = elaborate_name(name.as_node().unwrap(), ctx)?;
+            let params = elaborate_maybe_template_params(maybe_params.as_node().unwrap(), ctx)?;
+            Ok((name, params))
         }
     }
 }

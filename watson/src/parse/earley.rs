@@ -681,7 +681,7 @@ fn skip_ws_and_comments(text: &str, mut at: SourceOffset) -> SourceOffset {
         }
 
         if next_char == '-' && chars.peek() == Some(&'-') {
-            at = at.forward(2);
+            at = at.forward(1);
             for next_char in chars.by_ref() {
                 at = at.forward(next_char.len_utf8());
                 if next_char == '\n' {

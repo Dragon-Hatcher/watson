@@ -4,7 +4,18 @@ use crate::{
     report::{ProofReport, display_report},
     semant::{check_circularity::find_circular_dependency_groups, check_proof::check_proofs},
 };
-use std::path::Path;
+use argh::FromArgs;
+use crossterm::{
+    cursor::MoveTo,
+    execute,
+    terminal::{Clear, ClearType},
+};
+use notify::Watcher;
+use std::{
+    io,
+    path::{Path, PathBuf},
+    sync::mpsc,
+};
 use ustr::Ustr;
 
 mod context;
@@ -15,21 +26,65 @@ mod semant;
 mod strings;
 mod util;
 
+/// The Watson proof assistant.
+#[derive(FromArgs)]
+struct Args {
+    /// continually recheck on file changes.
+    #[argh(switch, short = 'w')]
+    watch: bool,
+
+    /// the root file of the project.
+    #[argh(positional)]
+    root: PathBuf,
+}
+
 fn main() {
-    let root_file = std::env::args_os().nth(1).unwrap();
-    let root_file = Path::new(&root_file);
+    let args: Args = argh::from_env();
 
-    let (source_cache, root_id) = make_source_cache(root_file);
-    let arenas = Arenas::new();
-    let mut ctx = Ctx::new(source_cache, &arenas);
+    if args.watch {
+        let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+        let mut watcher = notify::recommended_watcher(tx).unwrap();
+        watcher
+            .watch(&args.root, notify::RecursiveMode::Recursive)
+            .unwrap();
 
-    let report = compile(root_id, &mut ctx);
-    display_report(&report);
+        for i in 1.. {
+            let _ = rx.try_iter().count();
+            let arenas = Arenas::new();
+            let (ctx, report) = run(&args, &arenas);
 
-    if ctx.diags.has_errors() {
-        ctx.diags.print_errors(&ctx);
-        std::process::exit(1);
+            // Clear the screen to print the new info
+            _ = execute!(io::stdout(), Clear(ClearType::Purge), MoveTo(0, 0));
+
+            display_report(&report, Some(i));
+            if ctx.diags.has_errors() {
+                ctx.diags.print_errors(&ctx);
+            }
+
+            while let Ok(e) = rx.recv().unwrap() {
+                if !matches!(e.kind, notify::EventKind::Access(_)) {
+                    break;
+                }
+            }
+        }
+    } else {
+        let arenas = Arenas::new();
+        let (ctx, report) = run(&args, &arenas);
+
+        display_report(&report, None);
+
+        if ctx.diags.has_errors() {
+            ctx.diags.print_errors(&ctx);
+            std::process::exit(1)
+        }
     }
+}
+
+fn run<'ctx>(args: &Args, arenas: &'ctx Arenas<'ctx>) -> (Ctx<'ctx>, ProofReport<'ctx>) {
+    let (source_cache, root_id) = make_source_cache(&args.root);
+    let mut ctx = Ctx::new(source_cache, arenas);
+    let report = compile(root_id, &mut ctx);
+    (ctx, report)
 }
 
 fn make_source_cache(root_file: &Path) -> (SourceCache, SourceId) {

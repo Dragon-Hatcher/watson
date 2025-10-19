@@ -5,7 +5,10 @@ edition = "2024"
 
 [dependencies]
 annotate-snippets = "0.11.5"
+argh = "0.1.13"
+crossterm = "0.29.0"
 itertools = "0.14.0"
+notify = "8.2.0"
 rustc-hash = "2.1.1"
 slotmap = "1.0.7"
 typed-arena = "2.0.2"

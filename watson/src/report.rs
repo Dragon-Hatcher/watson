@@ -1,6 +1,6 @@
 use crate::semant::proof_status::ProofStatuses;
 use crate::semant::theorems::TheoremId;
-use crate::util::ansi::{ANSI_BOLD, ANSI_GREEN, ANSI_RED, ANSI_RESET, ANSI_YELLOW};
+use crate::util::ansi::{ANSI_BOLD, ANSI_GREEN, ANSI_GRAY, ANSI_RED, ANSI_RESET, ANSI_YELLOW};
 use crate::util::plural;
 
 pub struct ProofReport<'ctx> {
@@ -8,20 +8,26 @@ pub struct ProofReport<'ctx> {
     pub circularities: Vec<Vec<TheoremId<'ctx>>>,
 }
 
-pub fn display_report(report: &ProofReport) -> bool {
+pub fn display_report(report: &ProofReport, iteration: Option<usize>) -> bool {
     let ProofReport {
         statuses,
         circularities,
     } = report;
 
+    let iter_info = match iteration {
+        Some(iter) => format!("{ANSI_GRAY}iteration {iter}{ANSI_RESET}"),
+        None => String::new(),
+    };
+
     println!(
-        "Checked {} theorem{} ({} axiom{}, {} theorem{}):",
+        "Checked {} theorem{} ({} axiom{}, {} theorem{}): {}",
         statuses.total_cnt(),
         plural(statuses.total_cnt()),
         statuses.axiom_cnt(),
         plural(statuses.axiom_cnt()),
         statuses.theorem_cnt(),
-        plural(statuses.theorem_cnt())
+        plural(statuses.theorem_cnt()),
+        iter_info
     );
 
     println!(

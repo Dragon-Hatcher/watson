@@ -2,19 +2,12 @@ use crate::{
     context::arena::{InternedArena, NamedArena, PlainArena},
     diagnostics::DiagManager,
     parse::{
-        SourceCache,
         grammar::{
-            BuiltinCats, BuiltinRules, add_builtin_rules, add_builtin_syntax_for_formal_cat,
-        },
-        macros::{Macro, MacroId},
-        parse_state::{Category, CategoryId, ParseState, Rule, RuleId},
-        parse_tree::{ParseTree, ParseTreeId},
+            add_builtin_rules, add_builtin_syntax_for_formal_cat, BuiltinCats, BuiltinRules
+        }, macros::{Macro, MacroId}, parse_state::{Category, CategoryId, ParseState, Rule, RuleId}, parse_tree::{ParseTree, ParseTreeId}, SourceCache
     },
     semant::{
-        check_proof::{ProofState, ProofStateKey},
-        formal_syntax::{FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxRule, FormalSyntaxRuleId},
-        fragment::{Fragment, FragmentId},
-        theorems::{TheoremId, TheoremStatement},
+        check_proof::{ProofState, ProofStateKey}, formal_syntax::{FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxRule, FormalSyntaxRuleId}, fragment::{Fragment, FragmentId}, presentation::{Presentation, PresentationId, PresentationTree, PresentationTreeId}, theorems::{TheoremId, TheoremStatement}
     },
     strings,
 };
@@ -81,6 +74,8 @@ pub struct Arenas<'ctx> {
     pub fragments: InternedArena<Fragment<'ctx>, FragmentId<'ctx>>,
     pub theorem_stmts: NamedArena<TheoremStatement<'ctx>, TheoremId<'ctx>>,
     pub proof_states: PlainArena<ProofState<'ctx>, ProofStateKey<'ctx>>,
+    pub presentations: InternedArena<Presentation<'ctx>, PresentationId<'ctx>>,
+    pub presentation_trees: InternedArena<PresentationTree<'ctx>, PresentationTreeId<'ctx>>,
 }
 
 impl<'ctx> Arenas<'ctx> {
@@ -95,6 +90,8 @@ impl<'ctx> Arenas<'ctx> {
             fragments: InternedArena::new(),
             theorem_stmts: NamedArena::new(),
             proof_states: PlainArena::new(),
+            presentations: InternedArena::new(),
+            presentation_trees: InternedArena::new()
         }
     }
 }

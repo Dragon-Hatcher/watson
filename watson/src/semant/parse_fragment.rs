@@ -15,6 +15,11 @@ use crate::{
         fragment::{
             FragData, FragPart, FragRuleApplication, FragTemplateRef, Fragment, FragmentId,
         },
+        presentation::{
+            FactPresentation, PresPart, PresRuleApplication, PresTemplate, PresTreeChild,
+            PresTreeData, PresTreeRuleApp, PresTreeTemplate, Presentation, PresentationTree,
+            PresentationTreeId,
+        },
         theorems::{Fact, Template},
     },
 };
@@ -45,7 +50,7 @@ impl<'ctx> UnresolvedFact<'ctx> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NameCtx<'ctx, 'a> {
     templates: &'a FxHashMap<Ustr, Template<'ctx>>,
-    shorthands: &'a FxHashMap<Ustr, FragmentId<'ctx>>,
+    shorthands: &'a FxHashMap<Ustr, (FragmentId<'ctx>, PresentationTreeId<'ctx>)>,
     bindings: Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
     holes: Vec<FormalSyntaxCatId<'ctx>>,
 }
@@ -53,7 +58,7 @@ pub struct NameCtx<'ctx, 'a> {
 impl<'ctx, 'a> NameCtx<'ctx, 'a> {
     pub fn new(
         templates: &'a FxHashMap<Ustr, Template<'ctx>>,
-        shorthands: &'a FxHashMap<Ustr, FragmentId<'ctx>>,
+        shorthands: &'a FxHashMap<Ustr, (FragmentId<'ctx>, PresentationTreeId<'ctx>)>,
     ) -> Self {
         Self {
             templates,
@@ -72,17 +77,21 @@ pub fn parse_fact<'ctx>(
     fact: UnresolvedFact<'ctx>,
     names: &mut NameCtx<'ctx, '_>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<Fact<'ctx>> {
+) -> WResult<(Fact<'ctx>, FactPresentation<'ctx>)> {
     let sentence_cat = ctx.sentence_formal_cat;
 
-    let assumption = if let Some(assumption_tree) = fact.assumption {
-        Some(parse_fragment(assumption_tree, sentence_cat, names, ctx)?)
+    let (assumption, assumption_pres) = if let Some(assumption_tree) = fact.assumption {
+        let (frag, pres) = parse_fragment(assumption_tree, sentence_cat, names, ctx)?;
+        (Some(frag), Some(pres))
     } else {
-        None
+        (None, None)
     };
-    let conclusion = parse_fragment(fact.conclusion, sentence_cat, names, ctx)?;
+    let (conclusion, conclusion_pres) = parse_fragment(fact.conclusion, sentence_cat, names, ctx)?;
 
-    Ok(Fact::new(assumption, conclusion))
+    Ok((
+        Fact::new(assumption, conclusion),
+        FactPresentation::new(assumption_pres, conclusion_pres),
+    ))
 }
 
 pub fn parse_any_fragment<'ctx>(
@@ -90,7 +99,7 @@ pub fn parse_any_fragment<'ctx>(
     expected_cat: FormalSyntaxCatId<'ctx>,
     names: &mut NameCtx<'ctx, '_>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<FragmentId<'ctx>> {
+) -> WResult<(FragmentId<'ctx>, PresentationTreeId<'ctx>)> {
     let Some(frag) = maybe_parse_any_fragment(tree, expected_cat, names, ctx)? else {
         // TODO: actual error message
         return ctx.diags.err_ambiguous_parse(tree.span());
@@ -104,7 +113,7 @@ pub fn parse_fragment<'ctx>(
     expected_cat: FormalSyntaxCatId<'ctx>,
     names: &mut NameCtx<'ctx, '_>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<FragmentId<'ctx>> {
+) -> WResult<(FragmentId<'ctx>, PresentationTreeId<'ctx>)> {
     let Some(frag) = maybe_parse_fragment(tree, expected_cat, names, ctx)? else {
         // TODO: actual error message
         return ctx.diags.err_ambiguous_parse(tree.span());
@@ -118,7 +127,7 @@ fn maybe_parse_any_fragment<'ctx>(
     expected_cat: FormalSyntaxCatId<'ctx>,
     names: &mut NameCtx<'ctx, '_>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<Option<FragmentId<'ctx>>> {
+) -> WResult<Option<(FragmentId<'ctx>, PresentationTreeId<'ctx>)>> {
     debug_assert!(tree.cat() == ctx.builtin_cats.any_fragment);
 
     let tree = reduce_to_builtin(tree, ctx)?;
@@ -154,14 +163,14 @@ fn maybe_parse_fragment<'ctx>(
     expected_cat: FormalSyntaxCatId<'ctx>,
     names: &mut NameCtx<'ctx, '_>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<Option<FragmentId<'ctx>>> {
+) -> WResult<Option<(FragmentId<'ctx>, PresentationTreeId<'ctx>)>> {
     debug_assert!(matches!(
         tree.cat().source(),
         SyntaxCategorySource::FormalLang(_)
     ));
 
     let mut possibilities_todo = tree.possibilities().to_vec();
-    let mut successful_fragments: Vec<FragmentId> = Vec::new();
+    let mut successful_fragments: Vec<(FragmentId, PresentationTreeId)> = Vec::new();
 
     while let Some(possibility) = possibilities_todo.pop() {
         match possibility.rule().0.source() {
@@ -195,9 +204,16 @@ fn maybe_parse_fragment<'ctx>(
                     let frag_data = FragData::Hole(hole);
                     let frag = Fragment::new(expected_cat, frag_data);
                     let frag_id = ctx.arenas.fragments.intern(frag);
-                    successful_fragments.push(frag_id);
+
+                    let pres = Presentation::Hole(hole);
+                    let pres = ctx.arenas.presentations.intern(pres);
+
+                    let pres_tree = PresentationTree::new(pres, PresTreeData::Hole);
+                    let pres_tree = ctx.arenas.presentation_trees.intern(pres_tree);
+
+                    successful_fragments.push((frag_id, pres_tree));
                     continue;
-                } else if let Some(replacement) = names.shorthands.get(&name) {
+                } else if let Some((replacement, pres_tree)) = names.shorthands.get(&name) {
                     // This is a shorthand for a fragment. We can use it directly.
 
                     if !args.is_empty() {
@@ -210,7 +226,7 @@ fn maybe_parse_fragment<'ctx>(
                         continue;
                     }
 
-                    successful_fragments.push(*replacement);
+                    successful_fragments.push((*replacement, *pres_tree));
                     continue;
                 } else if let Some(template) = names.templates.get(&name) {
                     let template_cat = template.cat();
@@ -226,12 +242,13 @@ fn maybe_parse_fragment<'ctx>(
                     }
 
                     let mut arg_frags = Vec::new();
+                    let mut arg_presentations = Vec::new();
                     let mut template_success = true;
 
                     for (param_cat, arg_frag_id) in
                         template.params().to_vec().iter().zip(args.iter())
                     {
-                        let Some(arg_frag) =
+                        let Some((arg_frag, arg_pres)) =
                             maybe_parse_any_fragment(*arg_frag_id, *param_cat, names, ctx)?
                         else {
                             template_success = false;
@@ -239,13 +256,27 @@ fn maybe_parse_fragment<'ctx>(
                         };
 
                         arg_frags.push(arg_frag);
+                        arg_presentations.push(arg_pres)
                     }
 
                     if template_success {
                         let frag_data = FragData::Template(FragTemplateRef::new(name, arg_frags));
                         let frag = Fragment::new(template_cat, frag_data);
                         let frag_id = ctx.arenas.fragments.intern(frag);
-                        successful_fragments.push(frag_id);
+
+                        let pres = PresTemplate::new(
+                            name,
+                            arg_presentations.iter().map(|p| p.pres()).collect(),
+                        );
+                        let pres = Presentation::Template(pres);
+                        let pres = ctx.arenas.presentations.intern(pres);
+
+                        let pres_tree =
+                            PresTreeData::Template(PresTreeTemplate::new(arg_presentations));
+                        let pres_tree = PresentationTree::new(pres, pres_tree);
+                        let pres_tree = ctx.arenas.presentation_trees.intern(pres_tree);
+
+                        successful_fragments.push((frag_id, pres_tree));
                     }
                 } else {
                     // This is not a valid shorthand or template.
@@ -254,7 +285,12 @@ fn maybe_parse_fragment<'ctx>(
             }
             ParseRuleSource::FormalLang(formal_rule) => {
                 let mut frag_parts = Vec::new();
+                let mut pres_parts = Vec::new();
+                let mut pres_tree_parts = Vec::new();
                 let mut rule_success = true;
+
+                let mut binding_names = Vec::new();
+                let mut binding_names_idx = 0;
 
                 // First push the bindings from this rule to the name context.
                 let mut binding_count = 0;
@@ -267,6 +303,8 @@ fn maybe_parse_fragment<'ctx>(
                         let var_name = elaborate_name(child.as_node().unwrap(), ctx)?;
                         names.bindings.push((*var_formal_cat, var_name));
                         binding_count += 1;
+
+                        binding_names.push(var_name);
                     }
                 }
 
@@ -277,13 +315,15 @@ fn maybe_parse_fragment<'ctx>(
                 {
                     match formal_part {
                         FormalSyntaxPatPart::Cat(cat) => {
-                            let Some(child_frag_id) =
+                            let Some((child_frag_id, pres_tree)) =
                                 maybe_parse_fragment(child.as_node().unwrap(), *cat, names, ctx)?
                             else {
                                 rule_success = false;
                                 break;
                             };
                             frag_parts.push(FragPart::Fragment(child_frag_id));
+                            pres_tree_parts.push(PresTreeChild::Fragment(pres_tree));
+                            pres_parts.push(PresPart::Subpart(vec![pres_tree_parts.len() - 1]));
                         }
                         FormalSyntaxPatPart::Var(var_formal_cat) => {
                             // We need to check the names environment for a binding with this name.
@@ -306,12 +346,16 @@ fn maybe_parse_fragment<'ctx>(
                                 break;
                             }
 
-                            frag_parts.push(FragPart::Variable(*var_formal_cat, idx))
+                            frag_parts.push(FragPart::Variable(*var_formal_cat, idx));
+                            pres_tree_parts.push(PresTreeChild::Variable);
+                            pres_parts.push(PresPart::Variable(var_name));
                         }
-                        FormalSyntaxPatPart::Lit(_) | FormalSyntaxPatPart::Binding(_) => {
-                            // The parser already ensures that these parts of the pattern
-                            // are matched so there is nothing extra to do here.
-                            continue;
+                        FormalSyntaxPatPart::Lit(lit) => {
+                            pres_parts.push(PresPart::Str(*lit));
+                        }
+                        FormalSyntaxPatPart::Binding(_cat) => {
+                            pres_parts.push(PresPart::Binding(binding_names[binding_names_idx]));
+                            binding_names_idx += 1;
                         }
                     }
                 }
@@ -325,7 +369,15 @@ fn maybe_parse_fragment<'ctx>(
                     ));
                     let frag = Fragment::new(formal_rule.cat(), frag_data);
                     let frag_id = ctx.arenas.fragments.intern(frag);
-                    successful_fragments.push(frag_id);
+
+                    let pres = Presentation::Rule(PresRuleApplication::new(pres_parts));
+                    let pres = ctx.arenas.presentations.intern(pres);
+
+                    let pres_tree = PresTreeRuleApp::new(pres_tree_parts);
+                    let pres_tree = PresentationTree::new(pres, PresTreeData::Rule(pres_tree));
+                    let pres_tree = ctx.arenas.presentation_trees.intern(pres_tree);
+
+                    successful_fragments.push((frag_id, pres_tree));
                 }
 
                 // Now pop the bindings we added to the name context.

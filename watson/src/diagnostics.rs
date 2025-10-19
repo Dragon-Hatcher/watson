@@ -3,7 +3,6 @@ use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
 use crate::semant::check_proof::{ProofStateKey, ReasoningStep};
-use crate::semant::fragment::{_debug_fact, _debug_fragment};
 use crate::semant::theorems::TheoremId;
 use crate::util::plural;
 use annotate_snippets::{Level, Message, Renderer, Snippet};
@@ -142,21 +141,21 @@ fn render_proof_state<'ctx>(state: ProofStateKey<'ctx>) -> String {
         res += "  ";
 
         match step {
-            ReasoningStep::Hypothesis(fact) => res += &_debug_fact(fact),
-            ReasoningStep::Deduce(fact) => res += &_debug_fact(fact),
-            ReasoningStep::Assume(fact) => res += &_debug_fact(fact),
-            ReasoningStep::_Shorthand(name, frag) => {
+            ReasoningStep::Hypothesis((_, pres)) => res += &pres.render_str(),
+            ReasoningStep::Deduce((_, pres)) => res += &pres.render_str(),
+            ReasoningStep::Assume((_, pres)) => res += &pres.render_str(),
+            ReasoningStep::_Shorthand(name, (_, pres)) => {
                 res += &name;
                 res += " := ";
-                res += &_debug_fragment(frag);
+                res += &pres.render_str();
             }
         }
 
         res += "\n";
     }
 
-    res += "|- ";
-    res += &_debug_fragment(state.goal());
+    res += "⊢ ";
+    res += &state.goal().1.render_str();
 
     res
 }
@@ -333,7 +332,7 @@ impl<'ctx> DiagManager<'ctx> {
 
     pub fn err_missing_goal(&mut self, in_proof: impl Into<InProof<'ctx>>, at: Span) {
         let in_proof = in_proof.into();
-        let goal_txt = _debug_fragment(in_proof.proof_state.goal());
+        let goal_txt = in_proof.proof_state.goal().1.render_str();
 
         let diag = Diagnostic::new(&format!("missing goal `{goal_txt}`"))
             .with_error("goal unproved at end of section", at)

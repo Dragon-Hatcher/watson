@@ -9,10 +9,14 @@ use crate::{
     parse::{Span, elaborator::elaborate_tactic, parse_tree::ParseTreeId},
     semant::{
         fragment::{
-            _debug_fact, _debug_fragment, FragData, FragPart, FragRuleApplication, FragTemplateRef,
-            Fragment, FragmentId,
+            _debug_fact, FragData, FragPart, FragRuleApplication, FragTemplateRef, Fragment,
+            FragmentId,
         },
         parse_fragment::{NameCtx, UnresolvedFact, parse_any_fragment, parse_fragment},
+        presentation::{
+            FactPresentation, PresTemplate, PresTreeChild, PresTreeData, PresTreeRuleApp,
+            PresTreeTemplate, Presentation, PresentationId, PresentationTree, PresentationTreeId,
+        },
         proof_status::{ProofStatus, ProofStatuses},
         theorems::{Fact, Template, TheoremId, UnresolvedProof},
     },
@@ -36,20 +40,20 @@ pub fn check_proofs<'ctx>(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProofState<'ctx> {
-    knowns: FxHashSet<Fact<'ctx>>,
-    goal: FragmentId<'ctx>,
+    knowns: FxHashMap<Fact<'ctx>, FactPresentation<'ctx>>,
+    goal: (FragmentId<'ctx>, PresentationTreeId<'ctx>),
     templates: FxHashMap<Ustr, Template<'ctx>>,
-    shorthands: FxHashMap<Ustr, FragmentId<'ctx>>,
+    shorthands: FxHashMap<Ustr, (FragmentId<'ctx>, PresentationTreeId<'ctx>)>,
 
     reasoning_chain: Vec<ReasoningStep<'ctx>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReasoningStep<'ctx> {
-    Hypothesis(Fact<'ctx>),
-    Deduce(Fact<'ctx>),
-    Assume(Fact<'ctx>),
-    _Shorthand(Ustr, FragmentId<'ctx>),
+    Hypothesis((Fact<'ctx>, FactPresentation<'ctx>)),
+    Deduce((Fact<'ctx>, FactPresentation<'ctx>)),
+    Assume((Fact<'ctx>, FactPresentation<'ctx>)),
+    _Shorthand(Ustr, (FragmentId<'ctx>, PresentationTreeId<'ctx>)),
 }
 
 impl<'ctx> ProofState<'ctx> {
@@ -61,7 +65,7 @@ impl<'ctx> ProofState<'ctx> {
         &self.reasoning_chain
     }
 
-    pub fn goal(&self) -> FragmentId<'ctx> {
+    pub fn goal(&self) -> (FragmentId<'ctx>, PresentationTreeId<'ctx>) {
         self.goal
     }
 }
@@ -102,8 +106,8 @@ fn check_proof<'ctx>(
 
         match tactic {
             UnresolvedTactic::None => {
-                let goal_fact = Fact::new(None, state.goal);
-                if !state.knowns.contains(&goal_fact) {
+                let goal_fact = Fact::new(None, state.goal.0);
+                if !state.knowns.contains_key(&goal_fact) {
                     ctx.diags
                         .err_missing_goal((theorem_smt, state), proof.span());
                     proof_correct = false;
@@ -114,7 +118,7 @@ fn check_proof<'ctx>(
 
                 // Add the assumption to the sub-state if there is one.
                 let assumption = if let Some(assumption) = tactic.fact.assumption() {
-                    let Ok(assumption) = parse_fragment(
+                    let Ok((assumption, assumption_pres)) = parse_fragment(
                         assumption,
                         ctx.sentence_formal_cat,
                         &mut sub_state.name_ctx(),
@@ -131,11 +135,15 @@ fn check_proof<'ctx>(
                     };
 
                     let assumption_fact = Fact::new(None, assumption);
-                    sub_state.knowns.insert(assumption_fact);
+                    let assumption_fact_pres = FactPresentation::new(None, assumption_pres);
                     sub_state
-                        .reasoning_chain
-                        .push(ReasoningStep::Assume(assumption_fact));
-                    Some(assumption)
+                        .knowns
+                        .insert(assumption_fact, assumption_fact_pres);
+                    sub_state.reasoning_chain.push(ReasoningStep::Assume((
+                        assumption_fact,
+                        assumption_fact_pres,
+                    )));
+                    Some((assumption, assumption_pres))
                 } else {
                     None
                 };
@@ -158,13 +166,16 @@ fn check_proof<'ctx>(
                 let sub_state = ctx.arenas.proof_states.alloc(sub_state);
                 proof_states.push((sub_state, tactic.proof));
 
-                let conclusion_fact = Fact::new(assumption, conclusion);
+                let conclusion_fact = Fact::new(assumption.map(|a| a.0), conclusion.0);
+                let conclusion_fact_pres =
+                    FactPresentation::new(assumption.map(|a| a.1), conclusion.1);
 
                 let mut state = state.0.clone();
-                state.knowns.insert(conclusion_fact);
-                state
-                    .reasoning_chain
-                    .push(ReasoningStep::Deduce(conclusion_fact));
+                state.knowns.insert(conclusion_fact, conclusion_fact_pres);
+                state.reasoning_chain.push(ReasoningStep::Deduce((
+                    conclusion_fact,
+                    conclusion_fact_pres,
+                )));
                 let state = ctx.arenas.proof_states.alloc(state);
                 proof_states.push((state, tactic.continuation));
             }
@@ -243,10 +254,10 @@ fn check_proof<'ctx>(
                 }
 
                 for &hypothesis in theorem.hypotheses() {
-                    let instantiated = instantiate_fact_with_templates(hypothesis, &templates, ctx);
+                    let (instantiated, _instantiated_pres) =
+                        instantiate_fact_with_templates(hypothesis, &templates, ctx);
 
-                    if !state.knowns.contains(&instantiated) {
-                        dbg!(_debug_fragment(theorem.conclusion()));
+                    if !state.knowns.contains_key(&instantiated) {
                         eprintln!(
                             "[{}] Proof incorrect from missing hypothesis {}.",
                             theorem_smt.name(),
@@ -261,12 +272,12 @@ fn check_proof<'ctx>(
                     instantiate_fragment_with_templates(theorem.conclusion(), &templates, ctx);
 
                 if conclusion != state.goal {
-                    eprintln!(
-                        "[{}] Proof incorrect from theorem {} mismatch goal {}.",
-                        theorem_smt.name(),
-                        _debug_fragment(conclusion),
-                        _debug_fragment(state.goal),
-                    );
+                    // eprintln!(
+                    //     "[{}] Proof incorrect from theorem {} mismatch goal {}.",
+                    //     theorem_smt.name(),
+                    //     _debug_fragment(conclusion),
+                    //     _debug_fragment(state.goal),
+                    // );
                     proof_correct = false;
                     // TODO: error message.
                 }
@@ -285,101 +296,185 @@ fn check_proof<'ctx>(
 }
 
 fn instantiate_fact_with_templates<'ctx>(
-    fact: Fact<'ctx>,
-    templates: &FxHashMap<Ustr, FragmentId<'ctx>>,
+    fact: (Fact<'ctx>, FactPresentation<'ctx>),
+    templates: &FxHashMap<Ustr, (FragmentId<'ctx>, PresentationTreeId<'ctx>)>,
     ctx: &Ctx<'ctx>,
-) -> Fact<'ctx> {
-    let assumption = fact
-        .assumption()
-        .map(|assump| instantiate_fragment_with_templates(assump, templates, ctx));
-    let conclusion = instantiate_fragment_with_templates(fact.conclusion(), templates, ctx);
-    Fact::new(assumption, conclusion)
+) -> (Fact<'ctx>, FactPresentation<'ctx>) {
+    let (assumption, assumption_pres) = if let (Some(assumption), Some(assumption_pres)) =
+        (fact.0.assumption(), fact.1.assumption())
+    {
+        let (assumption, assumption_pres) =
+            instantiate_fragment_with_templates((assumption, assumption_pres), templates, ctx);
+        (Some(assumption), Some(assumption_pres))
+    } else {
+        (None, None)
+    };
+
+    let (conclusion, conclusion_pres) = instantiate_fragment_with_templates(
+        (fact.0.conclusion(), fact.1.conclusion()),
+        templates,
+        ctx,
+    );
+    (
+        Fact::new(assumption, conclusion),
+        FactPresentation::new(assumption_pres, conclusion_pres),
+    )
 }
 
 fn instantiate_fragment_with_templates<'ctx>(
-    frag: FragmentId<'ctx>,
-    templates: &FxHashMap<Ustr, FragmentId<'ctx>>,
+    frag: (FragmentId<'ctx>, PresentationTreeId<'ctx>),
+    templates: &FxHashMap<Ustr, (FragmentId<'ctx>, PresentationTreeId<'ctx>)>,
     ctx: &Ctx<'ctx>,
-) -> FragmentId<'ctx> {
-    match frag.0.data() {
-        FragData::Rule(rule) => {
+) -> (FragmentId<'ctx>, PresentationTreeId<'ctx>) {
+    match (frag.0.0.data(), frag.1.data(), frag.1.pres().0) {
+        (FragData::Rule(rule), PresTreeData::Rule(pres_tree), Presentation::Rule(_)) => {
             let formal_rule = rule.rule();
             let bindings_added = rule.bindings_added();
 
-            let mut new_parts: Vec<FragPart<'ctx>> = Vec::new();
-            for part in rule.children() {
-                let new_part = match part {
-                    FragPart::Fragment(frag_id) => {
-                        let new_frag =
-                            instantiate_fragment_with_templates(*frag_id, templates, ctx);
-                        FragPart::Fragment(new_frag)
+            let mut new_children = Vec::new();
+            let mut new_children_pres = Vec::new();
+            for (part, part_pres) in rule.children().iter().zip(pres_tree.children().iter()) {
+                let (new_part, new_pres) = match (part, part_pres) {
+                    (FragPart::Fragment(frag_id), PresTreeChild::Fragment(frag_pres)) => {
+                        let (new_frag, new_pres) = instantiate_fragment_with_templates(
+                            (*frag_id, *frag_pres),
+                            templates,
+                            ctx,
+                        );
+                        (
+                            FragPart::Fragment(new_frag),
+                            PresTreeChild::Fragment(new_pres),
+                        )
                     }
-                    FragPart::Variable(cat, idx) => FragPart::Variable(*cat, *idx),
+                    (FragPart::Variable(cat, idx), PresTreeChild::Variable) => {
+                        (FragPart::Variable(*cat, *idx), PresTreeChild::Variable)
+                    }
+                    _ => unreachable!(),
                 };
-                new_parts.push(new_part);
+                new_children.push(new_part);
+                new_children_pres.push(new_pres);
             }
             let data: FragData<'ctx> = FragData::Rule(FragRuleApplication::new(
                 formal_rule,
-                new_parts,
+                new_children,
                 bindings_added,
             ));
-            ctx.arenas.fragments.intern(Fragment::new(frag.cat(), data))
+            let new_frag = ctx
+                .arenas
+                .fragments
+                .intern(Fragment::new(frag.0.cat(), data));
+
+            let new_pres_tree = new_rule_pres_tree(frag.1.pres(), new_children_pres, ctx);
+
+            (new_frag, new_pres_tree)
         }
-        FragData::Template(temp) => {
+        (FragData::Template(temp), PresTreeData::Template(pres), Presentation::Template(_)) => {
             let replacement = templates[&temp.name()];
             let args: Vec<_> = temp
                 .args()
                 .iter()
-                .map(|&arg| instantiate_fragment_with_templates(arg, templates, ctx))
+                .zip(pres.args().iter())
+                .map(|(arg, pres)| {
+                    instantiate_fragment_with_templates((*arg, *pres), templates, ctx)
+                })
                 .collect();
             fill_template_holes(replacement, &args, 0, ctx)
         }
-        FragData::Hole(_) => unreachable!(),
+        _ => unreachable!(),
     }
 }
 
 fn fill_template_holes<'ctx>(
-    frag: FragmentId<'ctx>,
-    args: &[FragmentId<'ctx>],
+    frag: (FragmentId<'ctx>, PresentationTreeId<'ctx>),
+    args: &[(FragmentId<'ctx>, PresentationTreeId<'ctx>)],
     debruijn_shift: usize,
     ctx: &Ctx<'ctx>,
-) -> FragmentId<'ctx> {
-    match frag.0.data() {
-        FragData::Rule(rule_app) => {
-            let new_children = rule_app
+) -> (FragmentId<'ctx>, PresentationTreeId<'ctx>) {
+    match (frag.0.0.data(), frag.1.data(), frag.1.pres().0) {
+        (FragData::Rule(rule_app), PresTreeData::Rule(pres_tree), Presentation::Rule(_)) => {
+            let (new_children, new_children_pres): (Vec<_>, Vec<_>) = rule_app
                 .children()
                 .iter()
-                .map(|part| match part {
-                    FragPart::Fragment(child_id) => FragPart::Fragment(fill_template_holes(
-                        *child_id,
-                        args,
-                        debruijn_shift + rule_app.bindings_added(),
-                        ctx,
-                    )),
-                    FragPart::Variable(_, _) => *part,
+                .zip(pres_tree.children().iter())
+                .map(|(child, child_pres)| match (child, child_pres) {
+                    (FragPart::Fragment(child_id), PresTreeChild::Fragment(pres_id)) => {
+                        let (new_child, new_pres) = fill_template_holes(
+                            (*child_id, *pres_id),
+                            args,
+                            debruijn_shift + rule_app.bindings_added(),
+                            ctx,
+                        );
+                        (
+                            FragPart::Fragment(new_child),
+                            PresTreeChild::Fragment(new_pres),
+                        )
+                    }
+                    (FragPart::Variable(_, _), PresTreeChild::Variable) => (*child, *child_pres),
+                    _ => unreachable!(),
                 })
-                .collect();
+                .unzip();
+
             let data = FragData::Rule(FragRuleApplication::new(
                 rule_app.rule(),
                 new_children,
                 rule_app.bindings_added(),
             ));
-            ctx.arenas.fragments.intern(Fragment::new(frag.cat(), data))
+            let new_frag = ctx
+                .arenas
+                .fragments
+                .intern(Fragment::new(frag.0.cat(), data));
+
+            let new_pres_tree = new_rule_pres_tree(frag.1.pres(), new_children_pres, ctx);
+
+            (new_frag, new_pres_tree)
         }
-        FragData::Template(template) => {
-            let new_args = template
+        (
+            FragData::Template(template),
+            PresTreeData::Template(pres_tree),
+            Presentation::Template(pres),
+        ) => {
+            let (new_args, new_pres_args): (Vec<_>, Vec<_>) = template
                 .args()
                 .iter()
-                .map(|arg| fill_template_holes(*arg, args, debruijn_shift, ctx))
-                .collect();
+                .zip(pres_tree.args().iter())
+                .map(|(arg, pres)| fill_template_holes((*arg, *pres), args, debruijn_shift, ctx))
+                .unzip();
             let data = FragData::Template(FragTemplateRef::new(template.name(), new_args));
-            ctx.arenas.fragments.intern(Fragment::new(frag.cat(), data))
+            let new_frag = ctx
+                .arenas
+                .fragments
+                .intern(Fragment::new(frag.0.cat(), data));
+
+            let new_pres = PresTemplate::new(
+                pres.name(),
+                new_pres_args.iter().map(|a| a.pres()).collect(),
+            );
+            let new_pres = Presentation::Template(new_pres);
+            let new_pres = ctx.arenas.presentations.intern(new_pres);
+
+            let new_pres_tree = PresTreeData::Template(PresTreeTemplate::new(new_pres_args));
+            let new_pres_tree = PresentationTree::new(new_pres, new_pres_tree);
+            let new_pres_tree = ctx.arenas.presentation_trees.intern(new_pres_tree);
+
+            (new_frag, new_pres_tree)
         }
-        FragData::Hole(idx) => {
-            let replacement = args[*idx];
-            fix_debruijn_indices(replacement, debruijn_shift, ctx)
+        (FragData::Hole(idx), PresTreeData::Hole, Presentation::Hole(_)) => {
+            let (replacement, replacement_pres) = args[*idx];
+            let replacement = fix_debruijn_indices(replacement, debruijn_shift, ctx);
+            (replacement, replacement_pres)
         }
+        _ => unreachable!(),
     }
+}
+
+fn new_rule_pres_tree<'ctx>(
+    old_pres: PresentationId<'ctx>,
+    new_children_pres: Vec<PresTreeChild<'ctx>>,
+    ctx: &Ctx<'ctx>,
+) -> PresentationTreeId<'ctx> {
+    let new_pres_tree = PresTreeData::Rule(PresTreeRuleApp::new(new_children_pres));
+    let new_pres_tree = PresentationTree::new(old_pres, new_pres_tree);
+    ctx.arenas.presentation_trees.intern(new_pres_tree)
 }
 
 fn fix_debruijn_indices<'ctx>(

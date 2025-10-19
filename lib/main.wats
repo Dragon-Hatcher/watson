@@ -128,7 +128,7 @@ theorem and.comm [schema 'p] [schema 'q] : ('p ∧ 'q)
 proof
     have 'p by and.elim_left ['p] ['q];
     have 'q by and.elim_right ['p] ['q];
-    by and.intro ['q] ['p]
+    
 qed
 
 -- definition if

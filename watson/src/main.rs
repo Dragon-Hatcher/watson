@@ -33,11 +33,11 @@ fn main() {
 }
 
 fn make_source_cache(root_file: &Path) -> (SourceCache, SourceId) {
+    let root_file = root_file.canonicalize().unwrap(); // TODO.
     let root_dir = root_file.parent().unwrap().to_path_buf();
-    let root_dir = root_dir.canonicalize().unwrap();
     let source_cache = SourceCache::new(root_dir);
 
-    let text = std::fs::read_to_string(root_file).unwrap();
+    let text = std::fs::read_to_string(&root_file).unwrap();
     let root_id = Ustr::from(&root_file.file_stem().unwrap().to_string_lossy());
     let root_id = SourceId::new(root_id);
     source_cache.add(root_id, text, SourceDecl::Root);

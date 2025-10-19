@@ -385,7 +385,7 @@ fn disambiguate_macro_replacement<'ctx>(
     }
 
     let tree = ParseTree::new(span, cat, new_possibilities);
-    Ok(Some(ctx.arenas.parse_forest.intern(tree)))
+    Ok(Some(ctx.arenas.parse_forest.alloc(tree)))
 }
 
 fn elaborate_macro_replacement<'ctx>(
@@ -964,7 +964,7 @@ pub fn elaborate_name<'ctx>(name: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WRe
     }
 }
 
-fn elaborate_str_lit<'ctx>(str_lit: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WResult<Ustr> {
+pub fn elaborate_str_lit<'ctx>(str_lit: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WResult<Ustr> {
     match_rule! { (ctx, str_lit) =>
         str ::= [str_atom] => {
             let str_lit = str_atom.as_str_lit().unwrap();
@@ -1017,7 +1017,7 @@ pub fn reduce_to_builtin<'ctx>(
     }
 
     let new_tree = ParseTree::new(span, cat, possibilities);
-    let new_tree = ctx.arenas.parse_forest.intern(new_tree);
+    let new_tree = ctx.arenas.parse_forest.alloc(new_tree);
 
     Ok(new_tree)
 }

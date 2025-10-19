@@ -73,10 +73,8 @@ pub fn do_macro_replacement<'ctx>(
         if let [binding] = possibility.children()
             && let Some(binding) = binding.as_macro_binding()
         {
-            // Add all the possibilities from the binding.
-            for new_possibility in bindings[&binding].possibilities() {
-                new_possibilities.push(new_possibility.clone());
-            }
+            assert!(replace_in.possibilities().len() == 1);
+            return bindings[&binding];
         } else {
             let mut parts = Vec::new();
             for child in possibility.children() {
@@ -99,7 +97,7 @@ pub fn do_macro_replacement<'ctx>(
     }
 
     let new_tree = ParseTree::new(replace_in.span(), replace_in.cat(), new_possibilities);
-    ctx.arenas.parse_forest.intern(new_tree)
+    ctx.arenas.parse_forest.alloc(new_tree)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

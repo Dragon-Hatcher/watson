@@ -336,7 +336,7 @@ fn read_chart<'ctx>(
         }
 
         let tree = ParseTree::new(span, cat, possibilities);
-        Ok(ctx.arenas.parse_forest.intern(tree))
+        Ok(ctx.arenas.parse_forest.alloc(tree))
     }
 
     fn split_to_children<'ctx>(

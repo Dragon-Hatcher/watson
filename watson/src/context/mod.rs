@@ -66,7 +66,7 @@ impl<'ctx> Ctx<'ctx> {
 
 pub struct Arenas<'ctx> {
     pub macros: NamedArena<Macro<'ctx>, MacroId<'ctx>>,
-    pub parse_forest: InternedArena<ParseTree<'ctx>, ParseTreeId<'ctx>>,
+    pub parse_forest: PlainArena<ParseTree<'ctx>, ParseTreeId<'ctx>>,
     pub parse_cats: NamedArena<Category<'ctx>, CategoryId<'ctx>>,
     pub parse_rules: PlainArena<Rule<'ctx>, RuleId<'ctx>>,
     pub formal_cats: NamedArena<FormalSyntaxCat, FormalSyntaxCatId<'ctx>>,
@@ -82,7 +82,7 @@ impl<'ctx> Arenas<'ctx> {
     pub fn new() -> Self {
         Self {
             macros: NamedArena::new(),
-            parse_forest: InternedArena::new(),
+            parse_forest: PlainArena::new(),
             parse_cats: NamedArena::new(),
             parse_rules: PlainArena::new(),
             formal_cats: NamedArena::new(),

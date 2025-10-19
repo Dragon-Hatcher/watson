@@ -233,8 +233,8 @@ impl<'ctx> DiagManager<'ctx> {
             )
         };
 
-        let diag = Diagnostic::new("error while parsing command")
-            .with_error(&expected, Span::new(location, location));
+        let span = Span::new(location, location);
+        let diag = Diagnostic::new("error while parsing command").with_error(&expected, span);
 
         self.add_diag(diag);
         Err(())

@@ -265,7 +265,7 @@ fn make_parse_error<'ctx, T>(chart: &Chart, source: SourceId, ctx: &mut Ctx<'ctx
     let mut possible_atoms = possible_next_atoms.into_iter().collect::<Vec<_>>();
     possible_atoms.sort();
 
-    ctx.diags.err_parse_failure(location, &possible_atoms)
+    ctx.diags.err_parse_failure(Location::new(location.source(), latest_pos), &possible_atoms)
 }
 
 fn read_chart<'ctx>(

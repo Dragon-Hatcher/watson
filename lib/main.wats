@@ -128,12 +128,13 @@ theorem and.comm [schema 'p] [schema 'q] : ('p ∧ 'q)
 proof
     have 'p by and.elim_left ['p] ['q];
     have 'q by and.elim_right ['p] ['q];
-    
+    -- have 'q ∧ 'p by and.intro ['q] ['p];
 qed
 
 theorem fake [schema p] [schema q(term)] :
     |- (p ∧ (∃x, q(x))) → ∀y, p
 proof
+    
 qed
 
 -- definition if

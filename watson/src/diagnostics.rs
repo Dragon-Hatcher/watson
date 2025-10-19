@@ -3,6 +3,7 @@ use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
 use crate::semant::check_proof::{ProofStateKey, ReasoningStep};
+use crate::semant::formal_syntax::FormalSyntaxCatId;
 use crate::semant::presentation::{FactPresentation, PresentationTreeId};
 use crate::semant::theorems::TheoremId;
 use crate::util::plural;
@@ -303,6 +304,21 @@ impl<'ctx> DiagManager<'ctx> {
 // Below are errors relating specifically to proofs.
 
 impl<'ctx> DiagManager<'ctx> {
+    pub fn err_failed_to_parse_fragment(
+        &mut self,
+        in_proof: impl Into<InProof<'ctx>>,
+        span: Span,
+        cat: FormalSyntaxCatId<'ctx>,
+    ) {
+        let in_proof = in_proof.into();
+
+        let diag = Diagnostic::new(&format!("failed to parse {}", cat.name()))
+            .with_error("", span)
+            .in_proof(in_proof);
+
+        self.add_diag(diag);
+    }
+
     pub fn err_non_existent_theorem(&mut self, name: Ustr, span: Span) {
         let diag = Diagnostic::new(&format!("unknown theorem `{name}`")).with_error("", span);
 

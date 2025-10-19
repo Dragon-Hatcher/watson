@@ -105,8 +105,7 @@ pub fn parse_any_fragment<'ctx>(
     let Some((frag, pres, _)) =
         maybe_parse_any_fragment(tree, expected_cat, names, ctx, &mut Vec::new())?
     else {
-        // TODO: actual error message
-        return ctx.diags.err_ambiguous_parse(tree.span());
+        return Err(());
     };
 
     Ok((frag, pres))
@@ -121,8 +120,7 @@ pub fn parse_fragment<'ctx>(
     let Some((frag, pres, _)) =
         maybe_parse_fragment(tree, expected_cat, names, ctx, &mut Vec::new())?
     else {
-        // TODO: actual error message
-        return ctx.diags.err_ambiguous_parse(tree.span());
+        return Err(());
     };
 
     Ok((frag, pres))

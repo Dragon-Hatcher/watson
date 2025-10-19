@@ -18,7 +18,7 @@ impl FormalSyntaxCat {
         Self { name }
     }
 
-    pub fn _name(&self) -> Ustr {
+    pub fn name(&self) -> Ustr {
         self.name
     }
 }

@@ -164,7 +164,7 @@ impl<'ctx> PresRuleApplication<'ctx> {
         Self { parts }
     }
 
-    pub fn parts(&self) -> &[PresPart<'ctx>] {
+    pub fn _parts(&self) -> &[PresPart<'ctx>] {
         &self.parts
     }
 

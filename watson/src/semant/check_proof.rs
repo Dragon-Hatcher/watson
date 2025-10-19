@@ -9,8 +9,7 @@ use crate::{
     parse::{Span, elaborator::elaborate_tactic, parse_tree::ParseTreeId},
     semant::{
         fragment::{
-            _debug_fact, FragData, FragPart, FragRuleApplication, FragTemplateRef, Fragment,
-            FragmentId,
+            FragData, FragPart, FragRuleApplication, FragTemplateRef, Fragment, FragmentId,
         },
         parse_fragment::{NameCtx, UnresolvedFact, parse_any_fragment, parse_fragment},
         presentation::{
@@ -126,9 +125,10 @@ fn check_proof<'ctx>(
                     ) else {
                         // There isn't much we can do if the assumption doesn't parse
                         // we just drop this state and the continuation too.
-                        eprintln!(
-                            "[{}] Proof incorrect from parse failure.",
-                            theorem_smt.name()
+                        ctx.diags.err_failed_to_parse_fragment(
+                            (theorem_smt, state),
+                            assumption.span(),
+                            ctx.sentence_formal_cat,
                         );
                         proof_correct = false;
                         continue;
@@ -154,9 +154,10 @@ fn check_proof<'ctx>(
                     &mut state.name_ctx(),
                     ctx,
                 ) else {
-                    eprintln!(
-                        "[{}] Proof incorrect from parse failure.",
-                        theorem_smt.name()
+                    ctx.diags.err_failed_to_parse_fragment(
+                        (theorem_smt, state),
+                        tactic.fact.conclusion().span(),
+                        ctx.sentence_formal_cat,
                     );
                     proof_correct = false;
                     continue;
@@ -224,9 +225,10 @@ fn check_proof<'ctx>(
                     let Ok(instantiation) =
                         parse_any_fragment(*instantiation, template.cat(), &mut names, ctx)
                     else {
-                        eprintln!(
-                            "[{}] Proof incorrect from parse failure.",
-                            theorem_smt.name()
+                        ctx.diags.err_failed_to_parse_fragment(
+                            (theorem_smt, state),
+                            instantiation.span(),
+                            template.cat(),
                         );
                         proof_correct = false;
                         continue;
@@ -250,7 +252,11 @@ fn check_proof<'ctx>(
                         instantiate_fact_with_templates(hypothesis, &templates, ctx);
 
                     if !state.knowns.contains_key(&instantiated) {
-                        ctx.diags.err_missing_hypothesis((theorem_smt, state), proof.span(), instantiated_pres);
+                        ctx.diags.err_missing_hypothesis(
+                            (theorem_smt, state),
+                            proof.span(),
+                            instantiated_pres,
+                        );
                         proof_correct = false;
                     }
                 }

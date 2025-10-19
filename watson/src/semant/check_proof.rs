@@ -182,10 +182,6 @@ fn check_proof<'ctx>(
             UnresolvedTactic::By(tactic) => {
                 let Some(theorem) = ctx.arenas.theorem_stmts.get(tactic.theorem_name) else {
                     // The theorem doesn't exist.
-                    eprintln!(
-                        "[{}] Proof incorrect from non-existent theorem.",
-                        theorem_smt.name()
-                    );
                     proof_correct = false;
                     ctx.diags
                         .err_non_existent_theorem(tactic.theorem_name, tactic.theorem_name_span);
@@ -250,17 +246,12 @@ fn check_proof<'ctx>(
                 }
 
                 for &hypothesis in theorem.hypotheses() {
-                    let (instantiated, _instantiated_pres) =
+                    let (instantiated, instantiated_pres) =
                         instantiate_fact_with_templates(hypothesis, &templates, ctx);
 
                     if !state.knowns.contains_key(&instantiated) {
-                        eprintln!(
-                            "[{}] Proof incorrect from missing hypothesis {}.",
-                            theorem_smt.name(),
-                            _debug_fact(instantiated)
-                        );
+                        ctx.diags.err_missing_hypothesis((theorem_smt, state), proof.span(), instantiated_pres);
                         proof_correct = false;
-                        // TODO: error message.
                     }
                 }
 

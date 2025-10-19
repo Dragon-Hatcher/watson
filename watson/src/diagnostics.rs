@@ -3,7 +3,7 @@ use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
 use crate::semant::check_proof::{ProofStateKey, ReasoningStep};
-use crate::semant::presentation::PresentationTreeId;
+use crate::semant::presentation::{FactPresentation, PresentationTreeId};
 use crate::semant::theorems::TheoremId;
 use crate::util::plural;
 use annotate_snippets::{Level, Message, Renderer, Snippet};
@@ -360,73 +360,20 @@ impl<'ctx> DiagManager<'ctx> {
 
         self.add_diag(diag);
     }
+
+    pub fn err_missing_hypothesis(
+        &mut self,
+        in_proof: impl Into<InProof<'ctx>>,
+        at: Span,
+        hyp: FactPresentation<'ctx>,
+    ) {
+        let in_proof = in_proof.into();
+        let hyp_txt = hyp.render_str();
+
+        let diag = Diagnostic::new(&format!("missing hypothesis `{hyp_txt}`"))
+            .with_error("", at)
+            .in_proof(in_proof);
+
+        self.add_diag(diag);
+    }
 }
-
-// impl DiagManager {
-//     pub fn err_unknown_theorem(&mut self, theorem: TheoremId, name: Ustr, span: Span) {
-//         let diag = Diagnostic::new(&format!("unknown theorem `{name}`"))
-//             .with_error("", span)
-//             .for_theorem(theorem);
-
-//         self.add_diag(diag);
-//     }
-
-//     pub fn err_missing_tactic_templates(
-//         &mut self,
-//         theorem: TheoremId,
-//         last_template: Span,
-//         missing: usize,
-//     ) {
-//         let diag = Diagnostic::new(&format!(
-//             "missing {missing} tactic template{}",
-//             plural(missing)
-//         ))
-//         .with_error(
-//             &format!("expected {missing} more tactic template{}", plural(missing)),
-//             last_template,
-//         )
-//         .for_theorem(theorem);
-
-//         self.add_diag(diag);
-//     }
-
-//     pub fn err_extra_tactic_templates(
-//         &mut self,
-//         theorem: TheoremId,
-//         extra_template: Span,
-//         extra: usize,
-//     ) {
-//         let diag = Diagnostic::new(&format!("extra tactic template{}", plural(extra)))
-//             .with_error(
-//                 &format!("found {extra} extra tactic template{}", plural(extra)),
-//                 extra_template,
-//             )
-//             .for_theorem(theorem);
-
-//         self.add_diag(diag);
-//     }
-
-//     pub fn err_unknown_name(
-//         &mut self,
-//         theorem: TheoremId,
-//         proof_state: Option<ProofState>,
-//         name: Ustr,
-//         span: Span,
-//     ) {
-//         let diag = Diagnostic::new(&format!("unknown name `{name}`"))
-//             .with_error("", span)
-//             .for_theorem(theorem)
-//             .with_proof_state(proof_state);
-
-//         self.add_diag(diag);
-//     }
-
-//     pub fn err_incomplete_proof(&mut self, theorem: TheoremId, at: Span, proof_state: ProofState) {
-//         let diag = Diagnostic::new("unsolved goal")
-//             .with_error("", at)
-//             .for_theorem(theorem)
-//             .with_proof_state(Some(proof_state));
-
-//         self.add_diag(diag);
-//     }
-// }

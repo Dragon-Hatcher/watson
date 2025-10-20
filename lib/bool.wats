@@ -1,9 +1,9 @@
 syntax implication
-    sentence (100) ::= sentence "->" sentence
+    sentence (200) ::= sentence "->" sentence
 end
 
 syntax false
-    sentence ::= "false"
+    sentence (000) ::= "false"
 end
 
 axiom imp.intro [p q : sentence] : (assume p |- q)
@@ -26,7 +26,7 @@ proof
 qed
 
 macro not
-    sentence (200) ::= "~" $p:sentence => $p -> false
+    sentence (300) ::= "~" $p:sentence => $p -> false
 end
 
 theorem not.intro [p : sentence] : (assume p |- false)
@@ -50,11 +50,11 @@ axiom dne [p : sentence] : (~~p)
 end
 
 macro or
-    sentence ::= $p:sentence "or" $q:sentence => ~$p -> $q 
+    sentence (200) ::= $p:sentence "or" $q:sentence => ~$p -> $q 
 end
 
 macro and
-    sentence ::= $p:sentence "and" $q:sentence => ~((~$p) or (~$q))
+    sentence (200) ::= $p:sentence "and" $q:sentence => ~(~$p or ~$q)
 end
 
 theorem or.intro_right [p q : sentence] : (q)
@@ -113,24 +113,24 @@ qed
 theorem and.intro [p q : sentence] : (p) (q)
     |- p and q
 proof
-    have assume (~p) or (~q) |- false
+    have assume ~p or ~q |- false
         have assume ~p |- false by contradiction [p];
-        have (~p) -> false by imp.intro [~p] [false];
+        have ~p -> false by imp.intro [~p] [false];
 
         have assume ~q |- false by contradiction [q];
-        have (~q) -> false by imp.intro [~q] [false];
+        have ~q -> false by imp.intro [~q] [false];
 
         by or.elim [~p] [~q] [false]
     ;
-    have p and q by not.intro [(~p) or (~q)];
+    have p and q by not.intro [~p or ~q];
 qed
 
 theorem and.elim_left [p q : sentence] : (p and q)
     |- p
 proof
     have assume ~p |- false
-        have (~p) or (~q) by or.intro_left [~p] [~q];
-        by contradiction [(~p) or (~q)]
+        have ~p or ~q by or.intro_left [~p] [~q];
+        by contradiction [~p or ~q]
     ;
     have ~~p by not.intro [~p];
     have   p by dne [p];
@@ -140,8 +140,8 @@ theorem and.elim_right [p q : sentence] : (p and q)
     |- q
 proof
     have assume ~q |- false
-        have (~p) or (~q) by or.intro_right [~p] [~q];
-        by contradiction [(~p) or (~q)]
+        have ~p or ~q by or.intro_right [~p] [~q];
+        by contradiction [~p or ~q]
     ;
     have ~~q by not.intro [~q];
     have   q by dne [q];

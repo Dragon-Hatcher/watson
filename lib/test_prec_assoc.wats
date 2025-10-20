@@ -1,0 +1,72 @@
+syntax a
+    sentence ::= "a"
+end
+
+syntax op1
+    sentence (200) ::= sentence "N" sentence
+end
+
+syntax eq
+    sentence (100) ::= sentence "=" sentence
+end
+
+macro parens
+    sentence ::= "(" $p:sentence ")" => $p
+end
+
+axiom refl [p : sentence] :
+    |- p = p
+end
+
+theorem test1 :
+    |- a = a
+proof
+    by refl [a]
+qed
+
+theorem test2 :
+    |- a N a = a N a
+proof
+    by refl [a N a]
+qed
+
+This should lead to an ambiguous parse since N is non associative 
+
+theorem test3 :
+    |- a N a N a = a N a N a
+proof
+    by refl [a N a]
+qed
+
+theorem test4 :
+    |- (a N a) N a = (a N a) N a
+proof
+    by refl [(a N a) N a]
+qed
+
+
+syntax op2
+    sentence (200<) ::= sentence "*" sentence
+end
+
+theorem test5 :
+    |- a * a * a = (a * a) * a
+proof
+    by refl [(a * a) * a]
+qed
+
+syntax op3
+    sentence (200>) ::= sentence "->" sentence
+end
+
+theorem test6 :
+    |- a -> a -> a = a -> (a -> a)
+proof
+    by refl [a -> (a -> a)]
+qed
+
+theorem test7 :
+    |- a -> a -> a -> a = a -> (a -> (a -> a))
+proof
+    by refl [a -> (a -> (a -> a))]
+qed

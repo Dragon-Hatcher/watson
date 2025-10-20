@@ -9,8 +9,8 @@ use crate::{
         grammar::{self, add_builtin_syntax_for_formal_cat},
         macros::{Macro, MacroPat, do_macro_replacement},
         parse_state::{
-            Category, ParseAtomPattern, ParseRuleSource, Rule, RulePatternPart,
-            SyntaxCategorySource,
+            Associativity, Category, ParseAtomPattern, ParseRuleSource, Precedence, Rule,
+            RulePatternPart, SyntaxCategorySource,
         },
         parse_tree::{ParseTree, ParseTreeChildren, ParseTreeId, ParseTreePart},
         source_cache::{SourceDecl, source_id_to_path},
@@ -157,17 +157,20 @@ fn elaborate_syntax_cat<'ctx>(cat: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WR
 }
 
 fn elaborate_syntax<'ctx>(syntax: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WResult<()> {
-    // syntax_command ::= (syntax) kw"syntax" name name "::=" syntax_pat_list kw"end"
+    // syntax_command ::= (syntax) kw"syntax" name name prec_assoc "::=" syntax_pat_list kw"end"
 
     match_rule! { (ctx, syntax) =>
-        syntax ::= [syntax_kw, rule_name, cat, bnf_replace, pat_list, end_kw] => {
+        syntax ::= [syntax_kw, rule_name, cat, prec_assoc, bnf_replace, pat_list, end_kw] => {
             debug_assert!(syntax_kw.is_kw(*strings::SYNTAX));
             debug_assert!(bnf_replace.is_lit(*strings::BNF_REPLACE));
             debug_assert!(end_kw.is_kw(*strings::END));
 
             let rule_name = elaborate_name(rule_name.as_node().unwrap(), ctx)?;
             let cat_name = elaborate_name(cat.as_node().unwrap(), ctx)?;
-            let pat = elaborate_syntax_pat(pat_list.as_node().unwrap(), ctx)?;
+            let (prec, assoc) = elaborate_prec_assoc(prec_assoc.as_node().unwrap(), ctx)?;
+            let mut pat = elaborate_syntax_pat(pat_list.as_node().unwrap(), ctx)?;
+            pat.set_prec(prec);
+            pat.set_assoc(assoc);
 
             let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
                 return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat.span());
@@ -184,6 +187,55 @@ fn elaborate_syntax<'ctx>(syntax: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WRe
 
             Ok(())
         }
+    }
+}
+
+fn elaborate_prec_assoc<'ctx>(
+    prec_assoc: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<(Precedence, Associativity)> {
+    // prec_assoc ::= (prec_assoc_none)
+    //              | (prec_assoc_some) "(" maybe_prec maybe_assoc ")"
+
+    match_rule! { (ctx, prec_assoc) =>
+        prec_assoc_none ::= [] => Ok((Precedence::default(), Associativity::default())),
+        prec_assoc_some ::= [l_paren, prec, assoc, r_paren] => {
+            debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
+            debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
+
+            let prec = elaborate_maybe_prec(prec.as_node().unwrap(), ctx)?;
+            let assoc = elaborate_maybe_assoc(assoc.as_node().unwrap(), ctx)?;
+
+            Ok((prec, assoc))
+        }
+    }
+}
+
+fn elaborate_maybe_prec<'ctx>(maybe_prec: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WResult<Precedence> {
+    // maybe_prec ::= (prec_none)
+    //              | (prec_some) number
+
+    match_rule! { (ctx, maybe_prec) =>
+        prec_none ::= [] => Ok(Precedence::default()),
+        prec_some ::= [level] => {
+            let level = level.as_num().unwrap();
+            Ok(Precedence(level))
+        }
+    }
+}
+
+fn elaborate_maybe_assoc<'ctx>(
+    maybe_assoc: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<Associativity> {
+    // maybe_assoc ::= (assoc_none)
+    //               | (assoc_left)  "<"
+    //               | (assoc_right) ">"
+
+    match_rule! { (ctx, maybe_assoc) =>
+        assoc_none  ::= [] => Ok(Associativity::NonAssoc),
+        assoc_left  ::= [_l_arrow] => Ok(Associativity::Left),
+        assoc_right ::= [_r_arrow] => Ok(Associativity::Right)
     }
 }
 
@@ -393,12 +445,12 @@ fn elaborate_macro_replacement<'ctx>(
     replacement: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<(MacroPat<'ctx>, ParseTreeId<'ctx>)> {
-    // macro_replacement ::= (macro_replacement) <category> "::=" macro_pat_list "=>" template(category)
+    // macro_replacement ::= (macro_replacement) <category> prec_assoc "::=" macro_pat_list "=>" template(category)
 
     let replacement = reduce_to_builtin(replacement, ctx)?;
     let children = expect_unambiguous(replacement, ctx)?;
 
-    let [_cat_name, bnf_replace, pat, arrow, template] = children.children() else {
+    let [_cat_name, prec_assoc, bnf_replace, pat, arrow, template] = children.children() else {
         failed_to_match_builtin!(children.rule(), ctx);
     };
 
@@ -406,7 +458,10 @@ fn elaborate_macro_replacement<'ctx>(
     debug_assert!(arrow.is_lit(*strings::FAT_ARROW));
 
     let template = template.as_node().unwrap();
-    let pat = elaborate_macro_pat(pat.as_node().unwrap(), ctx)?;
+    let (prec, assoc) = elaborate_prec_assoc(prec_assoc.as_node().unwrap(), ctx)?;
+    let mut pat = elaborate_macro_pat(pat.as_node().unwrap(), ctx)?;
+    pat.set_prec(prec);
+    pat.set_assoc(assoc);
 
     Ok((pat, template))
 }

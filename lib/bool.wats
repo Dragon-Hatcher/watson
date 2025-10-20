@@ -1,5 +1,5 @@
 syntax implication
-    sentence ::= sentence "->" sentence
+    sentence (100) ::= sentence "->" sentence
 end
 
 syntax false
@@ -26,7 +26,7 @@ proof
 qed
 
 macro not
-    sentence ::= "~" $p:sentence => $p -> false
+    sentence (200) ::= "~" $p:sentence => $p -> false
 end
 
 theorem not.intro [p : sentence] : (assume p |- false)
@@ -50,7 +50,7 @@ axiom dne [p : sentence] : (~~p)
 end
 
 macro or
-    sentence ::= $p:sentence "or" $q:sentence => (~$p) -> $q 
+    sentence ::= $p:sentence "or" $q:sentence => ~$p -> $q 
 end
 
 macro and

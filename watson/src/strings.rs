@@ -36,6 +36,8 @@ str_const! {
     RIGHT_PAREN = ")";
     LEFT_BRACKET = "[";
     RIGHT_BRACKET = "]";
+    LEFT_ARROW = "<";
+    RIGHT_ARROW = ">";
     COMMA = ",";
     SEMICOLON = ";";
 }

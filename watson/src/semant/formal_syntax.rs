@@ -64,8 +64,24 @@ impl<'ctx> FormalSyntaxPat<'ctx> {
         }
     }
 
+    pub fn set_prec(&mut self, prec: Precedence) {
+        self.precedence = prec;
+    }
+
+    pub fn set_assoc(&mut self, assoc: Associativity) {
+        self.associativity = assoc;
+    }
+
     pub fn parts(&self) -> &[FormalSyntaxPatPart<'ctx>] {
         &self.parts
+    }
+
+    pub fn precedence(&self) -> Precedence {
+        self.precedence
+    }
+
+    pub fn associativity(&self) -> Associativity {
+        self.associativity
     }
 }
 

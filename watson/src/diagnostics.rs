@@ -212,6 +212,7 @@ impl<'ctx> DiagManager<'ctx> {
                 ParseAtomPattern::Kw(kw) => format!("\"{kw}\""),
                 ParseAtomPattern::Name => "a name".to_string(),
                 ParseAtomPattern::Str => "a string literal".to_string(),
+                ParseAtomPattern::Num => "a number".to_string(),
                 ParseAtomPattern::MacroBinding => "a macro binding".to_string(),
             }
         }

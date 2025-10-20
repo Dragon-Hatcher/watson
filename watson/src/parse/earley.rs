@@ -141,6 +141,7 @@ fn _debug_chart(chart: &Chart) {
                         ParseAtomPattern::Name => pattern.push_str("name "),
                         ParseAtomPattern::Lit(lit) => pattern.push_str(&format!("'{lit}' ")),
                         ParseAtomPattern::Str => pattern.push_str("str "),
+                        ParseAtomPattern::Num => pattern.push_str("num "),
                         ParseAtomPattern::MacroBinding => pattern.push_str("macro_binding "),
                     },
                     RulePatternPart::Cat { id, template } => {
@@ -373,6 +374,11 @@ fn read_chart<'ctx>(
                             let name = &text[start.byte_offset() + 1..span.end().byte_offset() - 1];
                             ParseAtomKind::StrLit(name.into())
                         }
+                        ParseAtomPattern::Num => {
+                            let start = skip_ws_and_comments(text, span.start().offset());
+                            let num = &text[start.byte_offset()..span.end().byte_offset()];
+                            ParseAtomKind::Num(num.parse().unwrap())
+                        }
                         ParseAtomPattern::MacroBinding => {
                             let start = skip_ws_and_comments(text, span.start().offset());
                             let name = &text[start.byte_offset() + 1..span.end().byte_offset()];
@@ -473,8 +479,8 @@ fn split_with_pattern(
             // try the shortest continuations first. If it is non-associative we
             // try them in the order they appear.
             match associativity {
-                Associativity::_Left => continuations.sort_by_key(|c| c.1),
-                Associativity::_Right => continuations.sort_by_key(|c| Reverse(c.1)),
+                Associativity::Left => continuations.sort_by_key(|c| Reverse(c.1)),
+                Associativity::Right => continuations.sort_by_key(|c| c.1),
                 Associativity::NonAssoc => {}
             }
 
@@ -549,6 +555,7 @@ fn _debug_trimmed_chart<'ctx>(trimmed: &TrimmedChart<'ctx>) {
                         ParseAtomPattern::Name => pattern.push_str("name "),
                         ParseAtomPattern::Lit(lit) => pattern.push_str(&format!("'{lit}' ")),
                         ParseAtomPattern::Str => pattern.push_str("str "),
+                        ParseAtomPattern::Num => pattern.push_str("num "),
                         ParseAtomPattern::MacroBinding => pattern.push_str("macro_binding "),
                     },
                     RulePatternPart::Cat { id, template } => {
@@ -587,6 +594,10 @@ fn parse_atom(atom: ParseAtomPattern, text: &str, at: SourceOffset) -> Option<So
             .then(|| content.forward(lit.len())),
         ParseAtomPattern::Str => {
             let (end, _str) = parse_str(text, content)?;
+            Some(end)
+        }
+        ParseAtomPattern::Num => {
+            let end = parse_num(text, content)?;
             Some(end)
         }
         ParseAtomPattern::MacroBinding => {
@@ -664,6 +675,21 @@ fn parse_str(text: &str, from: SourceOffset) -> Option<(SourceOffset, &str)> {
 
     // We reached the end of the input without finding a closing quote.
     None
+}
+
+fn parse_num(text: &str, from: SourceOffset) -> Option<SourceOffset> {
+    let mut chars = text[from.byte_offset()..].chars();
+    let mut at = from;
+
+    while let Some(next) = chars.next() && next.is_ascii_digit() {
+        at = at.forward(next.len_utf8());
+    }
+
+    if at == from { 
+        None
+    } else {
+        Some(at)
+    }
 }
 
 fn char_can_start_name(char: char) -> bool {

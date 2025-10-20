@@ -2,7 +2,7 @@ use crate::{
     context::Ctx,
     generate_arena_handle,
     parse::{
-        parse_state::{CategoryId, RulePattern, RulePatternPart},
+        parse_state::{Associativity, CategoryId, Precedence, RulePattern, RulePatternPart},
         parse_tree::{ParseTree, ParseTreeChildren, ParseTreeId, ParseTreePart},
     },
 };
@@ -104,11 +104,26 @@ pub fn do_macro_replacement<'ctx>(
 pub struct MacroPat<'ctx> {
     parts: Vec<RulePatternPart<'ctx>>,
     keys: FxHashMap<Ustr, usize>,
+    prec: Precedence,
+    assoc: Associativity,
 }
 
 impl<'ctx> MacroPat<'ctx> {
     pub fn new(parts: Vec<RulePatternPart<'ctx>>, keys: FxHashMap<Ustr, usize>) -> Self {
-        Self { parts, keys }
+        Self {
+            parts,
+            keys,
+            prec: Precedence::default(),
+            assoc: Associativity::default(),
+        }
+    }
+
+    pub fn set_prec(&mut self, prec: Precedence) {
+        self.prec = prec;
+    }
+
+    pub fn set_assoc(&mut self, assoc: Associativity) {
+        self.assoc = assoc;
     }
 
     pub fn parts(&self) -> &[RulePatternPart<'ctx>] {
@@ -120,6 +135,6 @@ impl<'ctx> MacroPat<'ctx> {
     }
 
     pub fn to_parse_rule(&self) -> RulePattern<'ctx> {
-        RulePattern::new(self.parts.clone())
+        RulePattern::new(self.parts.clone(), self.prec, self.assoc)
     }
 }

@@ -1,11 +1,13 @@
+use std::vec;
+
 use crate::{
     context::{
         Ctx,
         arena::{NamedArena, PlainArena},
     },
     parse::parse_state::{
-        Category, CategoryId, ParseAtomPattern, ParseRuleSource, ParseState, Rule, RuleId,
-        RulePattern, RulePatternPart, SyntaxCategorySource,
+        Associativity, Category, CategoryId, ParseAtomPattern, ParseRuleSource, ParseState,
+        Precedence, Rule, RuleId, RulePattern, RulePatternPart, SyntaxCategorySource,
     },
     semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
     strings,
@@ -58,7 +60,17 @@ command ::= (module_command)     module_command
 module_command ::= (module) kw"module" name
 
 syntax_cat_command ::= (syntax_cat) kw"syntax_cat" name
-syntax_command ::= (syntax) kw"syntax" name name "::=" syntax_pat_list kw"end"
+syntax_command ::= (syntax) kw"syntax" name name prec_assoc "::=" syntax_pat_list kw"end"
+
+prec_assoc ::= (prec_assoc_none)
+             | (prec_assoc_some) "(" maybe_prec maybe_assoc ")"
+
+maybe_prec ::= (prec_none)
+             | (prec_some) number
+
+maybe_assoc ::= (assoc_none)
+              | (assoc_left)  "<"
+              | (assoc_right) ">"
 
 syntax_pat ::= (syntax_pat_one)  syntax_pat_part
              | (syntax_pat_many) syntax_pat_part syntax_pat
@@ -70,7 +82,7 @@ syntax_pat_part ::= (syntax_pat_cat)     name
 
 macro_command ::= (macro) kw"macro" name macro_replacement kw"end"
 
-macro_replacement ::= (macro_replacement) <category> "::=" macro_pat_list "=>" template(category)
+macro_replacement ::= (macro_replacement) <category> prec_assoc "::=" macro_pat_list "=>" template(category)
 
 macro_pat ::= (macro_pat_one)  macro_pat_part
             | (macro_pat_many) macro_pat_part macro_pat
@@ -142,6 +154,9 @@ builtin_cats! {
         macro_command,
         axiom_command,
         theorem_command,
+        prec_assoc,
+        maybe_prec,
+        maybe_assoc,
         syntax_pat,
         syntax_pat_part,
         macro_replacement,
@@ -184,6 +199,13 @@ builtin_rules! {
         module,
         syntax_cat,
         syntax,
+        prec_assoc_none,
+        prec_assoc_some,
+        prec_none,
+        prec_some,
+        assoc_none,
+        assoc_left,
+        assoc_right,
         syntax_pat_one,
         syntax_pat_many,
         syntax_pat_part_cat,
@@ -241,6 +263,10 @@ fn lit(lit: Ustr) -> RulePatternPart<'static> {
     RulePatternPart::Atom(ParseAtomPattern::Lit(lit))
 }
 
+fn num() -> RulePatternPart<'static> {
+    RulePatternPart::Atom(ParseAtomPattern::Num)
+}
+
 fn cat(cat: CategoryId) -> RulePatternPart {
     RulePatternPart::Cat {
         id: cat,
@@ -274,7 +300,7 @@ pub fn add_builtin_rules<'ctx>(
             name,
             cat,
             ParseRuleSource::Builtin,
-            RulePattern::new(parts),
+            RulePattern::new(parts, Precedence::default(), Associativity::default()),
         ));
         state.use_rule(rule);
         rule
@@ -330,6 +356,7 @@ pub fn add_builtin_rules<'ctx>(
                 kw(*strings::SYNTAX),
                 cat(cats.name),
                 cat(cats.name),
+                cat(cats.prec_assoc),
                 lit(*strings::BNF_REPLACE),
                 cat(cats.syntax_pat),
                 kw(*strings::END),
@@ -374,6 +401,31 @@ pub fn add_builtin_rules<'ctx>(
                 cat(cats.tactic),
                 kw(*strings::QED),
             ],
+        ),
+
+        prec_assoc_none: rule("prec_assoc_none", cats.prec_assoc, vec![]),
+        prec_assoc_some: rule(
+            "prec_assoc_some",
+            cats.prec_assoc,
+            vec![
+                lit(*strings::LEFT_PAREN),
+                cat(cats.maybe_prec),
+                cat(cats.maybe_assoc),
+                lit(*strings::RIGHT_PAREN),
+            ],
+        ),
+        prec_none: rule("prec_none", cats.maybe_prec, vec![]),
+        prec_some: rule("prec_some", cats.maybe_prec, vec![num()]),
+        assoc_none: rule("assoc_none", cats.maybe_assoc, vec![]),
+        assoc_left: rule(
+            "assoc_left",
+            cats.maybe_assoc,
+            vec![lit(*strings::LEFT_ARROW)],
+        ),
+        assoc_right: rule(
+            "assoc_left",
+            cats.maybe_assoc,
+            vec![lit(*strings::RIGHT_ARROW)],
         ),
 
         syntax_pat_one: rule(
@@ -646,13 +698,18 @@ pub fn add_builtin_syntax_for_cat<'ctx>(for_cat: CategoryId<'ctx>, ctx: &mut Ctx
         "macro_replacement",
         ctx.builtin_cats.macro_replacement,
         ParseRuleSource::Builtin,
-        RulePattern::new(vec![
-            kw(for_cat.name()),
-            lit(*strings::BNF_REPLACE),
-            cat(ctx.builtin_cats.macro_pat),
-            lit(*strings::FAT_ARROW),
-            cat_template(for_cat),
-        ]),
+        RulePattern::new(
+            vec![
+                kw(for_cat.name()),
+                cat(ctx.builtin_cats.prec_assoc),
+                lit(*strings::BNF_REPLACE),
+                cat(ctx.builtin_cats.macro_pat),
+                lit(*strings::FAT_ARROW),
+                cat_template(for_cat),
+            ],
+            Precedence::default(),
+            Associativity::default(),
+        ),
     ));
     ctx.parse_state.use_rule(rule);
 
@@ -660,7 +717,11 @@ pub fn add_builtin_syntax_for_cat<'ctx>(for_cat: CategoryId<'ctx>, ctx: &mut Ctx
         "macro_binding",
         for_cat,
         ParseRuleSource::Builtin,
-        RulePattern::new(vec![RulePatternPart::Atom(ParseAtomPattern::MacroBinding)]),
+        RulePattern::new(
+            vec![RulePatternPart::Atom(ParseAtomPattern::MacroBinding)],
+            Precedence::default(),
+            Associativity::default(),
+        ),
     ));
     ctx.parse_state.use_rule(rule);
 }
@@ -675,10 +736,14 @@ pub fn add_builtin_syntax_for_formal_cat<'ctx>(
         "template_instantiation",
         macro_cat,
         ParseRuleSource::Builtin,
-        RulePattern::new(vec![
-            cat(ctx.builtin_cats.name),
-            cat(ctx.builtin_cats.maybe_shorthand_args),
-        ]),
+        RulePattern::new(
+            vec![
+                cat(ctx.builtin_cats.name),
+                cat(ctx.builtin_cats.maybe_shorthand_args),
+            ],
+            Precedence::default(),
+            Associativity::default(),
+        ),
     ));
     ctx.parse_state.use_rule(rule);
 
@@ -686,7 +751,11 @@ pub fn add_builtin_syntax_for_formal_cat<'ctx>(
         "any_fragment",
         ctx.builtin_cats.any_fragment,
         ParseRuleSource::Builtin,
-        RulePattern::new(vec![cat(macro_cat)]),
+        RulePattern::new(
+            vec![cat(macro_cat)],
+            Precedence::default(),
+            Associativity::default(),
+        ),
     ));
     ctx.parse_state.use_rule(rule);
 }
@@ -710,7 +779,11 @@ pub fn add_formal_syntax_rule<'ctx>(rule: FormalSyntaxRuleId<'ctx>, ctx: &mut Ct
         parts.push(part);
     }
 
-    let parse_rule_pattern = RulePattern::new(parts);
+    let parse_rule_pattern = RulePattern::new(
+        parts,
+        rule.pattern().precedence(),
+        rule.pattern().associativity(),
+    );
 
     let parse_rule = Rule::new(
         "formal_syntax_rule",

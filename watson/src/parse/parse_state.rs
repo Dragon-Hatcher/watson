@@ -162,16 +162,17 @@ pub enum SyntaxCategorySource<'ctx> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Precedence(pub usize);
 
-impl Precedence {
-    pub fn _new(level: usize) -> Self {
-        Self(level)
+impl Default for Precedence {
+    fn default() -> Self {
+        Self(500)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Associativity {
-    _Left,
-    _Right,
+    Left,
+    Right,
+    #[default]
     NonAssoc,
 }
 
@@ -230,11 +231,15 @@ pub struct RulePattern<'ctx> {
 }
 
 impl<'ctx> RulePattern<'ctx> {
-    pub fn new(parts: Vec<RulePatternPart<'ctx>>) -> Self {
+    pub fn new(
+        parts: Vec<RulePatternPart<'ctx>>,
+        precedence: Precedence,
+        associativity: Associativity,
+    ) -> Self {
         Self {
             parts,
-            precedence: Precedence(0),
-            associativity: Associativity::NonAssoc,
+            precedence,
+            associativity,
         }
     }
 
@@ -266,5 +271,6 @@ pub enum ParseAtomPattern {
     Kw(Ustr),
     Name,
     Str,
+    Num,
     MacroBinding,
 }

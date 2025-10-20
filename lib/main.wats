@@ -70,11 +70,11 @@ notation notation.forall
 end
 
 macro template.variable_shorthand
-    template ::= "[" $n:name $a:maybe_template_params "]" => [$n$a:term]
+    template ::= "[" $n:template_names "]" => [$n:term]
 end
 
 macro template.sentence_shorthand
-    template ::= "[" @kw"schema" $n:name $a:maybe_template_params "]" => [$n$a:sentence]
+    template ::= "[" @kw"schema" $n:template_names "]" => [$n : sentence]
 end
 
 axiom fol.equality.intro [x] :

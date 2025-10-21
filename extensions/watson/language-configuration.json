@@ -35,7 +35,13 @@
             }
         },
         {
-        "beforeText": "^\\s*have.*[^;]$",
+        "beforeText": "^\\s*have.*;\\s*(--.*)?$",
+            "action": {
+                "indent": "none"
+            }
+        },
+        {
+        "beforeText": "^\\s*have",
             "action": {
                 "indent": "indent"
             }

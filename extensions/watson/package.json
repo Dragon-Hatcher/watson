@@ -27,7 +27,7 @@
       {
         "language": "watson",
         "scopeName": "source.watson",
-        "path": "./syntaxes/watson.tmLanguage.json"
+        "path": "./syntaxes/watson.json"
       }
     ]
   }

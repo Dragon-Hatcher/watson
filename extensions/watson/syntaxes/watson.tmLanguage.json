@@ -1,0 +1,26 @@
+{
+  "scopeName": "source.watson",
+  "patterns": [
+    { "include": "#keywords" },
+    { "include": "#comments" }
+  ],
+  "repository": {
+    "keywords": {
+      "patterns": [
+        {
+          "match": "\\b(module|syntax_category|syntax|macro|theorem|axiom|end|end|qed|proof)\\b",
+          "name": "keyword.other.watson"
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "begin": "--",
+          "end": "\n",
+          "name": "comment.line.double-dash.watson"
+        }
+      ]
+    }
+  }
+}

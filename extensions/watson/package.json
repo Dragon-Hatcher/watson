@@ -1,0 +1,34 @@
+{
+  "name": "watson",
+  "displayName": "watson",
+  "description": "",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.105.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "watson",
+        "aliases": [
+          "Watson",
+          "watson"
+        ],
+        "extensions": [
+          ".wats"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "watson",
+        "scopeName": "source.watson",
+        "path": "./syntaxes/watson.tmLanguage.json"
+      }
+    ]
+  }
+}

@@ -26,5 +26,25 @@
         ["\"", "\""],
         ["'", "'"]
     ],
-    "wordPattern": "[\\w_'][\\w_'\\d\\.]*"
+    "wordPattern": "[\\w_'][\\w_'\\d\\.]*",
+    "onEnterRules": [
+        {
+            "beforeText": "^\\s*(syntax|axiom|theorem|macro|proof)",
+            "action": {
+                "indent": "indent"
+            }
+        },
+        {
+        "beforeText": "^\\s*have.*[^;]$",
+            "action": {
+                "indent": "indent"
+            }
+        },
+        {
+            "beforeText": "^\\s*(\\|-)",
+            "action": {
+                "indent": "outdent"
+            }
+        }
+    ]
 }

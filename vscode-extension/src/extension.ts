@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { SHORTHAND_DICT } from "./shorthands";
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("Watson extension started.");
@@ -15,16 +16,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 // This method is called when your extension is deactivated
 export function deactivate() {}
-
-const DICTIONARY = [
-  ["\\and", "∧"],
-  ["\\or", "∨"],
-  ["\\iff", "↔"],
-  ["\\to", "→"],
-  ["\\not", "¬"],
-  ["\\bot", "⊥"],
-  ["\\top", "⊤"],
-];
 
 class Rewriter {
   activeEditor: vscode.TextEditor | null = null;
@@ -69,7 +60,7 @@ class Rewriter {
 
     let edit = new vscode.WorkspaceEdit();
     let [text, range] = this.bestSolution;
-    let prevPossibles = DICTIONARY.filter((d) => d[0].startsWith(text));
+    let prevPossibles = SHORTHAND_DICT.filter((d) => d[0].startsWith(text));
 
     if (prevPossibles.length > 0) {
       edit.replace(this.activeEditor!.document.uri, range, prevPossibles[0][1]);
@@ -81,9 +72,18 @@ class Rewriter {
 
   updateSolution() {
     let newText = this.activeEditor!.document.getText(this.activeRange!);
-    let possibles = DICTIONARY.filter((d) => d[0].startsWith(newText));
 
-    if (possibles.length == 0) {
+    if (newText == "\\") {
+      this.bestSolution = null;
+      return;
+    }
+
+    let possibles = SHORTHAND_DICT.filter((d) => d[0].startsWith(newText));
+
+    if (possibles.length == 1 && possibles[0][0] == newText) {
+      this.bestSolution = [newText, this.activeRange!];
+      this.commitSolution();
+    } else if (possibles.length == 0) {
       this.commitSolution();
     } else {
       this.bestSolution = [newText, this.activeRange!];

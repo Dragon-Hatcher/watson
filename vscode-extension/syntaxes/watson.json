@@ -38,8 +38,12 @@
           "name": "keyword.other.watson"
         },
         {
-          "match": "\\b(have|todo)\\b",
+          "match": "\\b(have)\\b",
           "name": "keyword.control.watson"
+        },
+        {
+          "match": "\\b(todo)\\b",
+          "name": "invalid.illegal.watson"
         },
         {
           "match": "(@kw|@template|@variable|@binding)\\b",

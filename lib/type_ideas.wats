@@ -1,0 +1,207 @@
+syntax_category term
+
+syntax implication
+    sentence ::= sentence "→" sentence
+end
+
+syntax falsum
+    sentence ::= "⊥"
+end
+
+syntax equality
+    sentence ::= term "=" term
+end
+
+syntax containment
+    sentence ::= term "∈" term
+end
+
+syntax existential
+    sentence ::= "∃" @binding(term) "," sentence
+end
+
+syntax existential.eliminator
+    term ::= "∃ₑ" "(" @binding(term) "," sentence "=>" sentence ")"
+end
+
+syntax variable
+    term ::= @variable(term)
+end
+
+syntax iota
+    term ::= "ι" @binding(term) "," sentence
+end
+
+macro parens.sentence
+    sentence ::= "(" $p:sentence ")" => $p
+end
+
+macro parens.term
+    term ::= "(" $t:term ")" => $t
+end
+
+macro negation
+    sentence ::= "¬" $p:sentence => $p → ⊥
+end
+
+macro or
+    sentence ::= $p:sentence "∨" $q:sentence => (¬$p) → $q
+end
+
+macro and
+    sentence ::= $p:sentence "∧" $q:sentence => ¬((¬$p) ∨ (¬$q))
+end
+
+macro iff
+    sentence ::= $p:sentence "↔" $q:sentence => ($p → $q) ∧ ($q → $p)
+end
+
+macro forall
+    sentence ::= "∀" $n:name "," $p:sentence => ¬∃ $n, ¬$p
+end
+
+macro exists.at_most_one
+    sentence ::= "∃*" $n:name "," $p:sentence => ∃ __y, ∀ $n, $p → __y = $n 
+end
+
+macro exists.unique
+    sentence ::= "∃!" $n:name "," $p:sentence => (∃$n, $p) ∧ (∃*$n, $p)
+end
+
+==================================== Axioms ====================================
+
+axiom imp.intro [p q : sentence] : (assume p |- q)
+    |- p → q
+end
+
+axiom imp.elim [p q : sentence] : (p → q) (p)
+    |- q
+end
+
+axiom falsum.elim [p : sentence] : (⊥)
+    |- p
+end
+
+axiom not.elim [p : sentence] : (¬¬p)
+    |- p
+end
+
+axiom existential.intro [p(term) : sentence] [t : term] : (p(t))
+    |- ∃ x, p(x)
+end
+
+axiom existential.elim [p(term) q : sentence] : (assume p(∃ₑ(x,p(x) => q)) |- q)
+    |- q
+end 
+
+axiom iota_axiom [p(term) : sentence] : (∃! x, p(x))
+    |- p((ιx, p(x)))
+end
+
+==================================== Logic =====================================
+
+theorem falsum.intro [p : sentence] : (p) (¬p)
+    |- ⊥
+proof
+    by imp.elim [p] [⊥]
+qed
+
+theorem not.intro [p : sentence] : (assume p |- ⊥)
+    |- ¬p
+proof
+    by imp.intro [p] [⊥]
+qed
+
+theorem or.intro_right [p q : sentence] : (q)
+    |- p ∨ q
+proof
+    have assume ¬p |- q;
+    have (¬p) → q by imp.intro [¬p] [q];
+qed
+
+theorem or.intro_left [p q : sentence] : (p)
+    |- p ∨ q
+proof
+    have assume ¬p |- q
+        have ⊥ by falsum.intro [p];
+        have q by falsum.elim [q];
+    ;
+    have (¬p) → q by imp.intro [¬p] [q];
+qed
+
+================================================================================
+
+type 
+    Nat : term
+entails
+    |- _ ∈ ℕ
+end
+
+type
+    Real : term
+entails
+    |- _ ∈ ℝ
+end
+
+judgement nat.subtype.real
+    |- ℕ <= ℝ
+proof
+    by nat.in.real
+qed
+
+type 
+    Set {α : term}
+entails
+    |- ∀x ∈ _, α(x)
+end
+
+judgement set.in {α : term} [s : Set α] [x : term] (x ∈ s)
+    |- x : α
+proof
+    have ∀y ∈ s, α(y) as judgement;
+    by forall.elim
+qed
+
+judgement set.subtype {a β : term} {α <= β} 
+    |- Set α <= Set β
+proof
+    -- hypotheses: ∀x ∈ _, α(x)
+    -- goal: ∀x ∈ _, β(x)
+    arbitrary x;   
+    assume x ∈ _;
+    have α(x) as todo;      -- we prove α(x) by the hypothesis of Set α
+    have β(x) as judgement; -- we conclude β(x) from the α <= β hypothesis
+qed
+
+type 
+    Grp : term
+entails
+    |- Group.is _
+end
+
+type
+    GrpEl [G : term] : term
+entails
+    _ ∈ G .carrier
+end
+
+judgement.context imp.lift [a b : sentence] 
+    in a → b
+    use a
+    for b
+end
+
+judgement.context and.lift [a b : sentence] 
+    in a ∧ b
+    use a
+    for b
+end
+
+notation multiplication
+    sentence ::= sentence "*" sentence
+end
+
+let a * b where [G : Grp] {a b : GrpEl G} := (G .mul)(a, b)
+
+let a * b where {a b : Real} := Real.mul(a, b)
+

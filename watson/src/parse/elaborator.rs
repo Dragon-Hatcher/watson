@@ -7,12 +7,8 @@ use crate::{
     parse::{
         SourceId, Span,
         grammar::{self, add_builtin_syntax_for_formal_cat},
-        macros::{Macro, MacroPat, do_macro_replacement},
-        parse_state::{
-            Associativity, Category, ParseAtomPattern, ParseRuleSource, Precedence, Rule,
-            RulePatternPart, SyntaxCategorySource,
-        },
-        parse_tree::{ParseTree, ParseTreeChildren, ParseTreeId, ParseTreePart},
+        parse_state::{Associativity, Category, Precedence, SyntaxCategorySource},
+        parse_tree::{ParseTreeChildren, ParseTreeId},
         source_cache::{SourceDecl, source_id_to_path},
     },
     semant::{
@@ -36,7 +32,7 @@ macro_rules! failed_to_match_builtin {
 
 macro_rules! match_rule {
     (($ctx:expr, $tree_id:expr) => $($rule:ident ::= [$($child:ident),*] => $body:expr),+ $(,)?) => {{
-        let tree = reduce_to_builtin($tree_id, $ctx)?;
+        let tree = $tree_id;
         let children = expect_unambiguous(tree, $ctx)?;
         $(
             if children.rule() == $ctx.builtin_rules.$rule {
@@ -68,7 +64,6 @@ pub fn elaborate_command<'ctx>(
     // command ::= (module_command)     module_command
     //           | (syntax_cat_command) syntax_cat_command
     //           | (syntax_command)     syntax_command
-    //           | (macro_command)      macro_command
     //           | (axiom_command)      axiom_command
     //           | (theorem_command)    theorem_command
 
@@ -83,10 +78,6 @@ pub fn elaborate_command<'ctx>(
         },
         syntax_command ::= [syntax_cmd] => {
             elaborate_syntax(syntax_cmd.as_node().unwrap(), ctx)?;
-            Ok(ElaborateAction::None)
-        },
-        macro_command ::= [macro_cmd] => {
-            elaborate_macro(macro_cmd.as_node().unwrap(), ctx)?;
             Ok(ElaborateAction::None)
         },
         axiom_command ::= [axiom_cmd] => {
@@ -211,7 +202,10 @@ fn elaborate_prec_assoc<'ctx>(
     }
 }
 
-fn elaborate_maybe_prec<'ctx>(maybe_prec: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WResult<Precedence> {
+fn elaborate_maybe_prec<'ctx>(
+    maybe_prec: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<Precedence> {
     // maybe_prec ::= (prec_none)
     //              | (prec_some) number
 
@@ -316,288 +310,6 @@ fn elaborate_syntax_pat_part<'ctx>(
             let lit = elaborate_str_lit(lit.as_node().unwrap(), ctx)?;
             Ok(FormalSyntaxPatPart::Lit(lit))
         }
-    }
-}
-
-fn elaborate_macro<'ctx>(macro_cmd: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WResult<()> {
-    // macro_command ::= (macro) kw"macro" name macro_replacement kw"end"
-
-    match_rule! { (ctx, macro_cmd) =>
-        macro_r ::= [macro_kw, macro_name, replacement, end_kw] => {
-            debug_assert!(macro_kw.is_kw(*strings::MACRO));
-            debug_assert!(end_kw.is_kw(*strings::END));
-
-            let macro_name = elaborate_name(macro_name.as_node().unwrap(), ctx)?;
-            let replacement = replacement.as_node().unwrap();
-
-            let (pat, replacement) = elaborate_macro_replacement(replacement, ctx)?;
-            let cat = replacement.cat();
-
-            let Some(replacement) = disambiguate_macro_replacement(replacement, &pat, ctx)? else {
-                // TODO: correct error type.
-                return ctx.diags.err_ambiguous_parse(replacement.span());
-            };
-            let mac = ctx.arenas.macros.alloc(macro_name, Macro::new(macro_name, cat, pat, replacement));
-
-            let rule_pat = mac.pat().to_parse_rule();
-            let rule = Rule::new(macro_name, cat, ParseRuleSource::Macro(mac), rule_pat);
-            let rule = ctx.arenas.parse_rules.alloc(rule);
-            ctx.parse_state.use_rule(rule);
-
-            Ok(())
-        }
-    }
-}
-
-fn disambiguate_macro_replacement<'ctx>(
-    replacement: ParseTreeId<'ctx>,
-    pat: &MacroPat<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Option<ParseTreeId<'ctx>>> {
-    fn check_possibility<'ctx>(
-        replacement: ParseTreeId<'ctx>,
-        possibility: ParseTreeChildren<'ctx>,
-        pat: &MacroPat<'ctx>,
-        ctx: &mut Ctx<'ctx>,
-    ) -> WResult<ParseTreeChildren<'ctx>> {
-        if let [child] = possibility.children()
-            && let Some(binding) = child.as_macro_binding()
-        {
-            // This rule is a macro binding so we have to check that it matches
-            // the given pattern.
-
-            let Some(idx) = pat.keys().get(&binding) else {
-                return ctx
-                    .diags
-                    .err_undefined_macro_binding(binding, replacement.span());
-            };
-
-            let part = &pat.parts()[*idx];
-
-            if let RulePatternPart::Cat {
-                id: expected_cat, ..
-            } = part
-                && replacement.cat() != *expected_cat
-            {
-                // The category of this binding doesn't match the expected
-                // category from the pattern.
-                return Err(());
-            }
-
-            Ok(possibility)
-        } else {
-            // Otherwise we just need to recursively check all the children of this
-            // possibility.
-            let mut new_children = Vec::new();
-            let mut err = false;
-
-            for child in possibility.children() {
-                let new_child = match child {
-                    ParseTreePart::Atom(atom) => ParseTreePart::Atom(*atom),
-                    ParseTreePart::Node { id, span, cat } => {
-                        let Ok(Some(new_child)) = disambiguate_macro_replacement(*id, pat, ctx)
-                        else {
-                            err = true;
-                            continue;
-                        };
-
-                        ParseTreePart::Node {
-                            id: new_child,
-                            span: *span,
-                            cat: *cat,
-                        }
-                    }
-                };
-                new_children.push(new_child);
-            }
-
-            if err {
-                return Err(());
-            }
-
-            Ok(ParseTreeChildren::new(possibility.rule(), new_children))
-        }
-    }
-
-    let mut new_possibilities = Vec::new();
-
-    let old_tree = replacement;
-    let span = old_tree.span();
-    let cat = old_tree.cat();
-
-    for possibility in old_tree.possibilities().to_owned() {
-        let Ok(new_possibility) = check_possibility(replacement, possibility, pat, ctx) else {
-            continue;
-        };
-
-        new_possibilities.push(new_possibility);
-    }
-
-    if new_possibilities.is_empty() {
-        return Ok(None);
-    }
-
-    let tree = ParseTree::new(span, cat, new_possibilities);
-    Ok(Some(ctx.arenas.parse_forest.alloc(tree)))
-}
-
-fn elaborate_macro_replacement<'ctx>(
-    replacement: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<(MacroPat<'ctx>, ParseTreeId<'ctx>)> {
-    // macro_replacement ::= (macro_replacement) <category> prec_assoc "::=" macro_pat_list "=>" template(category)
-
-    let replacement = reduce_to_builtin(replacement, ctx)?;
-    let children = expect_unambiguous(replacement, ctx)?;
-
-    let [_cat_name, prec_assoc, bnf_replace, pat, arrow, template] = children.children() else {
-        failed_to_match_builtin!(children.rule(), ctx);
-    };
-
-    debug_assert!(bnf_replace.is_lit(*strings::BNF_REPLACE));
-    debug_assert!(arrow.is_lit(*strings::FAT_ARROW));
-
-    let template = template.as_node().unwrap();
-    let (prec, assoc) = elaborate_prec_assoc(prec_assoc.as_node().unwrap(), ctx)?;
-    let mut pat = elaborate_macro_pat(pat.as_node().unwrap(), ctx)?;
-    pat.set_prec(prec);
-    pat.set_assoc(assoc);
-
-    Ok((pat, template))
-}
-
-fn elaborate_macro_pat<'ctx>(
-    mut pat: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<MacroPat<'ctx>> {
-    // macro_pat ::= (macro_pat_one)  macro_pat_part
-    //             | (macro_pat_many) macro_pat_part macro_pat
-
-    let mut parts = Vec::new();
-    let mut keys = FxHashMap::default();
-
-    loop {
-        let (name, pat_part, rest) = match_rule! { (ctx, pat) =>
-            macro_pat_one ::= [part] => {
-                let part = part.as_node().unwrap();
-                let (name, pat_part) = elaborate_macro_pat_part(part, ctx)?;
-                (name, pat_part, None)
-            },
-            macro_pat_many ::= [part, rest] => {
-                let part = part.as_node().unwrap();
-                let rest = rest.as_node().unwrap();
-                let (name, pat_part) = elaborate_macro_pat_part(part, ctx)?;
-                (name, pat_part, Some(rest))
-            }
-        };
-
-        parts.push(pat_part);
-
-        if let Some(name) = name {
-            if keys.contains_key(&name) {
-                return ctx.diags.err_duplicate_macro_binding();
-            }
-
-            keys.insert(name, parts.len() - 1);
-        }
-
-        match rest {
-            Some(rest) => {
-                pat = rest;
-            }
-            None => {
-                break;
-            }
-        }
-    }
-
-    Ok(MacroPat::new(parts, keys))
-}
-
-fn elaborate_macro_pat_part<'ctx>(
-    pat: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<(Option<Ustr>, RulePatternPart<'ctx>)> {
-    // macro_pat_part ::= (macro_pat_part) macro_pat_binding macro_pat_kind
-
-    match_rule! { (ctx, pat) =>
-        macro_pat_part ::= [binding, kind] => {
-            let binding = binding.as_node().unwrap();
-            let kind = kind.as_node().unwrap();
-
-            let name = elaborate_macro_binding(binding, ctx)?;
-            let kind = elaborate_macro_pat_kind(kind, ctx)?;
-
-            Ok((name, kind))
-        }
-    }
-}
-
-fn elaborate_macro_binding<'ctx>(
-    binding: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Option<Ustr>> {
-    // macro_pat_binding ::= (macro_pat_binding_empty)
-    //                     | (macro_pat_binding_name)  "$" name ":"
-
-    match_rule! { (ctx, binding) =>
-        macro_pat_binding_empty ::= [] => {
-            Ok(None)
-        },
-        macro_pat_binding_name ::= [dollar, name, colon] => {
-            debug_assert!(dollar.is_lit(*strings::DOLLAR));
-            debug_assert!(colon.is_lit(*strings::COLON));
-
-            let name = elaborate_name(name.as_node().unwrap(), ctx)?;
-            Ok(Some(name))
-        }
-    }
-}
-
-fn elaborate_macro_pat_kind<'ctx>(
-    pat: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<RulePatternPart<'ctx>> {
-    // macro_pat_kind ::= (macro_pat_kind_kw)       "@" kw"kw" str
-    //                  | (macro_pat_kind_lit)      str
-    //                  | (macro_pat_kind_cat)      name
-    //                  | (macro_pat_kind_template) "@" kw"template" "(" name ")"
-
-    match_rule! { (ctx, pat) =>
-        macro_pat_kind_kw ::= [at, kw_kw, lit] => {
-            debug_assert!(at.is_lit(*strings::AT));
-            debug_assert!(kw_kw.is_kw(*strings::KW));
-
-            let lit = elaborate_str_lit(lit.as_node().unwrap(), ctx)?;
-            Ok(RulePatternPart::Atom(ParseAtomPattern::Kw(lit)))
-        },
-        macro_pat_kind_lit ::= [lit] => {
-            let lit = elaborate_str_lit(lit.as_node().unwrap(), ctx)?;
-            Ok(RulePatternPart::Atom(ParseAtomPattern::Lit(lit)))
-        },
-        macro_pat_kind_cat ::= [cat_name_node] => {
-            let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
-
-            let Some(cat) = ctx.arenas.parse_cats.get(cat_name) else {
-                return ctx.diags.err_non_existent_syntax_category(cat_name, cat_name_node.span());
-            };
-
-            Ok(RulePatternPart::Cat { id: cat, template: false })
-        },
-        macro_pat_kind_template ::= [at, template_kw, l_paren, cat_name_node, r_paren] => {
-            debug_assert!(at.is_lit(*strings::AT));
-            debug_assert!(template_kw.is_kw(*strings::TEMPLATE));
-            debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
-            debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
-
-            let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
-            let Some(cat) = ctx.arenas.parse_cats.get(cat_name) else {
-                return ctx.diags.err_non_existent_syntax_category(cat_name, cat_name_node.span());
-            };
-
-            Ok(RulePatternPart::Cat { id: cat, template: true })
-        }
-
     }
 }
 
@@ -1133,42 +845,4 @@ fn expect_unambiguous<'ctx>(
         [possibility] => Ok(possibility),
         _ => ctx.diags.err_ambiguous_parse(id.span()),
     }
-}
-
-pub fn reduce_to_builtin<'ctx>(
-    og_tree: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<ParseTreeId<'ctx>> {
-    // If we have no macro possibilities then we are already done.
-    if og_tree
-        .possibilities()
-        .iter()
-        .all(|p| !matches!(p.rule().source(), ParseRuleSource::Macro(_)))
-    {
-        return Ok(og_tree);
-    }
-
-    // Otherwise we collect all the possibilities into one new parse tree.
-    let span = og_tree.span();
-    let cat = og_tree.cat();
-    let mut possibilities = Vec::new();
-
-    for possibility in og_tree.0.possibilities() {
-        let ParseRuleSource::Macro(macro_) = possibility.rule().0.source() else {
-            possibilities.push(possibility.clone());
-            continue;
-        };
-
-        let bindings = macro_.collect_macro_bindings(possibility);
-        let tree_id = do_macro_replacement(macro_.replacement(), &bindings, ctx);
-
-        for new_possibility in tree_id.possibilities() {
-            possibilities.push(new_possibility.clone());
-        }
-    }
-
-    let new_tree = ParseTree::new(span, cat, possibilities);
-    let new_tree = ctx.arenas.parse_forest.alloc(new_tree);
-
-    Ok(new_tree)
 }

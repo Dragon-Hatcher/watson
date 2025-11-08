@@ -213,7 +213,6 @@ impl<'ctx> DiagManager<'ctx> {
                 ParseAtomPattern::Name => "a name".to_string(),
                 ParseAtomPattern::Str => "a string literal".to_string(),
                 ParseAtomPattern::Num => "a number".to_string(),
-                ParseAtomPattern::MacroBinding => "a macro binding".to_string(),
             }
         }
 
@@ -279,29 +278,6 @@ impl<'ctx> DiagManager<'ctx> {
     pub fn err_unknown_formal_syntax_cat<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
         let diag = Diagnostic::new(&format!("unknown formal syntax category `{name}`"))
             .with_error("", span);
-
-        self.add_diag(diag);
-        Err(())
-    }
-
-    pub fn err_duplicate_macro_binding<T>(&mut self) -> WResult<T> {
-        let diag = Diagnostic::new("duplicate macro binding");
-
-        self.add_diag(diag);
-        Err(())
-    }
-
-    pub fn err_undefined_macro_binding<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
-        let diag =
-            Diagnostic::new(&format!("undefined macro binding `${name}`")).with_error("", span);
-
-        self.add_diag(diag);
-        Err(())
-    }
-
-    pub fn err_non_existent_syntax_category<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
-        let diag =
-            Diagnostic::new(&format!("unknown syntax category `{name}`")).with_error("", span);
 
         self.add_diag(diag);
         Err(())

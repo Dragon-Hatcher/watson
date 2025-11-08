@@ -53,7 +53,6 @@ Grammar of the Watson language:
 command ::= (module_command)     module_command
           | (syntax_cat_command) syntax_cat_command
           | (syntax_command)     syntax_command
-          | (macro_command)      macro_command
           | (axiom_command)      axiom_command
           | (theorem_command)    theorem_command
 
@@ -79,22 +78,6 @@ syntax_pat_part ::= (syntax_pat_cat)     name
                   | (syntax_pat_binding) "@" kw"binding" "(" name ")"
                   | (syntax_pat_var)     "@" kw"variable" "(" name ")"
                   | (syntax_pat_lit)     str
-
-macro_command ::= (macro) kw"macro" name macro_replacement kw"end"
-
-macro_replacement ::= (macro_replacement) <category> prec_assoc "::=" macro_pat_list "=>" template(category)
-
-macro_pat ::= (macro_pat_one)  macro_pat_part
-            | (macro_pat_many) macro_pat_part macro_pat
-
-macro_pat_part ::= (macro_pat_part) macro_pat_binding macro_pat_kind
-
-macro_pat_binding ::= (macro_pat_binding_empty)
-                    | (macro_pat_binding_name)  "$" name ":"
-macro_pat_kind ::= (macro_pat_kind_kw)       "@" kw"kw" str
-                 | (macro_pat_kind_lit)      str
-                 | (macro_pat_kind_cat)      name
-                 | (macro_pat_kind_template) "@" kw"template" "(" name ")"
 
 axiom_command ::= (axiom) kw"axiom" name templates ":" hypotheses "|-" sentence kw"end"
 theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactics kw"qed"
@@ -151,7 +134,6 @@ builtin_cats! {
         module_command,
         syntax_cat_command,
         syntax_command,
-        macro_command,
         axiom_command,
         theorem_command,
         prec_assoc,
@@ -159,11 +141,6 @@ builtin_cats! {
         maybe_assoc,
         syntax_pat,
         syntax_pat_part,
-        macro_replacement,
-        macro_pat,
-        macro_pat_part,
-        macro_pat_binding,
-        macro_pat_kind,
         templates,
         template,
         template_names,
@@ -193,7 +170,6 @@ builtin_rules! {
         module_command,
         syntax_cat_command,
         syntax_command,
-        macro_command,
         axiom_command,
         theorem_command,
         module,
@@ -212,16 +188,6 @@ builtin_rules! {
         syntax_pat_part_binding,
         syntax_pat_part_var,
         syntax_pat_part_lit,
-        macro_r,
-        macro_pat_one,
-        macro_pat_many,
-        macro_pat_part,
-        macro_pat_binding_empty,
-        macro_pat_binding_name,
-        macro_pat_kind_kw,
-        macro_pat_kind_lit,
-        macro_pat_kind_cat,
-        macro_pat_kind_template,
         theorem,
         axiom,
         template_none,
@@ -268,17 +234,7 @@ fn num() -> RulePatternPart<'static> {
 }
 
 fn cat(cat: CategoryId) -> RulePatternPart {
-    RulePatternPart::Cat {
-        id: cat,
-        template: false,
-    }
-}
-
-fn cat_template(cat: CategoryId) -> RulePatternPart {
-    RulePatternPart::Cat {
-        id: cat,
-        template: true,
-    }
+    RulePatternPart::Cat(cat)
 }
 
 pub fn add_builtin_rules<'ctx>(
@@ -332,7 +288,6 @@ pub fn add_builtin_rules<'ctx>(
             cats.command,
             vec![cat(cats.syntax_command)],
         ),
-        macro_command: rule("macro_command", cats.command, vec![cat(cats.macro_command)]),
         axiom_command: rule("axiom_command", cats.command, vec![cat(cats.axiom_command)]),
         theorem_command: rule(
             "theorem_command",
@@ -359,16 +314,6 @@ pub fn add_builtin_rules<'ctx>(
                 cat(cats.prec_assoc),
                 lit(*strings::BNF_REPLACE),
                 cat(cats.syntax_pat),
-                kw(*strings::END),
-            ],
-        ),
-        macro_r: rule(
-            "macro_r",
-            cats.macro_command,
-            vec![
-                kw(*strings::MACRO),
-                cat(cats.name),
-                cat(cats.macro_replacement),
                 kw(*strings::END),
             ],
         ),
@@ -470,55 +415,6 @@ pub fn add_builtin_rules<'ctx>(
             "syntax_pat_part_lit",
             cats.syntax_pat_part,
             vec![cat(cats.str)],
-        ),
-
-        macro_pat_one: rule(
-            "macro_pat_one",
-            cats.macro_pat,
-            vec![cat(cats.macro_pat_part)],
-        ),
-        macro_pat_many: rule(
-            "macro_pat_many",
-            cats.macro_pat,
-            vec![cat(cats.macro_pat_part), cat(cats.macro_pat)],
-        ),
-
-        macro_pat_part: rule(
-            "macro_pat_part",
-            cats.macro_pat_part,
-            vec![cat(cats.macro_pat_binding), cat(cats.macro_pat_kind)],
-        ),
-        macro_pat_binding_empty: rule("macro_pat_binding_empty", cats.macro_pat_binding, vec![]),
-        macro_pat_binding_name: rule(
-            "macro_pat_binding_name",
-            cats.macro_pat_binding,
-            vec![lit(*strings::DOLLAR), cat(cats.name), lit(*strings::COLON)],
-        ),
-        macro_pat_kind_kw: rule(
-            "macro_pat_kind_kw",
-            cats.macro_pat_kind,
-            vec![lit(*strings::AT), kw(*strings::KW), cat(cats.str)],
-        ),
-        macro_pat_kind_lit: rule(
-            "macro_pat_kind_lit",
-            cats.macro_pat_kind,
-            vec![cat(cats.str)],
-        ),
-        macro_pat_kind_cat: rule(
-            "macro_pat_kind_cat",
-            cats.macro_pat_kind,
-            vec![cat(cats.name)],
-        ),
-        macro_pat_kind_template: rule(
-            "macro_pat_kind_template",
-            cats.macro_pat_kind,
-            vec![
-                lit(*strings::AT),
-                kw(*strings::TEMPLATE),
-                lit(*strings::LEFT_PAREN),
-                cat(cats.name),
-                lit(*strings::RIGHT_PAREN),
-            ],
         ),
 
         template_none: rule("template_none", cats.templates, vec![]),
@@ -693,39 +589,6 @@ pub fn add_builtin_rules<'ctx>(
     }
 }
 
-pub fn add_builtin_syntax_for_cat<'ctx>(for_cat: CategoryId<'ctx>, ctx: &mut Ctx<'ctx>) {
-    let rule = ctx.arenas.parse_rules.alloc(Rule::new(
-        "macro_replacement",
-        ctx.builtin_cats.macro_replacement,
-        ParseRuleSource::Builtin,
-        RulePattern::new(
-            vec![
-                kw(for_cat.name()),
-                cat(ctx.builtin_cats.prec_assoc),
-                lit(*strings::BNF_REPLACE),
-                cat(ctx.builtin_cats.macro_pat),
-                lit(*strings::FAT_ARROW),
-                cat_template(for_cat),
-            ],
-            Precedence::default(),
-            Associativity::default(),
-        ),
-    ));
-    ctx.parse_state.use_rule(rule);
-
-    let rule = ctx.arenas.parse_rules.alloc(Rule::new(
-        "macro_binding",
-        for_cat,
-        ParseRuleSource::Builtin,
-        RulePattern::new(
-            vec![RulePatternPart::Atom(ParseAtomPattern::MacroBinding)],
-            Precedence::default(),
-            Associativity::default(),
-        ),
-    ));
-    ctx.parse_state.use_rule(rule);
-}
-
 pub fn add_builtin_syntax_for_formal_cat<'ctx>(
     formal_cat: FormalSyntaxCatId<'ctx>,
     ctx: &mut Ctx<'ctx>,
@@ -766,10 +629,7 @@ pub fn add_formal_syntax_rule<'ctx>(rule: FormalSyntaxRuleId<'ctx>, ctx: &mut Ct
         let part = match formal_part {
             FormalSyntaxPatPart::Cat(formal_cat) => {
                 let cat = ctx.parse_state.cat_for_formal_cat(*formal_cat);
-                RulePatternPart::Cat {
-                    id: cat,
-                    template: false,
-                }
+                RulePatternPart::Cat(cat)
             }
             FormalSyntaxPatPart::Binding(_) | FormalSyntaxPatPart::Var(_) => {
                 cat(ctx.builtin_cats.name)

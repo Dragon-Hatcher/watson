@@ -38,7 +38,7 @@ fn build_chart<'ctx>(
 
     // Add all the start rules for the category we are parsing.
     for &rule in ctx.parse_state.rules_for_cat(category) {
-        let item = Item::new(rule, start.offset(), false);
+        let item = Item::new(rule, start.offset());
         chart.add_item(item, start.offset());
     }
 
@@ -60,22 +60,13 @@ fn build_chart<'ctx>(
                         continue;
                     };
 
-                    if !item.template && atom == &ParseAtomPattern::MacroBinding {
-                        // We don't allow macro bindings outside of templates.
-                        continue;
-                    }
-
                     // Add the item wherever the atom ended.
                     chart.add_item(item.advance(), atom_end);
                 }
-                Some(RulePatternPart::Cat {
-                    id: cat,
-                    template: new_template,
-                }) => {
+                Some(RulePatternPart::Cat(cat)) => {
                     // Predict. Add all the rules for the category at the current position.
                     for &prediction in ctx.parse_state.rules_for_cat(*cat) {
-                        let new_item =
-                            Item::new(prediction, current_position, item.template || *new_template);
+                        let new_item = Item::new(prediction, current_position);
                         if chart.add_item(new_item, current_position) {
                             // This is a new item, so we need to process it.
                             items.push_back(new_item);
@@ -142,15 +133,10 @@ fn _debug_chart(chart: &Chart) {
                         ParseAtomPattern::Lit(lit) => pattern.push_str(&format!("'{lit}' ")),
                         ParseAtomPattern::Str => pattern.push_str("str "),
                         ParseAtomPattern::Num => pattern.push_str("num "),
-                        ParseAtomPattern::MacroBinding => pattern.push_str("macro_binding "),
                     },
-                    RulePatternPart::Cat { id, template } => {
-                        let cat_name = id.name();
-                        if *template {
-                            pattern.push_str(&format!("{{{cat_name}}} "));
-                        } else {
-                            pattern.push_str(&format!("<{cat_name}> "));
-                        }
+                    RulePatternPart::Cat(id) => {
+                        let cat_name = id._name();
+                        pattern.push_str(&format!("<{cat_name}> "));
                     }
                 }
             }
@@ -160,7 +146,7 @@ fn _debug_chart(chart: &Chart) {
             let origin = item.origin;
             println!(
                 "  {} -> {} (from {:?})",
-                item.rule.cat().name(),
+                item.rule.cat()._name(),
                 pattern,
                 origin
             );
@@ -175,16 +161,14 @@ struct Item<'ctx> {
     rule: RuleId<'ctx>,
     dot: usize,
     origin: SourceOffset,
-    template: bool,
 }
 
 impl<'ctx> Item<'ctx> {
-    fn new(rule: RuleId<'ctx>, origin: SourceOffset, template: bool) -> Self {
+    fn new(rule: RuleId<'ctx>, origin: SourceOffset) -> Self {
         Self {
             rule,
             dot: 0,
             origin,
-            template,
         }
     }
 
@@ -379,16 +363,11 @@ fn read_chart<'ctx>(
                             let num = &text[start.byte_offset()..span.end().byte_offset()];
                             ParseAtomKind::Num(num.parse().unwrap())
                         }
-                        ParseAtomPattern::MacroBinding => {
-                            let start = skip_ws_and_comments(text, span.start().offset());
-                            let name = &text[start.byte_offset() + 1..span.end().byte_offset()];
-                            ParseAtomKind::MacroBinding(name.into())
-                        }
                     };
                     let atom = ParseAtom::new(span, kind);
                     parts.push(ParseTreePart::Atom(atom));
                 }
-                RulePatternPart::Cat { id, .. } => {
+                RulePatternPart::Cat(id) => {
                     let tree_id = search(span, *id, chart, ctx)?;
                     parts.push(ParseTreePart::Node {
                         id: tree_id,
@@ -469,7 +448,7 @@ fn split_with_pattern(
 
             result
         }
-        RulePatternPart::Cat { id: cat, .. } => {
+        RulePatternPart::Cat(cat) => {
             let continuations = chart.get(&(at, cat)).ok_or(SplitError::NoMatch)?;
             let mut continuations = continuations.clone();
 
@@ -545,7 +524,7 @@ fn _debug_trimmed_chart<'ctx>(trimmed: &TrimmedChart<'ctx>) {
     trimmed.sort_by_key(|(key, _)| *key);
 
     for ((offset, cat), completions) in trimmed {
-        println!("At {offset:?}, completed <{}>:", cat.name());
+        println!("At {offset:?}, completed <{}>:", cat._name());
         for (rule, end) in completions {
             let mut pattern = String::new();
             for part in rule.pattern().parts() {
@@ -556,19 +535,14 @@ fn _debug_trimmed_chart<'ctx>(trimmed: &TrimmedChart<'ctx>) {
                         ParseAtomPattern::Lit(lit) => pattern.push_str(&format!("'{lit}' ")),
                         ParseAtomPattern::Str => pattern.push_str("str "),
                         ParseAtomPattern::Num => pattern.push_str("num "),
-                        ParseAtomPattern::MacroBinding => pattern.push_str("macro_binding "),
                     },
-                    RulePatternPart::Cat { id, template } => {
-                        let cat_name = id.name();
-                        if *template {
-                            pattern.push_str(&format!("{{{cat_name}}} "));
-                        } else {
-                            pattern.push_str(&format!("<{cat_name}> "));
-                        }
+                    RulePatternPart::Cat(id) => {
+                        let cat_name = id._name();
+                        pattern.push_str(&format!("<{cat_name}> "));
                     }
                 }
             }
-            println!("  {} -> {} (to {:?})", rule.cat().name(), pattern, end);
+            println!("  {} -> {} (to {:?})", rule.cat()._name(), pattern, end);
         }
         println!();
     }
@@ -600,10 +574,6 @@ fn parse_atom(atom: ParseAtomPattern, text: &str, at: SourceOffset) -> Option<So
             let end = parse_num(text, content)?;
             Some(end)
         }
-        ParseAtomPattern::MacroBinding => {
-            let (end, _name) = parse_macro_binding(text, content)?;
-            Some(end)
-        }
     }
 }
 
@@ -624,33 +594,6 @@ pub fn parse_name(text: &str, from: SourceOffset) -> Option<(SourceOffset, &str)
     }
 
     Some((at, &text[from.byte_offset()..at.byte_offset()]))
-}
-
-fn parse_macro_binding(text: &str, from: SourceOffset) -> Option<(SourceOffset, &str)> {
-    let content = skip_ws_and_comments(text, from);
-
-    let mut chars = text[content.byte_offset()..].chars();
-
-    let first_char = chars.next()?;
-    if first_char != '$' {
-        return None;
-    }
-    let mut at = content.forward(first_char.len_utf8());
-
-    let second_char = chars.next()?;
-    if !char_can_start_name(second_char) {
-        return None;
-    }
-    at = at.forward(second_char.len_utf8());
-
-    for next_char in chars {
-        if !char_can_continue_name(next_char) {
-            break;
-        }
-        at = at.forward(next_char.len_utf8());
-    }
-
-    Some((at, &text[content.byte_offset() + 1..at.byte_offset()]))
 }
 
 fn parse_str(text: &str, from: SourceOffset) -> Option<(SourceOffset, &str)> {
@@ -681,15 +624,13 @@ fn parse_num(text: &str, from: SourceOffset) -> Option<SourceOffset> {
     let mut chars = text[from.byte_offset()..].chars();
     let mut at = from;
 
-    while let Some(next) = chars.next() && next.is_ascii_digit() {
+    while let Some(next) = chars.next()
+        && next.is_ascii_digit()
+    {
         at = at.forward(next.len_utf8());
     }
 
-    if at == from { 
-        None
-    } else {
-        Some(at)
-    }
+    if at == from { None } else { Some(at) }
 }
 
 fn char_can_start_name(char: char) -> bool {

@@ -1,6 +1,5 @@
 use crate::{
     generate_arena_handle,
-    parse::macros::MacroId,
     semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -8,7 +7,6 @@ use ustr::Ustr;
 
 pub struct ParseState<'ctx> {
     // Category info
-    new_categories: Vec<CategoryId<'ctx>>,
     categories_by_formal_cat: FxHashMap<FormalSyntaxCatId<'ctx>, CategoryId<'ctx>>,
 
     // Rule info
@@ -23,7 +21,6 @@ pub struct ParseState<'ctx> {
 impl<'ctx> ParseState<'ctx> {
     pub fn new() -> Self {
         Self {
-            new_categories: Vec::new(),
             categories_by_formal_cat: FxHashMap::default(),
             all_rules: FxHashSet::default(),
             rules_by_cat: FxHashMap::default(),
@@ -36,7 +33,6 @@ impl<'ctx> ParseState<'ctx> {
         self.rules_by_cat.insert(cat, Vec::new());
         self.can_be_empty.insert(cat, false);
         self.initial_atoms.insert(cat, FxHashSet::default());
-        self.new_categories.push(cat);
         if let SyntaxCategorySource::FormalLang(formal) = cat.source() {
             self.categories_by_formal_cat.insert(formal, cat);
         }
@@ -57,7 +53,7 @@ impl<'ctx> ParseState<'ctx> {
                 if !self.can_be_empty[&rule.cat()]
                     && rule.pattern().parts().iter().all(|part| match part {
                         RulePatternPart::Atom(_) => false,
-                        RulePatternPart::Cat { id, .. } => self.can_be_empty[id],
+                        RulePatternPart::Cat(id) => self.can_be_empty[id],
                     })
                 {
                     self.can_be_empty.insert(rule.cat(), true);
@@ -84,7 +80,7 @@ impl<'ctx> ParseState<'ctx> {
                             }
                             break;
                         }
-                        RulePatternPart::Cat { id, .. } => {
+                        RulePatternPart::Cat(id) => {
                             if *id != rule.cat() {
                                 let [from, to] =
                                     self.initial_atoms.get_disjoint_mut([id, &rule.cat()]);
@@ -123,10 +119,6 @@ impl<'ctx> ParseState<'ctx> {
     pub fn can_be_empty(&self, cat: CategoryId<'ctx>) -> bool {
         self.can_be_empty[&cat]
     }
-
-    pub fn pop_new_categories(&mut self) -> Option<CategoryId<'ctx>> {
-        self.new_categories.pop()
-    }
 }
 
 generate_arena_handle!(CategoryId<'ctx> => Category<'ctx>);
@@ -144,7 +136,7 @@ impl<'ctx> Category<'ctx> {
         Self { name, source }
     }
 
-    pub fn name(&self) -> Ustr {
+    pub fn _name(&self) -> Ustr {
         self.name
     }
 
@@ -220,7 +212,6 @@ impl<'ctx> Rule<'ctx> {
 pub enum ParseRuleSource<'ctx> {
     Builtin,
     FormalLang(FormalSyntaxRuleId<'ctx>),
-    Macro(MacroId<'ctx>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -259,10 +250,7 @@ impl<'ctx> RulePattern<'ctx> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RulePatternPart<'ctx> {
     Atom(ParseAtomPattern),
-    Cat {
-        id: CategoryId<'ctx>,
-        template: bool,
-    },
+    Cat(CategoryId<'ctx>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -272,5 +260,4 @@ pub enum ParseAtomPattern {
     Name,
     Str,
     Num,
-    MacroBinding,
 }

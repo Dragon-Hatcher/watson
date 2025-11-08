@@ -6,7 +6,6 @@ use crate::{
         grammar::{
             BuiltinCats, BuiltinRules, add_builtin_rules, add_builtin_syntax_for_formal_cat,
         },
-        macros::{Macro, MacroId},
         parse_state::{Category, CategoryId, ParseState, Rule, RuleId},
         parse_tree::{ParseTree, ParseTreeId},
     },
@@ -73,7 +72,6 @@ impl<'ctx> Ctx<'ctx> {
 }
 
 pub struct Arenas<'ctx> {
-    pub macros: NamedArena<Macro<'ctx>, MacroId<'ctx>>,
     pub parse_forest: PlainArena<ParseTree<'ctx>, ParseTreeId<'ctx>>,
     pub parse_cats: NamedArena<Category<'ctx>, CategoryId<'ctx>>,
     pub parse_rules: PlainArena<Rule<'ctx>, RuleId<'ctx>>,
@@ -89,7 +87,6 @@ pub struct Arenas<'ctx> {
 impl<'ctx> Arenas<'ctx> {
     pub fn new() -> Self {
         Self {
-            macros: NamedArena::new(),
             parse_forest: PlainArena::new(),
             parse_cats: NamedArena::new(),
             parse_rules: PlainArena::new(),

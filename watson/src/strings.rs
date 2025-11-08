@@ -13,7 +13,6 @@ str_const! {
     MODULE = "module";
     SYNTAX_CAT = "syntax_category";
     SYNTAX = "syntax";
-    MACRO = "macro";
     AXIOM = "axiom";
     THEOREM = "theorem";
     PROOF = "proof";
@@ -27,9 +26,7 @@ str_const! {
 // Symbols:
 str_const! {
     BNF_REPLACE = "::=";
-    FAT_ARROW = "=>";
     AT = "@";
-    DOLLAR = "$";
     COLON = ":";
     TURNSTILE = "|-";
     LEFT_PAREN = "(";
@@ -46,8 +43,6 @@ str_const! {
     SENTENCE = "sentence";
     BINDING = "binding";
     VARIABLE = "variable";
-    KW = "kw";
-    TEMPLATE = "template";
 }
 
 str_const! {

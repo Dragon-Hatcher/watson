@@ -2,7 +2,6 @@ mod earley;
 pub mod elaborator;
 pub mod grammar;
 pub mod location;
-pub mod macros;
 pub mod parse_state;
 pub mod parse_tree;
 pub mod source_cache;
@@ -22,19 +21,11 @@ pub fn parse<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> Vec<TheoremId<'ctx>> 
 
     let mut theorems = Vec::new();
     while let Some(next) = sources_stack.pop() {
-        update_state(ctx);
         parse_source(next, ctx, &mut sources_stack, &mut theorems);
     }
 
     theorems
 }
-
-fn update_state(ctx: &mut Ctx) {
-    while let Some(cat) = ctx.parse_state.pop_new_categories() {
-        grammar::add_builtin_syntax_for_cat(cat, ctx);
-    }
-}
-
 fn parse_source<'ctx>(
     loc: Location,
     ctx: &mut Ctx<'ctx>,

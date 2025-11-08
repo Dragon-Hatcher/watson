@@ -5,12 +5,9 @@ use crate::{
     context::Ctx,
     diagnostics::WResult,
     parse::{
-        elaborator::{
-            elaborate_maybe_shorthand_args, elaborate_name, elaborate_str_lit, reduce_to_builtin,
-        },
-        macros::do_macro_replacement,
-        parse_state::{ParseAtomPattern, ParseRuleSource, RulePatternPart, SyntaxCategorySource},
-        parse_tree::{ParseTreeChildren, ParseTreeId, ParseTreePart},
+        elaborator::{elaborate_maybe_shorthand_args, elaborate_name},
+        parse_state::{ParseRuleSource, SyntaxCategorySource},
+        parse_tree::{ParseTreeChildren, ParseTreeId},
     },
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart},
@@ -113,7 +110,6 @@ fn maybe_parse_any_fragment<'ctx>(
 ) -> WResult<Option<(FragmentId<'ctx>, PresentationTreeId<'ctx>, Mappings<'ctx>)>> {
     debug_assert!(tree.cat() == ctx.builtin_cats.any_fragment);
 
-    let tree = reduce_to_builtin(tree, ctx)?;
     let mut possible_formals = Vec::new();
 
     for possibility in tree.possibilities() {
@@ -230,23 +226,6 @@ impl<'ctx> PartialPresentation<'ctx> {
             &mut 0,
         );
         self.pres
-    }
-
-    fn replace_chained(&mut self, with: &PartialPresentation<'ctx>) {
-        if let Presentation::Rule(r) = &mut self.pres {
-            let mut passed = 0;
-            for part in r.parts.iter_mut() {
-                if let PresPart::Subpart(v) = part {
-                    if !v.is_empty() {
-                        *part = PresPart::Chain(Box::new(with.pres.clone()));
-                        self.parse_nodes
-                            .splice(passed..passed, with.parse_nodes.iter().copied());
-                        return;
-                    }
-                    passed += 1;
-                }
-            }
-        }
     }
 }
 
@@ -520,59 +499,6 @@ fn maybe_parse_fragment<'ctx>(
                 names
                     .bindings
                     .truncate(names.bindings.len() - binding_count);
-            }
-            ParseRuleSource::Macro(mac) => {
-                // Expand the macro and add the new possibilities to the stack.
-                let bindings = mac.collect_macro_bindings(&possibility);
-                let expanded = do_macro_replacement(mac.replacement(), &bindings, ctx);
-
-                let mut pres_parts = Vec::new();
-                let mut parse_nodes = Vec::new();
-                for (pat, child) in mac.pat().parts().iter().zip(possibility.children().iter()) {
-                    let ppart = match (pat, child) {
-                        (RulePatternPart::Atom(ParseAtomPattern::Kw(kw)), _) => PresPart::Str(*kw),
-                        (RulePatternPart::Atom(ParseAtomPattern::Lit(lit)), _) => {
-                            PresPart::Str(*lit)
-                        }
-                        (
-                            RulePatternPart::Atom(ParseAtomPattern::Name),
-                            ParseTreePart::Node { id, .. },
-                        ) => PresPart::Str(elaborate_name(*id, ctx)?),
-                        (
-                            RulePatternPart::Atom(ParseAtomPattern::Str),
-                            ParseTreePart::Node { id, .. },
-                        ) => PresPart::Str(elaborate_str_lit(*id, ctx)?),
-                        (RulePatternPart::Cat { .. }, ParseTreePart::Node { id, .. }) => {
-                            parse_nodes.push(*id);
-
-                            if *id == expanded {
-                                // The output was replaced with this node. Sentinel.
-                                PresPart::Subpart(vec![0])
-                            } else {
-                                PresPart::Subpart(Vec::new())
-                            }
-                        }
-                        _ => unreachable!(),
-                    };
-                    pres_parts.push(ppart);
-                }
-
-                let new_pres = Presentation::Rule(PresRuleApplication::new(pres_parts));
-                let new_pres = PartialPresentation {
-                    pres: new_pres,
-                    parse_nodes,
-                };
-                let partial_pres = match macro_pres {
-                    Some(mut pres) => {
-                        pres.replace_chained(&new_pres);
-                        pres
-                    }
-                    None => new_pres,
-                };
-
-                for possibility in expanded.possibilities() {
-                    possibilities_todo.push((possibility.clone(), Some(partial_pres.clone())));
-                }
             }
         }
     }

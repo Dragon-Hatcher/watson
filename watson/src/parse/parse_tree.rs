@@ -131,16 +131,6 @@ impl<'ctx> ParseTreePart<'ctx> {
         }
     }
 
-    pub fn as_macro_binding(&self) -> Option<Ustr> {
-        if let Self::Atom(atom) = self
-            && let ParseAtomKind::MacroBinding(text) = atom.kind
-        {
-            Some(text)
-        } else {
-            None
-        }
-    }
-
     pub fn as_node(&self) -> Option<ParseTreeId<'ctx>> {
         if let Self::Node { id, .. } = self {
             Some(*id)
@@ -177,5 +167,4 @@ pub enum ParseAtomKind {
     Name(Ustr),
     StrLit(Ustr),
     Num(usize),
-    MacroBinding(Ustr),
 }

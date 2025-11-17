@@ -47,5 +47,8 @@
 	},
 	"keywords": [
 		"svelte"
-	]
+	],
+	"dependencies": {
+		"katex": "^0.16.25"
+	}
 }

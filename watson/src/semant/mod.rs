@@ -6,3 +6,5 @@ pub mod parse_fragment;
 pub mod presentation;
 pub mod proof_status;
 pub mod theorems;
+pub mod notation;
+pub mod scope;

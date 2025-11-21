@@ -2,7 +2,7 @@ use crate::context::Ctx;
 use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
-use crate::semant::check_proof::{ProofStateKey, ReasoningStep};
+use crate::semant::check_proof::{ProofStateKey};
 use crate::semant::formal_syntax::FormalSyntaxCatId;
 use crate::semant::presentation::{FactPresentation, PresentationTreeId};
 use crate::semant::theorems::TheoremId;
@@ -134,30 +134,30 @@ impl<'ctx> Diagnostic<'ctx> {
     }
 }
 
-fn render_proof_state<'ctx>(state: ProofStateKey<'ctx>) -> String {
+fn render_proof_state<'ctx>(_state: ProofStateKey<'ctx>) -> String {
     let mut res = String::new();
 
     res += "Proof state:\n";
 
-    for &step in state.reasoning_chain() {
-        res += "  ";
+    // for &step in state.reasoning_chain() {
+    //     res += "  ";
 
-        match step {
-            ReasoningStep::Hypothesis((_, pres)) => res += &pres.render_str(),
-            ReasoningStep::Deduce((_, pres)) => res += &pres.render_str(),
-            ReasoningStep::Assume((_, pres)) => res += &pres.render_str(),
-            ReasoningStep::_Shorthand(name, (_, pres)) => {
-                res += &name;
-                res += " := ";
-                res += &pres.render_str();
-            }
-        }
+    //     match step {
+    //         ReasoningStep::Hypothesis((_, pres)) => res += &pres.render_str(),
+    //         ReasoningStep::Deduce((_, pres)) => res += &pres.render_str(),
+    //         ReasoningStep::Assume((_, pres)) => res += &pres.render_str(),
+    //         ReasoningStep::_Shorthand(name, (_, pres)) => {
+    //             res += &name;
+    //             res += " := ";
+    //             res += &pres.render_str();
+    //         }
+    //     }
 
-        res += "\n";
-    }
+    //     res += "\n";
+    // }
 
-    res += "⊢ ";
-    res += &state.goal().1.render_str();
+    // res += "⊢ ";
+    // res += &state.goal().1.render_str();
 
     res
 }
@@ -350,7 +350,8 @@ impl<'ctx> DiagManager<'ctx> {
 
     pub fn err_missing_goal(&mut self, in_proof: impl Into<InProof<'ctx>>, at: Span) {
         let in_proof = in_proof.into();
-        let goal_txt = in_proof.proof_state.goal().1.render_str();
+        // let goal_txt = in_proof.proof_state.goal().1.render_str();
+        let goal_txt = "TODO";
 
         let diag = Diagnostic::new(&format!("missing goal `{goal_txt}`"))
             .with_error("goal unproved at end of proof", at)
@@ -366,7 +367,8 @@ impl<'ctx> DiagManager<'ctx> {
         conclusion: PresentationTreeId<'ctx>,
     ) {
         let in_proof = in_proof.into();
-        let goal_txt = in_proof.proof_state.goal().1.render_str();
+        // let goal_txt = in_proof.proof_state.goal().1.render_str();
+        let goal_txt = "TODO";
         let conclusion_txt = conclusion.render_str();
 
         let diag = Diagnostic::new(&format!(

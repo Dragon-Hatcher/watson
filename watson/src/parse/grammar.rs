@@ -1,4 +1,4 @@
-use std::vec;
+use std::{ops::Not, vec};
 
 use crate::{
     context::{
@@ -9,7 +9,10 @@ use crate::{
         Associativity, Category, CategoryId, ParseAtomPattern, ParseRuleSource, ParseState,
         Precedence, Rule, RuleId, RulePattern, RulePatternPart, SyntaxCategorySource,
     },
-    semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
+    semant::{
+        formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
+        notation::{NotationPattern, NotationPatternId, NotationPatternPart},
+    },
     strings,
 };
 use ustr::Ustr;
@@ -53,13 +56,15 @@ Grammar of the Watson language:
 command ::= (module_command)     module_command
           | (syntax_cat_command) syntax_cat_command
           | (syntax_command)     syntax_command
+          | (notation_command)   notation_command
+          | (definition_command) definition_command
           | (axiom_command)      axiom_command
           | (theorem_command)    theorem_command
 
 module_command ::= (module) kw"module" name
 
 syntax_cat_command ::= (syntax_cat) kw"syntax_cat" name
-syntax_command ::= (syntax) kw"syntax" name name prec_assoc "::=" syntax_pat_list kw"end"
+syntax_command ::= (syntax) kw"syntax" name name prec_assoc "::=" syntax_pat kw"end"
 
 prec_assoc ::= (prec_assoc_none)
              | (prec_assoc_some) "(" maybe_prec maybe_assoc ")"
@@ -79,24 +84,31 @@ syntax_pat_part ::= (syntax_pat_cat)     name
                   | (syntax_pat_var)     "@" kw"variable" "(" name ")"
                   | (syntax_pat_lit)     str
 
+notation_command ::= (notation) kw"notation" name name prec_assoc "::=" notation_pat kw"end"
+
+notation_pat ::= (notation_pat_one)  notation_pat_part
+               | (notation_pat_many) notation_pat_part notation_pat
+
+notation_pat ::= (notation_pat_lit)     str
+               | (notation_pat_kw)      "@" kw"kw" str
+               | (notation_pat_name)    "@" kw"name"
+               | (notation_pat_cat)     name
+               | (notation_pat_binding) "@" kw"binding" "(" name ")"
+
+definition_command ::= (definition) kw"definition" name notation_binding ":=" any_fragment kw"end"
+
+// notation_binding is created from each notation command
+
 axiom_command ::= (axiom) kw"axiom" name templates ":" hypotheses "|-" sentence kw"end"
 theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactics kw"qed"
 
 templates ::= (template_none)
             | (template_many) template templates
 
-template ::= (template) "[" template_names ":" name "]"
+template ::= (template) "[" template_bindings ":" name "]"
 
-template_names ::= (template_names_none)
-                 | (template_names_many) template_name template_names
-
-template_name ::= (template_name) name maybe_template_params
-
-maybe_template_params ::= (maybe_template_params_none)
-                        | (maybe_template_params_some) "(" template_params ")"
-template_params ::= (template_params_one)  template_param
-                  | (template_params_many) template_param "," template_params
-template_param ::= (template_param) name
+template_bindings ::= (template_bindings_none)
+                    | (template_bindings_many) notation_binding template_bindings
 
 hypotheses ::= (hypotheses_none)
              | (hypotheses_many) hypothesis hypotheses
@@ -134,6 +146,8 @@ builtin_cats! {
         module_command,
         syntax_cat_command,
         syntax_command,
+        notation_command,
+        definition_command,
         axiom_command,
         theorem_command,
         prec_assoc,
@@ -141,13 +155,12 @@ builtin_cats! {
         maybe_assoc,
         syntax_pat,
         syntax_pat_part,
+        notation_pat,
+        notation_pat_part,
+        notation_binding,
         templates,
         template,
-        template_names,
-        template_name,
-        maybe_template_params,
-        template_params,
-        template_param,
+        template_bindings,
         hypotheses,
         hypothesis,
         fact,
@@ -170,6 +183,8 @@ builtin_rules! {
         module_command,
         syntax_cat_command,
         syntax_command,
+        notation_command,
+        definition_command,
         axiom_command,
         theorem_command,
         module,
@@ -188,19 +203,22 @@ builtin_rules! {
         syntax_pat_part_binding,
         syntax_pat_part_var,
         syntax_pat_part_lit,
+        notation,
+        notation_pat_one,
+        notation_pat_many,
+        notation_pat_lit,
+        notation_pat_kw,
+        notation_pat_cat,
+        notation_pat_name,
+        notation_pat_binding,
+        definition,
         theorem,
         axiom,
         template_none,
         template_many,
         template,
-        template_names_none,
-        template_names_many,
-        template_name,
-        maybe_template_params_none,
-        maybe_template_params_some,
-        template_params_one,
-        template_params_many,
-        template_param,
+        template_bindings_none,
+        template_bindings_many,
         hypotheses_none,
         hypotheses_many,
         hypothesis,
@@ -262,7 +280,7 @@ pub fn add_builtin_rules<'ctx>(
         rule
     };
 
-    BuiltinRules {
+    let rules = BuiltinRules {
         name: rule(
             "name",
             cats.name,
@@ -287,6 +305,16 @@ pub fn add_builtin_rules<'ctx>(
             "syntax_command",
             cats.command,
             vec![cat(cats.syntax_command)],
+        ),
+        notation_command: rule(
+            "notation_command",
+            cats.command,
+            vec![cat(cats.notation_command)],
+        ),
+        definition_command: rule(
+            "definition_command",
+            cats.command,
+            vec![cat(cats.definition_command)],
         ),
         axiom_command: rule("axiom_command", cats.command, vec![cat(cats.axiom_command)]),
         theorem_command: rule(
@@ -314,6 +342,31 @@ pub fn add_builtin_rules<'ctx>(
                 cat(cats.prec_assoc),
                 lit(*strings::BNF_REPLACE),
                 cat(cats.syntax_pat),
+                kw(*strings::END),
+            ],
+        ),
+        notation: rule(
+            "notation",
+            cats.notation_command,
+            vec![
+                kw(*strings::NOTATION),
+                cat(cats.name),
+                cat(cats.name),
+                cat(cats.prec_assoc),
+                lit(*strings::BNF_REPLACE),
+                cat(cats.notation_pat),
+                kw(*strings::END),
+            ],
+        ),
+        definition: rule(
+            "definition",
+            cats.definition_command,
+            vec![
+                kw(*strings::DEFINITION),
+                cat(cats.name),
+                cat(cats.notation_binding),
+                lit(*strings::ASSIGN),
+                cat(cats.any_fragment),
                 kw(*strings::END),
             ],
         ),
@@ -417,6 +470,48 @@ pub fn add_builtin_rules<'ctx>(
             vec![cat(cats.str)],
         ),
 
+        notation_pat_one: rule(
+            "notation_pat_one",
+            cats.notation_pat,
+            vec![cat(cats.notation_pat_part)],
+        ),
+        notation_pat_many: rule(
+            "notation_pat_many",
+            cats.notation_pat,
+            vec![cat(cats.notation_pat_part), cat(cats.notation_pat)],
+        ),
+        notation_pat_lit: rule(
+            "notation_pat_lit",
+            cats.notation_pat_part,
+            vec![cat(cats.str)],
+        ),
+        notation_pat_kw: rule(
+            "notation_pat_kw",
+            cats.notation_pat_part,
+            vec![lit(*strings::AT), kw(*strings::KW), cat(cats.str)],
+        ),
+        notation_pat_name: rule(
+            "notation_pat_name",
+            cats.notation_pat_part,
+            vec![lit(*strings::AT), kw(*strings::NAME)],
+        ),
+        notation_pat_cat: rule(
+            "notation_pat_cat",
+            cats.notation_pat_part,
+            vec![cat(cats.name)],
+        ),
+        notation_pat_binding: rule(
+            "notation_pat_binding",
+            cats.notation_pat_part,
+            vec![
+                lit(*strings::AT),
+                kw(*strings::BINDING),
+                lit(*strings::LEFT_PAREN),
+                cat(cats.name),
+                lit(*strings::RIGHT_PAREN),
+            ],
+        ),
+
         template_none: rule("template_none", cats.templates, vec![]),
         template_many: rule(
             "template_many",
@@ -429,55 +524,19 @@ pub fn add_builtin_rules<'ctx>(
             cats.template,
             vec![
                 lit(*strings::LEFT_BRACKET),
-                cat(cats.template_names),
+                cat(cats.template_bindings),
                 lit(*strings::COLON),
                 cat(cats.name),
                 lit(*strings::RIGHT_BRACKET),
             ],
         ),
 
-        template_names_none: rule("template_names_none", cats.template_names, vec![]),
-        template_names_many: rule(
-            "template_names_many",
-            cats.template_names,
-            vec![cat(cats.template_name), cat(cats.template_names)],
+        template_bindings_none: rule("template_bindings_none", cats.template_bindings, vec![]),
+        template_bindings_many: rule(
+            "template_bindings_many",
+            cats.template_bindings,
+            vec![cat(cats.notation_binding), cat(cats.template_bindings)],
         ),
-
-        template_name: rule(
-            "template_name",
-            cats.template_name,
-            vec![cat(cats.name), cat(cats.maybe_template_params)],
-        ),
-
-        maybe_template_params_none: rule(
-            "maybe_template_params_none",
-            cats.maybe_template_params,
-            vec![],
-        ),
-        maybe_template_params_some: rule(
-            "maybe_template_params_some",
-            cats.maybe_template_params,
-            vec![
-                lit(*strings::LEFT_PAREN),
-                cat(cats.template_params),
-                lit(*strings::RIGHT_PAREN),
-            ],
-        ),
-        template_params_one: rule(
-            "template_params_one",
-            cats.template_params,
-            vec![cat(cats.template_param)],
-        ),
-        template_params_many: rule(
-            "template_params_many",
-            cats.template_params,
-            vec![
-                cat(cats.template_param),
-                lit(*strings::COMMA),
-                cat(cats.template_params),
-            ],
-        ),
-        template_param: rule("template_param", cats.template_param, vec![cat(cats.name)]),
 
         hypotheses_none: rule("hypotheses_none", cats.hypotheses, vec![]),
         hypotheses_many: rule(
@@ -586,36 +645,23 @@ pub fn add_builtin_rules<'ctx>(
             cats.shorthand_arg,
             vec![cat(cats.any_fragment)],
         ),
-    }
+    };
+    state.recompute_initial_atoms();
+    rules
 }
 
-pub fn add_builtin_syntax_for_formal_cat<'ctx>(
+pub fn add_parse_rules_for_formal_cat<'ctx>(
     formal_cat: FormalSyntaxCatId<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) {
-    let macro_cat = ctx.parse_state.cat_for_formal_cat(formal_cat);
-
-    let rule = ctx.arenas.parse_rules.alloc(Rule::new(
-        "template_instantiation",
-        macro_cat,
-        ParseRuleSource::Builtin,
-        RulePattern::new(
-            vec![
-                cat(ctx.builtin_cats.name),
-                cat(ctx.builtin_cats.maybe_shorthand_args),
-            ],
-            Precedence::default(),
-            Associativity::default(),
-        ),
-    ));
-    ctx.parse_state.use_rule(rule);
+    let parse_cat = ctx.parse_state.cat_for_formal_cat(formal_cat);
 
     let rule = ctx.arenas.parse_rules.alloc(Rule::new(
         "any_fragment",
         ctx.builtin_cats.any_fragment,
         ParseRuleSource::Builtin,
         RulePattern::new(
-            vec![cat(macro_cat)],
+            vec![cat(parse_cat)],
             Precedence::default(),
             Associativity::default(),
         ),
@@ -623,35 +669,95 @@ pub fn add_builtin_syntax_for_formal_cat<'ctx>(
     ctx.parse_state.use_rule(rule);
 }
 
-pub fn add_formal_syntax_rule<'ctx>(rule: FormalSyntaxRuleId<'ctx>, ctx: &mut Ctx<'ctx>) {
+pub fn formal_rule_to_notation<'ctx>(
+    rule: FormalSyntaxRuleId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> NotationPatternId<'ctx> {
     let mut parts = Vec::new();
-    for formal_part in rule.0.pattern().parts() {
+
+    for formal_part in rule.pattern().parts() {
         let part = match formal_part {
-            FormalSyntaxPatPart::Cat(formal_cat) => {
-                let cat = ctx.parse_state.cat_for_formal_cat(*formal_cat);
-                RulePatternPart::Cat(cat)
-            }
-            FormalSyntaxPatPart::Binding(_) | FormalSyntaxPatPart::Var(_) => {
-                cat(ctx.builtin_cats.name)
-            }
-            FormalSyntaxPatPart::Lit(lit_str) => lit(*lit_str),
+            FormalSyntaxPatPart::Cat(cat) => NotationPatternPart::Cat(*cat),
+            FormalSyntaxPatPart::Var(_) => NotationPatternPart::Name,
+            FormalSyntaxPatPart::Binding(cat) => NotationPatternPart::Binding(*cat),
+            FormalSyntaxPatPart::Lit(lit) => NotationPatternPart::Lit(*lit),
         };
         parts.push(part);
     }
 
-    let parse_rule_pattern = RulePattern::new(
+    let notation = NotationPattern::new(
+        rule.name(),
+        rule.cat(),
         parts,
         rule.pattern().precedence(),
         rule.pattern().associativity(),
     );
+    ctx.arenas.notations.alloc(notation)
+}
+
+fn fragment_parse_rule_for_notation<'ctx>(
+    notation: NotationPatternId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> RuleId<'ctx> {
+    let mut parts = Vec::new();
+    for &notation_part in notation.0.parts() {
+        let part = match notation_part {
+            NotationPatternPart::Lit(lit_str) => lit(lit_str),
+            NotationPatternPart::Kw(kw_str) => kw(kw_str),
+            NotationPatternPart::Name => cat(ctx.builtin_cats.name),
+            NotationPatternPart::Cat(formal_cat) => {
+                let cat = ctx.parse_state.cat_for_formal_cat(formal_cat);
+                RulePatternPart::Cat(cat)
+            }
+            NotationPatternPart::Binding(_) => cat(ctx.builtin_cats.name),
+        };
+        parts.push(part);
+    }
+
+    let parse_pat = RulePattern::new(parts, notation.prec(), notation.assoc());
 
     let parse_rule = Rule::new(
-        "formal_syntax_rule",
-        ctx.parse_state.cat_for_formal_cat(rule.cat()),
-        ParseRuleSource::FormalLang(rule),
-        parse_rule_pattern,
+        notation.name(),
+        ctx.parse_state.cat_for_formal_cat(notation.cat()),
+        ParseRuleSource::Notation(notation),
+        parse_pat,
     );
 
-    let rule = ctx.arenas.parse_rules.alloc(parse_rule);
-    ctx.parse_state.use_rule(rule);
+    ctx.arenas.parse_rules.alloc(parse_rule)
+}
+
+fn binding_parse_rule_for_notation<'ctx>(
+    notation: NotationPatternId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> RuleId<'ctx> {
+    let mut parts = Vec::new();
+    for notation_part in notation.0.parts() {
+        let part = match notation_part {
+            NotationPatternPart::Lit(lit_str) => lit(*lit_str),
+            NotationPatternPart::Kw(kw_str) => kw(*kw_str),
+            NotationPatternPart::Name
+            | NotationPatternPart::Cat(_)
+            | NotationPatternPart::Binding(_) => cat(ctx.builtin_cats.name),
+        };
+        parts.push(part)
+    }
+
+    let parse_pat = RulePattern::new(parts, Precedence::default(), Associativity::default());
+
+    let parse_rule = Rule::new(
+        "notation_binding",
+        ctx.builtin_cats.notation_binding,
+        ParseRuleSource::Notation(notation),
+        parse_pat,
+    );
+
+    ctx.arenas.parse_rules.alloc(parse_rule)
+}
+
+pub fn add_parse_rules_for_notation<'ctx>(notation: NotationPatternId<'ctx>, ctx: &mut Ctx<'ctx>) {
+    let fragment_rule = fragment_parse_rule_for_notation(notation, ctx);
+    ctx.parse_state.use_rule(fragment_rule);
+
+    let binding_rule = binding_parse_rule_for_notation(notation, ctx);
+    ctx.parse_state.use_rule(binding_rule);
 }

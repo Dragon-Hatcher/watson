@@ -1,6 +1,6 @@
 use crate::{
     generate_arena_handle,
-    semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
+    semant::{formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId}, notation::NotationPatternId},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use ustr::Ustr;
@@ -41,10 +41,9 @@ impl<'ctx> ParseState<'ctx> {
     pub fn use_rule(&mut self, rule: RuleId<'ctx>) {
         self.all_rules.insert(rule);
         self.rules_by_cat.get_mut(&rule.cat()).unwrap().push(rule);
-        self.recompute_initial_atoms();
     }
 
-    fn recompute_initial_atoms(&mut self) {
+    pub fn recompute_initial_atoms(&mut self) {
         // The first step it to compute which categories have empty rules.
         let mut changed = true;
         while changed {
@@ -211,7 +210,7 @@ impl<'ctx> Rule<'ctx> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ParseRuleSource<'ctx> {
     Builtin,
-    FormalLang(FormalSyntaxRuleId<'ctx>),
+    Notation(NotationPatternId<'ctx>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

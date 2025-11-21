@@ -3,9 +3,7 @@ use crate::{
     diagnostics::DiagManager,
     parse::{
         SourceCache,
-        grammar::{
-            BuiltinCats, BuiltinRules, add_builtin_rules, add_builtin_syntax_for_formal_cat,
-        },
+        grammar::{BuiltinCats, BuiltinRules, add_builtin_rules, add_parse_rules_for_formal_cat},
         parse_state::{Category, CategoryId, ParseState, Rule, RuleId},
         parse_tree::{ParseTree, ParseTreeId},
     },
@@ -13,6 +11,7 @@ use crate::{
         check_proof::{ProofState, ProofStateKey},
         formal_syntax::{FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxRule, FormalSyntaxRuleId},
         fragment::{Fragment, FragmentId},
+        notation::{NotationBinding, NotationBindingId, NotationPattern, NotationPatternId},
         presentation::{Presentation, PresentationId, PresentationTree, PresentationTreeId},
         theorems::{TheoremId, TheoremStatement},
     },
@@ -65,7 +64,8 @@ impl<'ctx> Ctx<'ctx> {
             builtin_rules,
         };
 
-        add_builtin_syntax_for_formal_cat(sentence_formal_cat, &mut ctx);
+        add_parse_rules_for_formal_cat(sentence_formal_cat, &mut ctx);
+        ctx.parse_state.recompute_initial_atoms();
 
         ctx
     }
@@ -77,6 +77,8 @@ pub struct Arenas<'ctx> {
     pub parse_rules: PlainArena<Rule<'ctx>, RuleId<'ctx>>,
     pub formal_cats: NamedArena<FormalSyntaxCat, FormalSyntaxCatId<'ctx>>,
     pub formal_rules: NamedArena<FormalSyntaxRule<'ctx>, FormalSyntaxRuleId<'ctx>>,
+    pub notations: PlainArena<NotationPattern<'ctx>, NotationPatternId<'ctx>>,
+    pub notation_bindings: PlainArena<NotationBinding<'ctx>, NotationBindingId<'ctx>>,
     pub fragments: InternedArena<Fragment<'ctx>, FragmentId<'ctx>>,
     pub theorem_stmts: NamedArena<TheoremStatement<'ctx>, TheoremId<'ctx>>,
     pub proof_states: PlainArena<ProofState<'ctx>, ProofStateKey<'ctx>>,
@@ -92,6 +94,8 @@ impl<'ctx> Arenas<'ctx> {
             parse_rules: PlainArena::new(),
             formal_cats: NamedArena::new(),
             formal_rules: NamedArena::new(),
+            notations: PlainArena::new(),
+            notation_bindings: PlainArena::new(),
             fragments: InternedArena::new(),
             theorem_stmts: NamedArena::new(),
             proof_states: PlainArena::new(),

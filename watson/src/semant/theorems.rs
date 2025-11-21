@@ -4,8 +4,8 @@ use crate::{
     generate_arena_handle,
     parse::parse_tree::ParseTreeId,
     semant::{
-        formal_syntax::FormalSyntaxCatId,
         fragment::FragmentId,
+        notation::NotationBindingId,
         presentation::{FactPresentation, PresentationTreeId},
     },
 };
@@ -15,7 +15,7 @@ generate_arena_handle!(TheoremId<'ctx> => TheoremStatement<'ctx>);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TheoremStatement<'ctx> {
     name: Ustr,
-    templates: Vec<Template<'ctx>>,
+    templates: Vec<NotationBindingId<'ctx>>,
     hypotheses: Vec<(Fact<'ctx>, FactPresentation<'ctx>)>,
     conclusion: (FragmentId<'ctx>, PresentationTreeId<'ctx>),
     proof: UnresolvedProof<'ctx>,
@@ -24,7 +24,7 @@ pub struct TheoremStatement<'ctx> {
 impl<'ctx> TheoremStatement<'ctx> {
     pub fn new(
         name: Ustr,
-        templates: Vec<Template<'ctx>>,
+        templates: Vec<NotationBindingId<'ctx>>,
         hypotheses: Vec<(Fact<'ctx>, FactPresentation<'ctx>)>,
         conclusion: (FragmentId<'ctx>, PresentationTreeId<'ctx>),
         proof: UnresolvedProof<'ctx>,
@@ -42,7 +42,7 @@ impl<'ctx> TheoremStatement<'ctx> {
         self.name
     }
 
-    pub fn templates(&self) -> &[Template<'ctx>] {
+    pub fn templates(&self) -> &[NotationBindingId<'ctx>] {
         &self.templates
     }
 
@@ -63,35 +63,6 @@ impl<'ctx> TheoremStatement<'ctx> {
 pub enum UnresolvedProof<'ctx> {
     Axiom,
     Theorem(ParseTreeId<'ctx>),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Template<'ctx> {
-    name: Ustr,
-    cat: FormalSyntaxCatId<'ctx>,
-    params: Vec<FormalSyntaxCatId<'ctx>>,
-}
-
-impl<'ctx> Template<'ctx> {
-    pub fn new(
-        name: Ustr,
-        cat: FormalSyntaxCatId<'ctx>,
-        params: Vec<FormalSyntaxCatId<'ctx>>,
-    ) -> Self {
-        Self { name, cat, params }
-    }
-
-    pub fn name(&self) -> Ustr {
-        self.name
-    }
-
-    pub fn cat(&self) -> FormalSyntaxCatId<'ctx> {
-        self.cat
-    }
-
-    pub fn params(&self) -> &[FormalSyntaxCatId<'ctx>] {
-        &self.params
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

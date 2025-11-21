@@ -13,8 +13,12 @@ str_const! {
     MODULE = "module";
     SYNTAX_CAT = "syntax_category";
     SYNTAX = "syntax";
+    NOTATION = "notation";
+    DEFINITION = "definition";
     AXIOM = "axiom";
     THEOREM = "theorem";
+    NAME = "name";
+    KW = "kw";
     PROOF = "proof";
     QED = "qed";
     ASSUME = "assume";
@@ -26,6 +30,7 @@ str_const! {
 // Symbols:
 str_const! {
     BNF_REPLACE = "::=";
+    ASSIGN = ":=";
     AT = "@";
     COLON = ":";
     TURNSTILE = "|-";

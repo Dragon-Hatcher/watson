@@ -35,7 +35,7 @@ impl<'ctx> FormalSyntaxRule<'ctx> {
         Self { name, cat, pat }
     }
 
-    pub fn _name(&self) -> Ustr {
+    pub fn name(&self) -> Ustr {
         self.name
     }
 

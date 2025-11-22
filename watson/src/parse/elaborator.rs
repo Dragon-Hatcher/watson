@@ -6,7 +6,7 @@ use crate::{
     diagnostics::WResult,
     parse::{
         SourceId, Span, grammar,
-        parse_state::{Associativity, Category, Precedence, SyntaxCategorySource},
+        parse_state::{Associativity, Category, ParseRuleSource, Precedence, SyntaxCategorySource},
         parse_tree::{ParseTreeChildren, ParseTreeId},
         source_cache::{SourceDecl, source_id_to_path},
     },
@@ -16,9 +16,12 @@ use crate::{
             FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxPat, FormalSyntaxPatPart,
             FormalSyntaxRule, FormalSyntaxRuleId,
         },
-        notation::{NotationBindingId, NotationPattern, NotationPatternId, NotationPatternPart},
+        notation::{
+            NotationBinding, NotationBindingId, NotationInstantiationPart, NotationPattern,
+            NotationPatternId, NotationPatternPart,
+        },
         presentation::FactPresentation,
-        scope::{Scope},
+        scope::Scope,
         theorems::{Fact, TheoremId, TheoremStatement, UnresolvedProof},
     },
     strings,
@@ -442,8 +445,6 @@ fn elaborate_definition<'ctx>(
 ) -> WResult<Scope<'ctx>> {
     // definition_command ::= (definition) kw"definition" name notation_binding ":=" fragment kw"end"
 
-    dbg!(definition);
-
     match_rule! { (ctx, definition) =>
         definition ::= [definition_kw, name_node, notation_binding, assign, fragment_node, end_kw] => {
             debug_assert!(definition_kw.is_kw(*strings::DEFINITION));
@@ -460,10 +461,55 @@ fn elaborate_definition<'ctx>(
 
 fn elaborate_notation_binding<'ctx>(
     notation_binding: ParseTreeId<'ctx>,
+    output_cat: FormalSyntaxCatId<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<NotationBindingId<'ctx>> {
-    dbg!(notation_binding);
-    todo!()
+    fn children_to_binding<'ctx>(
+        children: &ParseTreeChildren<'ctx>,
+        pattern: NotationPatternId<'ctx>,
+        ctx: &mut Ctx<'ctx>,
+    ) -> NotationBindingId<'ctx> {
+        let mut instantiations = Vec::new();
+        for (child, part) in children.children().iter().zip(pattern.parts()) {
+            match part {
+                NotationPatternPart::Name => {
+                    let name = elaborate_name(child.as_node().unwrap(), ctx).unwrap();
+                    instantiations.push(NotationInstantiationPart::Name(name));
+                }
+                _ => {}
+            }
+        }
+        let binding = NotationBinding::new(pattern, instantiations);
+        ctx.arenas.notation_bindings.alloc(binding)
+    }
+
+    let mut solution = None;
+
+    for possibility in notation_binding.possibilities() {
+        let rule = possibility.rule();
+        let &ParseRuleSource::Notation(notation) = rule.source() else {
+            unreachable!();
+        };
+
+        if notation.cat() != output_cat {
+            continue;
+        }
+
+        if let Some(_prev_solution) = solution {
+            todo!("error");
+        }
+
+        let binding = children_to_binding(possibility, notation, ctx);
+        solution = Some(binding);
+    }
+
+    if let Some(solution) = solution {
+        Ok(solution)
+    } else {
+        // The fact that we parsed the binding means that some notation must
+        // have matched.
+        unreachable!()
+    }
 }
 
 fn elaborate_axiom<'ctx>(
@@ -627,7 +673,7 @@ fn elaborate_template<'ctx>(
     template: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<Vec<(NotationBindingId<'ctx>, Span)>> {
-    // template ::= (template) "[" name maybe_template_params ":" name "]"
+    // template ::= (template) "[" template_bindings ":" name "]"
 
     match_rule! { (ctx, template) =>
         template ::= [l_brack, names, colon, cat_name_node, r_brack] => {
@@ -640,7 +686,7 @@ fn elaborate_template<'ctx>(
                 return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
-            let bindings = elaborate_template_bindings(names.as_node().unwrap(), ctx)?;
+            let bindings = elaborate_template_bindings(names.as_node().unwrap(), cat, ctx)?;
 
             Ok(bindings)
         }
@@ -649,6 +695,7 @@ fn elaborate_template<'ctx>(
 
 fn elaborate_template_bindings<'ctx>(
     mut bindings: ParseTreeId<'ctx>,
+    cat: FormalSyntaxCatId<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<Vec<(NotationBindingId<'ctx>, Span)>> {
     // template_bindings ::= (template_bindings_none)
@@ -664,8 +711,9 @@ fn elaborate_template_bindings<'ctx>(
             template_bindings_many ::= [binding, rest] => {
                 let binding = binding.as_node().unwrap();
                 let span = binding.span();
+                let binding = elaborate_notation_binding(binding, cat, ctx)?;
 
-                binding_list.push((todo!(), span));
+                binding_list.push((binding, span));
                 bindings = rest.as_node().unwrap();
             }
         }

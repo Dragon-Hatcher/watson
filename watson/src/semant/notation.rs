@@ -71,6 +71,26 @@ pub struct NotationBinding<'ctx> {
     instantiations: Vec<NotationInstantiationPart>
 }
 
+impl<'ctx> NotationBinding<'ctx> {
+    pub fn new(
+        pattern: NotationPatternId<'ctx>,
+        instantiations: Vec<NotationInstantiationPart>
+    ) -> Self {
+        Self {
+            pattern,
+            instantiations
+        }
+    }
+
+    pub fn pattern(&self) -> NotationPatternId<'ctx> {
+        self.pattern
+    }
+
+    pub fn instantiations(&self) -> &[NotationInstantiationPart] {
+        &self.instantiations
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NotationInstantiationPart {
     Name(Ustr),

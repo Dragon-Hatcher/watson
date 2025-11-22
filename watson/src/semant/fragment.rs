@@ -1,57 +1,61 @@
 use crate::{
     generate_arena_handle,
-    semant::{
-        formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
-        theorems::Fact,
-    },
+    semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
 };
-use ustr::Ustr;
 
 generate_arena_handle! { FragmentId<'ctx> => Fragment<'ctx> }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Fragment<'ctx> {
     cat: FormalSyntaxCatId<'ctx>,
-    data: FragData<'ctx>,
+    head: FragHead<'ctx>,
+    children: Vec<FragmentId<'ctx>>,
 }
 
 impl<'ctx> Fragment<'ctx> {
-    pub fn new(cat: FormalSyntaxCatId<'ctx>, data: FragData<'ctx>) -> Self {
-        Self { cat, data }
+    pub fn new(
+        cat: FormalSyntaxCatId<'ctx>,
+        head: FragHead<'ctx>,
+        children: Vec<FragmentId<'ctx>>,
+    ) -> Self {
+        Self {
+            cat,
+            head,
+            children,
+        }
     }
 
     pub fn cat(&self) -> FormalSyntaxCatId<'ctx> {
         self.cat
     }
 
-    pub fn data(&'ctx self) -> &'ctx FragData<'ctx> {
-        &self.data
+    pub fn head(&self) -> FragHead<'ctx> {
+        self.head
+    }
+
+    pub fn children(&self) -> &[FragmentId<'ctx>] {
+        &self.children
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum FragData<'ctx> {
-    Rule(FragRuleApplication<'ctx>),
-    Template(FragTemplateRef<'ctx>),
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FragHead<'ctx> {
+    RuleApplication(FragRuleApplication<'ctx>),
+    Variable(FormalSyntaxCatId<'ctx>, usize), // Debruijn index
+    TemplateRef(usize),
     Hole(usize),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FragRuleApplication<'ctx> {
     rule: FormalSyntaxRuleId<'ctx>,
-    children: Vec<FragPart<'ctx>>,
     bindings_added: usize,
 }
 
 impl<'ctx> FragRuleApplication<'ctx> {
-    pub fn new(
-        rule: FormalSyntaxRuleId<'ctx>,
-        children: Vec<FragPart<'ctx>>,
-        bindings_added: usize,
-    ) -> Self {
+    pub fn new(rule: FormalSyntaxRuleId<'ctx>, bindings_added: usize) -> Self {
         Self {
             rule,
-            children,
             bindings_added,
         }
     }
@@ -60,132 +64,7 @@ impl<'ctx> FragRuleApplication<'ctx> {
         self.rule
     }
 
-    pub fn children(&self) -> &[FragPart<'ctx>] {
-        &self.children
-    }
-
     pub fn bindings_added(&self) -> usize {
         self.bindings_added
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum FragPart<'ctx> {
-    Fragment(FragmentId<'ctx>),
-    Variable(FormalSyntaxCatId<'ctx>, usize), // Debruijn index
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FragTemplateRef<'ctx> {
-    name: Ustr,
-    args: Vec<FragmentId<'ctx>>,
-}
-
-impl<'ctx> FragTemplateRef<'ctx> {
-    pub fn new(name: Ustr, args: Vec<FragmentId<'ctx>>) -> Self {
-        Self { name, args }
-    }
-
-    pub fn name(&self) -> Ustr {
-        self.name
-    }
-
-    pub fn args(&self) -> &[FragmentId<'ctx>] {
-        &self.args
-    }
-}
-
-pub fn _debug_fact(fact: Fact) -> String {
-    if let Some(assumption) = fact.assumption() {
-        format!(
-            "assume {} |- {}",
-            _debug_fragment(assumption),
-            _debug_fragment(fact.conclusion())
-        )
-    } else {
-        _debug_fragment(fact.conclusion())
-    }
-}
-
-pub fn _debug_fragment(frag: FragmentId) -> String {
-    fn recurse(frag: FragmentId, mut bound_count: usize) -> String {
-        fn print_part(part: &FragPart, bound_count: usize) -> String {
-            match part {
-                FragPart::Fragment(frag) => recurse(*frag, bound_count),
-                FragPart::Variable(_cat, idx) => {
-                    format!("?{}", bound_count - idx - 1)
-                }
-            }
-        }
-
-        match &frag.data {
-            FragData::Rule(rule_app) => {
-                let mut str = String::new();
-                let mut child_idx = 0;
-
-                if rule_app.rule.pattern().parts().len() > 1 {
-                    str.push('(');
-                }
-
-                let first_bind = bound_count;
-                let mut bind_offset = 0;
-
-                for part in rule_app.rule.pattern().parts() {
-                    if let FormalSyntaxPatPart::Binding(_) = part {
-                        bound_count += 1;
-                    }
-                }
-
-                for part in rule_app.rule.pattern().parts() {
-                    match part {
-                        FormalSyntaxPatPart::Binding(_) => {
-                            str.push_str(&format!("?{}", first_bind + bind_offset));
-                            str.push(' ');
-                            bind_offset += 1;
-                        }
-                        FormalSyntaxPatPart::Cat(_) | FormalSyntaxPatPart::Var(_) => {
-                            let part = print_part(&rule_app.children[child_idx], bound_count);
-                            str.push_str(&part);
-                            str.push(' ');
-
-                            child_idx += 1;
-                        }
-                        FormalSyntaxPatPart::Lit(lit) => {
-                            str.push_str(lit.as_str());
-                            str.push(' ');
-                        }
-                    }
-                }
-
-                if str.ends_with(' ') {
-                    str.pop();
-                }
-
-                if rule_app.rule.pattern().parts().len() > 1 {
-                    str.push(')');
-                }
-
-                str
-            }
-            FragData::Template(template) => {
-                if template.args.is_empty() {
-                    format!("{}", template.name)
-                } else {
-                    format!(
-                        "{}({})",
-                        template.name,
-                        template
-                            .args
-                            .iter()
-                            .map(|arg| recurse(*arg, bound_count))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
-                }
-            }
-            FragData::Hole(idx) => format!("_{}", idx),
-        }
-    }
-
-    recurse(frag, 0)
 }

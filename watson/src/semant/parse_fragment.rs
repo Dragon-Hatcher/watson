@@ -1,3 +1,57 @@
+use rustc_hash::FxHashMap;
+use ustr::Ustr;
+
+use crate::{
+    context::Ctx,
+    diagnostics::WResult,
+    parse::{elaborator::elaborate_name, parse_tree::ParseTreeId},
+    semant::{
+        formal_syntax::FormalSyntaxCatId, fragment::FragmentId, notation::NotationPatternPart,
+        scope::Scope,
+    },
+};
+
+// pub struct UnparsedFrag<'ctx> {
+//     possibilities: Vec<UnparsedFragPossibility<'ctx>>,
+// }
+
+// pub struct UnparsedFragPossibility<'ctx> {
+//     notation: NotationPatternId<'ctx>,
+//     children: Vec<UnparsedFragPart<'ctx>>,
+// }
+
+fn parse_fragment<'ctx>(
+    frag: ParseTreeId<'ctx>,
+    scope: &Scope<'ctx>,
+    bindings: &mut Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
+    mem: &mut FxHashMap<ParseTreeId<'ctx>, FragmentId<'ctx>>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<FragmentId<'ctx>> {
+    if let Some(frag_id) = mem.get(&frag) {
+        return Ok(*frag_id);
+    }
+
+    for possibility in frag.possibilities() {
+        let rule = possibility.rule();
+        let notation = rule.source().get_notation();
+
+        let mut bindings_added = 0;
+        for (child, part) in possibility.children().iter().zip(notation.parts()) {
+            if let NotationPatternPart::Binding(cat) = part {
+                let name = elaborate_name(child.as_node().unwrap(), ctx)?;
+                bindings.push((*cat, name));
+                bindings_added += 1;
+            }
+        }
+
+        for _ in 0..bindings_added {
+            bindings.pop();
+        }
+    }
+
+    todo!()
+}
+
 // use rustc_hash::FxHashMap;
 // use ustr::Ustr;
 

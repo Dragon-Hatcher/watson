@@ -1,1 +1,187 @@
-    
+Suppose we have the following pre-existing declarations:
+
+let a * b where [G : Group] [a b : GroupEl G] := G.mul(a, b)
+let a * b where [a b : Real] := Real.mul(a, b)
+
+let 1 where [G : Group] := G.one
+let 1 := Real.one
+
+judgment |- Real.one : Real
+judgment [G : Group] |- G.one : GroupEl G
+judgment [a : term] (a ∈ ℝ) |- a : Real
+
+And we are in a proof and the user proves:
+
+have n ∈ ℝ by etc;
+
+Then if they write `1 * n` how do we disambiguate that syntax?
+
+First label each node in the syntax tree as follows:
+      [X] 1*n
+         /   \
+    [Y] 1     n [Z]
+
+Now we create three new type-classes:
+ - IsFragX [a : term]
+ - IsFragY [a : term]
+ - IsFragZ [a : term]
+
+Our goal is to find any instance of IsFragX a.
+
+Because of our let bindings for the multiplication notation we have two
+instances of IsFragX. We convert the type requirements from the let binding into
+requests for instances of a class HasType:
+
+instance [a b G] <IsFragY a> <IsFragZ b> <HasType G Group> <HasType a (GroupEl G)> <HasType b (GroupEl G)> => IsFragX G.mul(a, b)
+instance [a b] <IsFragY a> <IsFragZ b> <HasType a Real> <HasType a Real> => IsFragX Real.add(a, b)
+
+From the let bindings for `1` we also have these instances:
+
+instance [G] <HasType G Group> => IsFragY G.one
+instance => IsFragY Real.one
+
+And finally from however `n` is defined we have some instance:
+
+instance => IsFragZ n
+
+We turn the in context known facts into instances of the Fact type-class:
+
+instance => Fact (a ∈ ℝ)
+
+And finally we turn the judgment rules into instances of the HasType type-class:
+
+instance => HasType Real.one Real
+instance [G] <HasType G Group> => HasType G.one Group
+instance [a] <Fact (a ∈ ℝ)> => HasType a Real
+
+Now we perform the tabled type-class resolution algorithm:
+
+1) Try the first instance of IsFragX and get the goal state:
+
+<IsFragY ?a> <IsFragZ ?b> <HasType ?G Group> <HasType ?a (GroupEl ?G)> <HasType ?b (GroupEl ?G)>
+
+2) We examine the first goal `IsFragY ?a` and see we haven't tried it before.
+Therefore we create a new table entry for it and pop the first instance
+
+<HasType ?G Group>
+
+3) We observe that we have no instances that can produce `HasType ?G Group` so we
+backtrack to trying the next instance `instance => IsFragY Real.one`. This has
+no goals and so succeeds giving us a solution to `IsFragY ?a`
+
+!!! Solution: IsFragY Real.one !!!
+
+4) Backtracking to IsFragX which was wanting this solution. The goal state now looks
+like this:
+
+<IsFragZ ?b> <HasType ?G Group> <HasType Real.one (GroupEl ?G)> <HasType ?b (GroupEl ?G)>
+
+5) Now we examine `IsFragZ ?b` and see that it is new. So we start a new table entry,
+popping the first and only instance
+
+!!! Solution: IsFragZ n !!!
+
+6) Backtrack to IsFragX again to get:
+
+<HasType ?G Group> <HasType Real.one (GroupEl ?G)> <HasType n (GroupEl ?G)>
+
+7) Note that nothing can give us `HasType ?G Group` as before so this branch has
+failed. At this point the table state looks like this:
+
+IsFragY ?0 ==> IsFragY Real.one
+IsFragZ ?0 ==> IsFragZ n
+
+We backtrack to IsFragZ and see there are no more instances. We backtrack to 
+IsFragY and see there are no more instances. So we have to backtrack to IsFragX
+and try the next instance which gives us this state:
+
+<IsFragY ?a> <IsFragZ ?b> <HasType ?a Real> <HasType ?a Real>
+
+8) We pop the first goal and see that it is in our table so we fill it in:
+
+<IsFragZ ?b> <HasType Real.one Real> <HasType ?a Real>
+
+9) We pop the next goal and see that it is in our table also and so fill it in:
+
+<HasType Real.one Real> <HasType n Real>
+
+10) We pop the next goal `HasType Real.one Real`. It is unexamined so make a new
+entry for it. We had an instance for this so it is solved immediately:
+
+!!! Solution: HasType Real.one Real !!!
+
+11) Return to IsFragX and our goal state looks like this:
+
+<HasType n Real>
+
+12) Pop the next (and final) goal and make the new table entry for it. We find 
+an instance that we can use so instantiate the new goal state:
+
+<Fact (n ∈ ℝ)>
+
+13) Pop the goal and make a new table entry. We had an instance of this so we get:
+
+!!! Solution: Fact (n ∈ ℝ) !!!
+
+14) This gives us a solution for `HasType n Real` so we get
+
+!!! Solution: HasType n Real !!!
+
+15) One more layer up we get our solution to IsFragX:
+
+!!! Solution: IsFragX Real.mul(Real.one, n)
+
+
+
+
+
+
+Now what if we add a new type `Set α`. We then add a new, reasonable seeming judgment:
+
+judgment {α} [s : Set α] [a : term] (a ∈ s) |- a : α
+
+But this creates a big problem. Say we are trying to instantiate `HasType n Real`.
+Eventually we will find the instance corresponding to this judgment and get the goal state of
+
+<HasType ?s (Set Real)> <Fact (n ∈ ?s)>
+
+But the new goal `HasType ?s (Set Real)` will eventually find the same instance and produce
+
+<HasType ?t (Set (Set Real))> <Fact (?s ∈ ?t)>
+
+Which will in turn produce
+
+<HasType ?u (Set (Set (Set Real)))> <Fact (?t ∈ ?u)>
+
+etc...
+
+
+Now consider function application. We can define the syntax like this (incidentally
+this syntax resolution system should be powerful enough to enable multiplication
+by juxtaposition, i.e. a b = a * b but anyways.): 
+
+let f(x) where [D R : term] [f : Fn D R] := ...;
+
+And then we want to add a new judgment like so:
+
+
+
+judgment {α β} [D : Set α] [R : Set β] [f : Fn D R] (x ∈ D) |- f(x) : β
+
+
+
+
+Then assume we know that `f ∈ (ℝ → ℝ)` and of course we have a judgment
+
+judgment |- ℝ : Set Real
+
+then the use writes the syntax `f(1 + n) + 1`. We can easily infer that 1+n : Real
+as we did in the previous example. But we need to infer f(1+n) : Real to get the
+outer stage of inference to work. And to do that we need that 1+n ∈ ℝ. It is tempting
+to add an instance like so
+
+instance [a] <HasType a Real> => <Fact (a ∈ ℝ)>
+
+But now the domain of facts is no longer closed. I think this specific instance
+is actually okay? but I think adding instance like this in general might be a
+dangerous path.

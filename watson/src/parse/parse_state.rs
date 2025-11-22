@@ -213,6 +213,15 @@ pub enum ParseRuleSource<'ctx> {
     Notation(NotationPatternId<'ctx>),
 }
 
+impl<'ctx> ParseRuleSource<'ctx> {
+    pub fn get_notation(&self) -> NotationPatternId<'ctx> {
+        match self {
+            ParseRuleSource::Notation(id) => *id,
+            _ => panic!("ParseRuleSource is not Notation"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RulePattern<'ctx> {
     parts: Vec<RulePatternPart<'ctx>>,

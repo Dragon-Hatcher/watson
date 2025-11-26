@@ -1,31 +1,30 @@
-use rustc_hash::FxHashMap;
-use ustr::Ustr;
-
 use crate::{
     context::Ctx,
     diagnostics::WResult,
     parse::{
-        SourceId, Span, grammar,
-        parse_state::{Associativity, Category, ParseRuleSource, Precedence, SyntaxCategorySource},
+        SourceId, Span,
+        parse_state::{Associativity, ParseRuleSource, Precedence, SyntaxCategorySource},
         parse_tree::{ParseTreeChildren, ParseTreeId},
         source_cache::{SourceDecl, source_id_to_path},
     },
     semant::{
-        // check_proof::{UnresolvedByTactic, UnresolvedHaveTactic, UnresolvedTactic},
         formal_syntax::{
-            FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxPat, FormalSyntaxPatPart,
+            CatMap, FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxPat, FormalSyntaxPatPart,
             FormalSyntaxRule, FormalSyntaxRuleId,
         },
+        fragment::{FragHead, Fragment, FragmentId},
         notation::{
             NotationBinding, NotationBindingId, NotationInstantiationPart, NotationPattern,
             NotationPatternId, NotationPatternPart,
         },
-        presentation::FactPresentation,
-        scope::Scope,
-        theorems::{Fact, TheoremId, TheoremStatement, UnresolvedProof},
+        parse_fragment::{UnresolvedFact, UnresolvedFrag, parse_fragment},
+        scope::{Scope, ScopeEntry},
+        theorems::{Fact, Template, TheoremId, TheoremStatement, UnresolvedProof},
     },
     strings,
 };
+use rustc_hash::{FxHashMap, FxHashSet};
+use ustr::Ustr;
 
 macro_rules! failed_to_match_builtin {
     ($rule:expr, $ctx:expr) => {
@@ -443,47 +442,90 @@ fn elaborate_definition<'ctx>(
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<Scope<'ctx>> {
-    // definition_command ::= (definition) kw"definition" name notation_binding ":=" fragment kw"end"
+    // definition_command ::= (definition) kw"definition" notation_binding ":=" fragment kw"end"
 
     match_rule! { (ctx, definition) =>
-        definition ::= [definition_kw, name_node, notation_binding, assign, fragment_node, end_kw] => {
+        definition ::= [definition_kw, notation_binding, assign, fragment_node, end_kw] => {
             debug_assert!(definition_kw.is_kw(*strings::DEFINITION));
             debug_assert!(assign.is_lit(*strings::ASSIGN));
             debug_assert!(end_kw.is_kw(*strings::END));
 
-            let name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
-            let binding = elaborate_notation_binding(notation_binding.as_node().unwrap(), ctx)?;
+            let binding_possibilities = elaborate_notation_binding(notation_binding.as_node().unwrap(), ctx)?;
+            let possible_frag_cats = elaborate_any_fragment(fragment_node.as_node().unwrap());
 
-            todo!()
+            let mut solution = None;
+            for (cat, frag) in possible_frag_cats {
+                let matching_bindings = binding_possibilities.get(cat);
+                if matching_bindings.is_empty() { continue; }
+                if matching_bindings.len() > 1 { todo!("Error: ambiguous notation binding.")}
+
+                let (binding, hole_names) = &matching_bindings[0];
+
+                let frag = UnresolvedFrag(frag);
+                let Ok(parse) = parse_fragment(frag, scope, ctx)? else {
+                    // TODO: do something with the errors here.
+                    continue;
+                };
+
+                solution = Some((*binding, parse));
+                todo!("We need to actually make the new scope above.");
+            }
+
+            match solution {
+                Some((binding, frag)) => {
+                    let entry = ScopeEntry::new(frag);
+                    Ok(scope.child_with(binding, entry))
+                },
+                None => todo!("Error: no matching notation bindings."),
+            }
         }
     }
 }
 
+fn elaborate_any_fragment<'ctx>(
+    any_frag: ParseTreeId<'ctx>,
+) -> impl Iterator<Item = (FormalSyntaxCatId<'ctx>, ParseTreeId<'ctx>)> {
+    any_frag.0.possibilities().iter().map(|possibility| {
+        let frag = possibility.children()[0];
+        let frag = frag.as_node().unwrap();
+        let SyntaxCategorySource::FormalLang(formal_cat) = frag.cat().source() else {
+            unreachable!();
+        };
+
+        (formal_cat, frag)
+    })
+}
+
 fn elaborate_notation_binding<'ctx>(
     notation_binding: ParseTreeId<'ctx>,
-    output_cat: FormalSyntaxCatId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<NotationBindingId<'ctx>> {
+) -> WResult<CatMap<'ctx, (NotationBindingId<'ctx>, Vec<Ustr>)>> {
     fn children_to_binding<'ctx>(
         children: &ParseTreeChildren<'ctx>,
         pattern: NotationPatternId<'ctx>,
         ctx: &mut Ctx<'ctx>,
-    ) -> NotationBindingId<'ctx> {
+    ) -> (NotationBindingId<'ctx>, Vec<Ustr>) {
         let mut instantiations = Vec::new();
+        let mut hole_names = Vec::new();
         for (child, part) in children.children().iter().zip(pattern.parts()) {
             match part {
                 NotationPatternPart::Name => {
                     let name = elaborate_name(child.as_node().unwrap(), ctx).unwrap();
                     instantiations.push(NotationInstantiationPart::Name(name));
                 }
+                NotationPatternPart::Cat(_) => {
+                    let name = elaborate_name(child.as_node().unwrap(), ctx).unwrap();
+                    hole_names.push(name);
+                }
                 _ => {}
             }
         }
         let binding = NotationBinding::new(pattern, instantiations);
-        ctx.arenas.notation_bindings.alloc(binding)
+        let binding = ctx.arenas.notation_bindings.intern(binding);
+        (binding, hole_names)
     }
 
-    let mut solution = None;
+    let mut solution = CatMap::new();
 
     for possibility in notation_binding.possibilities() {
         let rule = possibility.rule();
@@ -491,25 +533,92 @@ fn elaborate_notation_binding<'ctx>(
             unreachable!();
         };
 
-        if notation.cat() != output_cat {
-            continue;
-        }
-
-        if let Some(_prev_solution) = solution {
-            todo!("error");
-        }
-
-        let binding = children_to_binding(possibility, notation, ctx);
-        solution = Some(binding);
+        let (binding, hole_names) = children_to_binding(possibility, notation, ctx);
+        solution.insert(notation.cat(), (binding, hole_names));
     }
 
-    if let Some(solution) = solution {
-        Ok(solution)
-    } else {
-        // The fact that we parsed the binding means that some notation must
-        // have matched.
-        unreachable!()
+    Ok(solution)
+}
+
+fn elaborate_notation_binding_with_cat<'ctx>(
+    notation_binding: ParseTreeId<'ctx>,
+    cat: FormalSyntaxCatId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<(NotationBindingId<'ctx>, Vec<Ustr>)> {
+    let by_cat = elaborate_notation_binding(notation_binding, ctx)?;
+    let solutions = by_cat.get(cat);
+
+    if solutions.is_empty() {
+        todo!("Error: No solutions to binding");
     }
+
+    if solutions.len() > 1 {
+        todo!("Error: ambiguous solution to binding");
+    }
+
+    Ok(solutions[0].clone())
+}
+
+fn templates_to_scope<'ctx>(
+    templates: &[Template<'ctx>],
+    parent_scope: &Scope<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> Scope<'ctx> {
+    let mut my_scope = parent_scope.clone();
+
+    for (i, template) in templates.iter().enumerate() {
+        let args = template
+            .binding()
+            .pattern()
+            .parts()
+            .iter()
+            .filter_map(|part| match part {
+                NotationPatternPart::Cat(cat) => Some(*cat),
+                _ => None,
+            })
+            .enumerate()
+            .map(|(i, cat)| {
+                let frag = Fragment::new(cat, FragHead::Hole(i), Vec::new());
+                ctx.arenas.fragments.intern(frag)
+            })
+            .collect();
+        let frag = Fragment::new(template.cat(), FragHead::TemplateRef(i), args);
+        let frag = ctx.arenas.fragments.intern(frag);
+        let entry = ScopeEntry::new(frag);
+        my_scope = my_scope.child_with(template.binding(), entry)
+    }
+
+    my_scope
+}
+
+fn parse_hypotheses_and_conclusion<'ctx>(
+    un_hypotheses: Vec<UnresolvedFact<'ctx>>,
+    un_conclusion: UnresolvedFrag<'ctx>,
+    scope: &Scope<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<(Vec<Fact<'ctx>>, FragmentId<'ctx>)> {
+    let mut hypotheses = Vec::new();
+    for un_hypothesis in un_hypotheses {
+        let assumption = match un_hypothesis.assumption {
+            Some(assumption) => match parse_fragment(assumption, scope, ctx)? {
+                Ok(assumption) => Some(assumption),
+                Err(err) => todo!("Error: failed to parse conclusion {err:?}"),
+            },
+            None => None,
+        };
+        let conclusion = match parse_fragment(un_hypothesis.conclusion, scope, ctx)? {
+            Ok(conclusion) => conclusion,
+            Err(err) => todo!("Error: failed to parse conclusion {err:?}"),
+        };
+        hypotheses.push(Fact::new(assumption, conclusion));
+    }
+
+    let conclusion = match parse_fragment(un_conclusion, scope, ctx)? {
+        Ok(conclusion) => conclusion,
+        Err(err) => todo!("Error: failed to parse conclusion {err:?}"),
+    };
+
+    Ok((hypotheses, conclusion))
 }
 
 fn elaborate_axiom<'ctx>(
@@ -526,49 +635,22 @@ fn elaborate_axiom<'ctx>(
             debug_assert!(turnstile.is_lit(*strings::TURNSTILE));
             debug_assert!(end_kw.is_kw(*strings::END));
 
-            todo!()
+            let name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
+            let templates = elaborate_templates(templates.as_node().unwrap(), ctx)?;
 
-            // let name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
-            // let templates = elaborate_templates(templates.as_node().unwrap(), ctx)?;
+            let my_scope = templates_to_scope(&templates, scope, ctx);
 
-            // let templates_map = templates.iter().map(|t| (t.name(), t.clone())).collect();
-            // let shorthands = FxHashMap::default();
-            // let mut name_ctx = NameCtx::new(&templates_map, &shorthands);
+            let hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
+            let conclusion = UnresolvedFrag(conclusion.as_node().unwrap());
 
-            // let un_hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
-            // let mut hypotheses = Vec::new();
-            // for un_h in  un_hypotheses.into_iter() {
-            //     let (a, a_pres) = if let Some(un_a) = un_h.assumption() {
-            //         let Ok((a, a_pres)) = parse_fragment(un_a, ctx.sentence_formal_cat, &mut name_ctx, ctx) else {
-            //             ctx.diags.err_failed_to_parse_fragment_in_stmt(name, un_a.span(), ctx.sentence_formal_cat);
-            //             return Err(());
-            //         };
-            //         (Some(a), Some(a_pres))
-            //     } else {
-            //         (None, None)
-            //     };
+            let (hypotheses, conclusion) = parse_hypotheses_and_conclusion(hypotheses, conclusion, &my_scope, ctx)?;
 
-            //     let Ok((c, c_pres)) = parse_fragment(un_h.conclusion(), ctx.sentence_formal_cat, &mut name_ctx, ctx) else {
-            //         ctx.diags.err_failed_to_parse_fragment_in_stmt(name, un_h.conclusion().span(), ctx.sentence_formal_cat);
-            //         return Err(());
-            //     };
-            //     hypotheses.push((Fact::new(a, c), FactPresentation::new(a_pres, c_pres)));
-            // }
+            let scope_id = ctx.scopes.alloc(my_scope);
 
-            // let conclusion = conclusion.as_node().unwrap();
-            // let Ok(conclusion) = parse_fragment(conclusion, ctx.sentence_formal_cat, &mut name_ctx, ctx) else {
-            //     ctx.diags.err_failed_to_parse_fragment_in_stmt(name, conclusion.span(), ctx.sentence_formal_cat);
-            //     return Err(());
-            // };
+            let theorem_stmt = TheoremStatement::new(name, templates, hypotheses, conclusion, scope_id, UnresolvedProof::Axiom);
+            let theorem_stmt = ctx.arenas.theorem_stmts.alloc(name, theorem_stmt);
 
-            // let theorem_stmt = TheoremStatement::new(name, templates, hypotheses, conclusion, UnresolvedProof::Axiom);
-
-            // if let Some(_previous) = ctx.arenas.theorem_stmts.get(name) {
-            //     return ctx.diags.err_duplicate_theorem(name, name_node.span());
-            // }
-
-            // let thm_id = ctx.arenas.theorem_stmts.alloc(name, theorem_stmt);
-            // Ok(thm_id)
+            Ok(theorem_stmt)
         }
     }
 }
@@ -588,50 +670,24 @@ fn elaborate_theorem<'ctx>(
             debug_assert!(proof_kw.is_kw(*strings::PROOF));
             debug_assert!(qed_kw.is_kw(*strings::QED));
 
-            todo!()
+            let name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
+            let templates = elaborate_templates(templates.as_node().unwrap(), ctx)?;
 
-            // let name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
-            // let templates = elaborate_templates(templates.as_node().unwrap(), ctx)?;
+            let my_scope = templates_to_scope(&templates, scope, ctx);
 
-            // let templates_map = templates.iter().map(|t| (t.name(), t.clone())).collect();
-            // let shorthands = FxHashMap::default();
-            // let mut name_ctx = NameCtx::new(&templates_map, &shorthands);
+            let hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
+            let conclusion = UnresolvedFrag(conclusion.as_node().unwrap());
 
-            // let un_hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
-            // let mut hypotheses = Vec::new();
-            // for un_h in  un_hypotheses.into_iter() {
-            //     let (a, a_pres) = if let Some(un_a) = un_h.assumption() {
-            //         let Ok((a, a_pres)) = parse_fragment(un_a, ctx.sentence_formal_cat, &mut name_ctx, ctx) else {
-            //             ctx.diags.err_failed_to_parse_fragment_in_stmt(name, un_a.span(), ctx.sentence_formal_cat);
-            //             return Err(());
-            //         };
-            //         (Some(a), Some(a_pres))
-            //     } else {
-            //         (None, None)
-            //     };
+            let (hypotheses, conclusion) = parse_hypotheses_and_conclusion(hypotheses, conclusion, &my_scope, ctx)?;
 
-            //     let Ok((c, c_pres)) = parse_fragment(un_h.conclusion(), ctx.sentence_formal_cat, &mut name_ctx, ctx) else {
-            //         ctx.diags.err_failed_to_parse_fragment_in_stmt(name, un_h.conclusion().span(), ctx.sentence_formal_cat);
-            //         return Err(());
-            //     };
-            //     hypotheses.push((Fact::new(a, c), FactPresentation::new(a_pres, c_pres)));
-            // }
+            let scope_id = ctx.scopes.alloc(my_scope);
 
-            // let conclusion = conclusion.as_node().unwrap();
-            // let Ok(conclusion) = parse_fragment(conclusion, ctx.sentence_formal_cat, &mut name_ctx, ctx) else {
-            //     ctx.diags.err_failed_to_parse_fragment_in_stmt(name, conclusion.span(), ctx.sentence_formal_cat);
-            //     return Err(());
-            // };
+            let proof = UnresolvedProof::Theorem(tactic.as_node().unwrap());
 
-            // let tactic = tactic.as_node().unwrap();
-            // let theorem_stmt = TheoremStatement::new(name, templates, hypotheses, conclusion, UnresolvedProof::Theorem(tactic));
+            let theorem_stmt = TheoremStatement::new(name, templates, hypotheses, conclusion, scope_id, proof);
+            let theorem_stmt = ctx.arenas.theorem_stmts.alloc(name, theorem_stmt);
 
-            // if let Some(_previous) = ctx.arenas.theorem_stmts.get(name) {
-            //     return ctx.diags.err_duplicate_theorem(name, name_node.span());
-            // }
-
-            // let thm_id = ctx.arenas.theorem_stmts.alloc(name, theorem_stmt);
-            // Ok(thm_id)
+            Ok(theorem_stmt)
         }
     }
 }
@@ -639,11 +695,11 @@ fn elaborate_theorem<'ctx>(
 fn elaborate_templates<'ctx>(
     mut templates: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<Vec<NotationBindingId<'ctx>>> {
+) -> WResult<Vec<Template<'ctx>>> {
     // templates ::= (template_none)
     //             | (template_many) template templates
 
-    // let mut seen_names = FxHashMap::default();
+    let mut seen_templates = FxHashSet::default();
     let mut templates_list = Vec::new();
 
     loop {
@@ -654,16 +710,16 @@ fn elaborate_templates<'ctx>(
             template_many ::= [template, rest] => {
                 let template = template.as_node().unwrap();
 
-                // for (binding, span) in elaborate_template(template, ctx)? {
-                //     if let Some(old) = seen_names.get(&binding.name()) {
-                //         return ctx.diags.err_duplicate_template_name(binding.name(), *old, span);
-                //     }
+                for template in elaborate_template(template, ctx)? {
+                    if seen_templates.contains(&template.binding()) {
+                        todo!("Error: duplicate template binding.");
+                    }
 
-                //     seen_names.insert(temp.name(), span);
-                //     templates_list.push(temp);
-                // }
+                    seen_templates.insert(template.binding());
+                    templates_list.push(template);
+                }
+
                 templates = rest.as_node().unwrap();
-                todo!();
             }
         }
     }
@@ -672,7 +728,7 @@ fn elaborate_templates<'ctx>(
 fn elaborate_template<'ctx>(
     template: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<Vec<(NotationBindingId<'ctx>, Span)>> {
+) -> WResult<Vec<Template<'ctx>>> {
     // template ::= (template) "[" template_bindings ":" name "]"
 
     match_rule! { (ctx, template) =>
@@ -697,7 +753,7 @@ fn elaborate_template_bindings<'ctx>(
     mut bindings: ParseTreeId<'ctx>,
     cat: FormalSyntaxCatId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<Vec<(NotationBindingId<'ctx>, Span)>> {
+) -> WResult<Vec<Template<'ctx>>> {
     // template_bindings ::= (template_bindings_none)
     //                     | (template_bindings_many) notation_binding template_bindings
 
@@ -710,149 +766,88 @@ fn elaborate_template_bindings<'ctx>(
             },
             template_bindings_many ::= [binding, rest] => {
                 let binding = binding.as_node().unwrap();
-                let span = binding.span();
-                let binding = elaborate_notation_binding(binding, cat, ctx)?;
+                let (binding, names) = elaborate_notation_binding_with_cat(binding, cat, ctx)?;
+                let template = Template::new(cat, binding, names);
 
-                binding_list.push((binding, span));
+                binding_list.push(template);
                 bindings = rest.as_node().unwrap();
             }
         }
     }
 }
 
-// fn elaborate_hypotheses<'ctx>(
-//     hypotheses: ParseTreeId<'ctx>,
-//     ctx: &mut Ctx<'ctx>,
-// ) -> WResult<Vec<UnresolvedFact<'ctx>>> {
-//     // hypotheses ::= (hypotheses_none)
-//     //              | (hypotheses_many) hypothesis hypotheses
-
-//     let mut hypotheses_list = Vec::new();
-//     let mut next_hypotheses = Some(hypotheses);
-
-//     while let Some(hypotheses) = next_hypotheses {
-//         match_rule! { (ctx, hypotheses) =>
-//             hypotheses_none ::= [] => {
-//                 next_hypotheses = None;
-//             },
-//             hypotheses_many ::= [hypothesis, rest] => {
-//                 let hypothesis = hypothesis.as_node().unwrap();
-//                 let rest = rest.as_node().unwrap();
-
-//                 hypotheses_list.push(elaborate_hypothesis(hypothesis, ctx)?);
-//                 next_hypotheses = Some(rest);
-//             }
-//         }
-//     }
-
-//     Ok(hypotheses_list)
-// }
-
-// fn elaborate_hypothesis<'ctx>(
-//     hypothesis: ParseTreeId<'ctx>,
-//     ctx: &mut Ctx<'ctx>,
-// ) -> WResult<UnresolvedFact<'ctx>> {
-//     // hypothesis ::= (hypothesis) "(" fact ")"
-
-//     match_rule! { (ctx, hypothesis) =>
-//         hypothesis ::= [l_paren, fact, r_paren] => {
-//             debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
-//             debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
-
-//             let fact = fact.as_node().unwrap();
-//             let fact = elaborate_fact(fact, ctx)?;
-
-//             Ok(fact)
-//         }
-//     }
-// }
-
-// fn elaborate_fact<'ctx>(
-//     fact: ParseTreeId<'ctx>,
-//     ctx: &mut Ctx<'ctx>,
-// ) -> WResult<UnresolvedFact<'ctx>> {
-//     // fact ::= (fact_assumption) kw"assume" sentence "|-" sentence
-//     //        | (fact_sentence)   sentence
-
-//     match_rule! { (ctx, fact) =>
-//         fact_assumption ::= [assume_kw, assumption, turnstile, conclusion] => {
-//             debug_assert!(assume_kw.is_kw(*strings::ASSUME));
-//             debug_assert!(turnstile.is_lit(*strings::TURNSTILE));
-
-//             let assumption = assumption.as_node().unwrap();
-//             let conclusion = conclusion.as_node().unwrap();
-//             Ok(UnresolvedFact::new(Some(assumption), conclusion))
-//         },
-//         fact_sentence ::= [conclusion] => {
-//             let conclusion = conclusion.as_node().unwrap();
-//             Ok(UnresolvedFact::new(None, conclusion))
-//         }
-//     }
-// }
-
-pub fn elaborate_maybe_shorthand_args<'ctx>(
-    maybe_args: ParseTreeId<'ctx>,
+fn elaborate_hypotheses<'ctx>(
+    hypotheses: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<Vec<ParseTreeId<'ctx>>> {
-    // maybe_shorthand_args ::= (maybe_shorthand_args_none)
-    //                        | (maybe_shorthand_args_some) "(" shorthand_args ")"
+) -> WResult<Vec<UnresolvedFact<'ctx>>> {
+    // hypotheses ::= (hypotheses_none)
+    //              | (hypotheses_many) hypothesis hypotheses
 
-    match_rule! { (ctx, maybe_args) =>
-        maybe_shorthand_args_none ::= [] => {
-            Ok(Vec::new())
-        },
-        maybe_shorthand_args_some ::= [l_paren, args, r_paren] => {
+    let mut hypotheses_list = Vec::new();
+    let mut next_hypotheses = Some(hypotheses);
+
+    while let Some(hypotheses) = next_hypotheses {
+        match_rule! { (ctx, hypotheses) =>
+            hypotheses_none ::= [] => {
+                next_hypotheses = None;
+            },
+            hypotheses_many ::= [hypothesis, rest] => {
+                let hypothesis = hypothesis.as_node().unwrap();
+                let rest = rest.as_node().unwrap();
+
+                hypotheses_list.push(elaborate_hypothesis(hypothesis, ctx)?);
+                next_hypotheses = Some(rest);
+            }
+        }
+    }
+
+    Ok(hypotheses_list)
+}
+
+fn elaborate_hypothesis<'ctx>(
+    hypothesis: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<UnresolvedFact<'ctx>> {
+    // hypothesis ::= (hypothesis) "(" fact ")"
+
+    match_rule! { (ctx, hypothesis) =>
+        hypothesis ::= [l_paren, fact, r_paren] => {
             debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
             debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
 
-            elaborate_shorthand_args(args.as_node().unwrap(), ctx)
+            let fact = fact.as_node().unwrap();
+            let fact = elaborate_fact(fact, ctx)?;
+
+            Ok(fact)
         }
     }
 }
 
-fn elaborate_shorthand_args<'ctx>(
-    args: ParseTreeId<'ctx>,
+fn elaborate_fact<'ctx>(
+    fact: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<Vec<ParseTreeId<'ctx>>> {
-    let mut next_args = Some(args);
-    let mut arg_list = Vec::new();
+) -> WResult<UnresolvedFact<'ctx>> {
+    // fact ::= (fact_assumption) kw"assume" sentence "|-" sentence
+    //        | (fact_sentence)   sentence
 
-    while let Some(args) = next_args {
-        // shorthand_args ::= (shorthand_args_one)  shorthand_arg
-        //                  | (shorthand_args_many) shorthand_arg "," shorthand_args
+    match_rule! { (ctx, fact) =>
+        fact_assumption ::= [assume_kw, assumption, turnstile, conclusion] => {
+            debug_assert!(assume_kw.is_kw(*strings::ASSUME));
+            debug_assert!(turnstile.is_lit(*strings::TURNSTILE));
 
-        let (arg, next) = match_rule! { (ctx, args) =>
-            shorthand_args_one ::= [arg] => {
-                let arg = arg.as_node().unwrap();
-                (arg, None)
-            },
-            shorthand_args_many ::= [arg, comma, rest] => {
-                let arg = arg.as_node().unwrap();
-                let rest = rest.as_node().unwrap();
-                debug_assert!(comma.is_lit(*strings::COMMA));
-                (arg, Some(rest))
-            }
-        };
-
-        arg_list.push(elaborate_shorthand_arg(arg, ctx)?);
-        next_args = next;
-    }
-
-    Ok(arg_list)
-}
-
-fn elaborate_shorthand_arg<'ctx>(
-    arg: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<ParseTreeId<'ctx>> {
-    // shorthand_arg ::= (shorthand_arg) any_fragment
-
-    match_rule! { (ctx, arg) =>
-        shorthand_arg ::= [frag] => {
-            let frag = frag.as_node().unwrap();
-            debug_assert!(frag.cat() == ctx.builtin_cats.any_fragment);
-
-            Ok(frag)
+            let assumption = UnresolvedFrag(assumption.as_node().unwrap());
+            let conclusion = UnresolvedFrag(conclusion.as_node().unwrap());
+            Ok(UnresolvedFact {
+                assumption: Some(assumption),
+                conclusion,
+            })
+        },
+        fact_sentence ::= [conclusion] => {
+            let conclusion = UnresolvedFrag(conclusion.as_node().unwrap());
+            Ok(UnresolvedFact {
+                assumption: None,
+                conclusion,
+            })
         }
     }
 }

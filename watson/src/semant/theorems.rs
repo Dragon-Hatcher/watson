@@ -1,32 +1,29 @@
-use ustr::Ustr;
-
 use crate::{
-    generate_arena_handle,
-    parse::parse_tree::ParseTreeId,
-    semant::{
-        fragment::FragmentId,
-        notation::NotationBindingId,
-        presentation::{FactPresentation, PresentationTreeId},
-    },
+    context::arena::ScopeId, generate_arena_handle, parse::parse_tree::ParseTreeId, semant::{
+        formal_syntax::FormalSyntaxCatId, fragment::FragmentId, notation::NotationBindingId, presentation::{FactPresentation, PresentationTreeId}, scope::Scope
+    }
 };
+use ustr::Ustr;
 
 generate_arena_handle!(TheoremId<'ctx> => TheoremStatement<'ctx>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TheoremStatement<'ctx> {
     name: Ustr,
-    templates: Vec<NotationBindingId<'ctx>>,
-    hypotheses: Vec<(Fact<'ctx>, FactPresentation<'ctx>)>,
-    conclusion: (FragmentId<'ctx>, PresentationTreeId<'ctx>),
+    templates: Vec<Template<'ctx>>,
+    hypotheses: Vec<Fact<'ctx>>,
+    conclusion: FragmentId<'ctx>,
+    scope: ScopeId,
     proof: UnresolvedProof<'ctx>,
 }
 
 impl<'ctx> TheoremStatement<'ctx> {
     pub fn new(
         name: Ustr,
-        templates: Vec<NotationBindingId<'ctx>>,
-        hypotheses: Vec<(Fact<'ctx>, FactPresentation<'ctx>)>,
-        conclusion: (FragmentId<'ctx>, PresentationTreeId<'ctx>),
+        templates: Vec<Template<'ctx>>,
+        hypotheses: Vec<Fact<'ctx>>,
+        conclusion: FragmentId<'ctx>,
+        scope: ScopeId,
         proof: UnresolvedProof<'ctx>,
     ) -> Self {
         Self {
@@ -34,6 +31,7 @@ impl<'ctx> TheoremStatement<'ctx> {
             templates,
             hypotheses,
             conclusion,
+            scope,
             proof,
         }
     }
@@ -42,20 +40,49 @@ impl<'ctx> TheoremStatement<'ctx> {
         self.name
     }
 
-    pub fn templates(&self) -> &[NotationBindingId<'ctx>] {
+    pub fn templates(&self) -> &[Template<'ctx>] {
         &self.templates
     }
 
-    pub fn hypotheses(&self) -> &[(Fact<'ctx>, FactPresentation<'ctx>)] {
+    pub fn hypotheses(&self) -> &[Fact<'ctx>] {
         &self.hypotheses
     }
 
-    pub fn conclusion(&self) -> (FragmentId<'ctx>, PresentationTreeId<'ctx>) {
+    pub fn conclusion(&self) -> FragmentId<'ctx> {
         self.conclusion
     }
 
     pub fn proof(&self) -> &UnresolvedProof<'ctx> {
         &self.proof
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Template<'ctx> {
+    cat: FormalSyntaxCatId<'ctx>,
+    binding: NotationBindingId<'ctx>,
+    hole_names: Vec<Ustr>,
+}
+
+impl<'ctx> Template<'ctx> {
+    pub fn new(cat: FormalSyntaxCatId<'ctx>, binding: NotationBindingId<'ctx>, hole_names: Vec<Ustr>) -> Self {
+        Self {
+            cat,
+            binding,
+            hole_names
+        }
+    }
+
+    pub fn binding(&self) -> NotationBindingId<'ctx> {
+        self.binding
+    }
+
+    pub fn cat(&self) -> FormalSyntaxCatId<'ctx> {
+        self.cat
+    }
+
+    pub fn hole_names(&self) -> &[Ustr] {
+        &self.hole_names
     }
 }
 

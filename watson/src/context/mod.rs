@@ -1,5 +1,7 @@
+use rustc_hash::FxHashMap;
+
 use crate::{
-    context::arena::{InternedArena, NamedArena, PlainArena},
+    context::arena::{InternedArena, NamedArena, PlainArena, ScopeArena},
     diagnostics::DiagManager,
     parse::{
         SourceCache,
@@ -22,6 +24,7 @@ pub mod arena;
 
 pub struct Ctx<'ctx> {
     pub arenas: &'ctx Arenas<'ctx>,
+    pub scopes: ScopeArena<'ctx>,
 
     /// Information about how we should currently be parsing syntax.
     pub parse_state: ParseState<'ctx>,
@@ -35,6 +38,7 @@ pub struct Ctx<'ctx> {
     pub sentence_formal_cat: FormalSyntaxCatId<'ctx>,
     pub builtin_cats: BuiltinCats<'ctx>,
     pub builtin_rules: BuiltinRules<'ctx>,
+    pub single_name_notations: FxHashMap<FormalSyntaxCatId<'ctx>, NotationPatternId<'ctx>>,
 }
 
 impl<'ctx> Ctx<'ctx> {
@@ -56,12 +60,14 @@ impl<'ctx> Ctx<'ctx> {
 
         let mut ctx = Self {
             arenas,
+            scopes: ScopeArena::new(),
             parse_state,
             diags: DiagManager::new(),
             sources,
             sentence_formal_cat,
             builtin_cats,
             builtin_rules,
+            single_name_notations: FxHashMap::default(),
         };
 
         add_parse_rules_for_formal_cat(sentence_formal_cat, &mut ctx);
@@ -78,7 +84,7 @@ pub struct Arenas<'ctx> {
     pub formal_cats: NamedArena<FormalSyntaxCat, FormalSyntaxCatId<'ctx>>,
     pub formal_rules: NamedArena<FormalSyntaxRule<'ctx>, FormalSyntaxRuleId<'ctx>>,
     pub notations: PlainArena<NotationPattern<'ctx>, NotationPatternId<'ctx>>,
-    pub notation_bindings: PlainArena<NotationBinding<'ctx>, NotationBindingId<'ctx>>,
+    pub notation_bindings: InternedArena<NotationBinding<'ctx>, NotationBindingId<'ctx>>,
     pub fragments: InternedArena<Fragment<'ctx>, FragmentId<'ctx>>,
     pub theorem_stmts: NamedArena<TheoremStatement<'ctx>, TheoremId<'ctx>>,
     pub proof_states: PlainArena<ProofState<'ctx>, ProofStateKey<'ctx>>,
@@ -95,7 +101,7 @@ impl<'ctx> Arenas<'ctx> {
             formal_cats: NamedArena::new(),
             formal_rules: NamedArena::new(),
             notations: PlainArena::new(),
-            notation_bindings: PlainArena::new(),
+            notation_bindings: InternedArena::new(),
             fragments: InternedArena::new(),
             theorem_stmts: NamedArena::new(),
             proof_states: PlainArena::new(),

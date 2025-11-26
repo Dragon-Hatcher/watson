@@ -95,7 +95,7 @@ notation_pat ::= (notation_pat_lit)     str
                | (notation_pat_cat)     name
                | (notation_pat_binding) "@" kw"binding" "(" name ")"
 
-definition_command ::= (definition) kw"definition" name notation_binding ":=" any_fragment kw"end"
+definition_command ::= (definition) kw"definition" notation_binding ":=" any_fragment kw"end"
 
 // notation_binding is created from each notation command
 
@@ -363,7 +363,6 @@ pub fn add_builtin_rules<'ctx>(
             cats.definition_command,
             vec![
                 kw(*strings::DEFINITION),
-                cat(cats.name),
                 cat(cats.notation_binding),
                 lit(*strings::ASSIGN),
                 cat(cats.any_fragment),
@@ -667,6 +666,8 @@ pub fn add_parse_rules_for_formal_cat<'ctx>(
         ),
     ));
     ctx.parse_state.use_rule(rule);
+
+
 }
 
 pub fn formal_rule_to_notation<'ctx>(

@@ -71,12 +71,12 @@ fn main() {
         let arenas = Arenas::new();
         let (ctx, report) = run(&args, &arenas);
 
-        // display_report(&report, ctx.diags.has_errors(), None);
+        display_report(&report, ctx.diags.has_errors(), None);
 
-        // if ctx.diags.has_errors() {
-        //     ctx.diags.print_errors(&ctx);
-        //     std::process::exit(1)
-        // }
+        if ctx.diags.has_errors() {
+            ctx.diags.print_errors(&ctx);
+            std::process::exit(1)
+        }
     }
 }
 

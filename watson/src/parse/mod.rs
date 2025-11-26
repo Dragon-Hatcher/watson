@@ -8,11 +8,12 @@ pub mod source_cache;
 
 pub use location::{Location, SourceId, Span};
 pub use source_cache::SourceCache;
+use ustr::Ustr;
 
 use crate::{
     context::Ctx,
-    parse::{earley::parse_name, elaborator::ElaborateAction, parse_state::{Category, ParseAtomPattern, SyntaxCategorySource}},
-    semant::{scope::Scope, theorems::TheoremId},
+    parse::{earley::parse_name, elaborator::ElaborateAction, parse_state::{Associativity, Category, ParseAtomPattern, Precedence, SyntaxCategorySource}},
+    semant::{notation::{NotationPattern, NotationPatternPart}, scope::Scope, theorems::TheoremId},
 };
 
 pub fn parse<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> Vec<TheoremId<'ctx>> {
@@ -82,6 +83,21 @@ fn parse_source<'ctx>(
                 ctx.parse_state.use_cat(parse_cat);
 
                 grammar::add_parse_rules_for_formal_cat(cat, ctx);
+
+                // We also add a notation for this category which is just a 
+                // single name. This is needed to allow bindings an also just
+                // for convenience.
+                let name = Ustr::from(&format!("{}.name", cat.name()));
+                let parts = vec![NotationPatternPart::Name];
+                let prec = Precedence::default();
+                let assoc = Associativity::default();
+                let notation = NotationPattern::new(name, cat, parts, prec, assoc);
+                let notation = ctx.arenas.notations.alloc(notation);                
+                grammar::add_parse_rules_for_notation(notation, ctx);
+
+                ctx.single_name_notations.insert(cat, notation);
+
+                // Update the parse state given all the rules we have added.
                 ctx.parse_state.recompute_initial_atoms();
             }
             ElaborateAction::NewFormalRule(rule) => {

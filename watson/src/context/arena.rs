@@ -3,6 +3,8 @@ use std::{hash::Hash, marker::PhantomData, sync::Mutex};
 use typed_arena::Arena;
 use ustr::Ustr;
 
+use crate::semant::scope::Scope;
+
 pub struct PlainArena<Data, Handle> {
     arena: Arena<Data>,
     handle: PhantomData<Handle>,
@@ -137,4 +139,27 @@ macro_rules! generate_arena_handle {
     ($handle:ident => $data:ident) => {
         generate_arena_handle!($handle<'ctx> => $data);
     };
+}
+
+pub struct ScopeArena<'ctx> {
+    scopes: Vec<Scope<'ctx>>
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScopeId(usize);
+
+impl<'ctx> ScopeArena<'ctx> {
+    pub fn new() -> Self {
+        Self { scopes: Vec::new() }
+    }
+
+    pub fn alloc(&mut self, scope: Scope<'ctx>) -> ScopeId {
+        let id = ScopeId(self.scopes.len());
+        self.scopes.push(scope);
+        id
+    }
+
+    pub fn get(&self, id: ScopeId) -> Scope<'ctx> {
+        self.scopes[id.0].clone()
+    }
 }

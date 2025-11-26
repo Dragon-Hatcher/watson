@@ -1,3 +1,4 @@
+use rustc_hash::FxHashMap;
 use ustr::Ustr;
 
 use crate::{
@@ -91,4 +92,25 @@ pub enum FormalSyntaxPatPart<'ctx> {
     Binding(FormalSyntaxCatId<'ctx>),
     Var(FormalSyntaxCatId<'ctx>),
     Lit(Ustr),
+}
+
+pub struct CatMap<'ctx, T> {
+    mapping: FxHashMap<FormalSyntaxCatId<'ctx>, Vec<T>>,
+}
+
+impl<'ctx, T> CatMap<'ctx, T> {
+    pub fn new() -> Self {
+        Self {
+            mapping: FxHashMap::default(),
+        }
+    }
+
+    pub fn insert(&mut self, cat: FormalSyntaxCatId<'ctx>, t: T) {
+        self.mapping.entry(cat).or_default().push(t);
+    }
+
+    pub fn get(&self, cat: FormalSyntaxCatId<'ctx>) -> &[T] {
+        self.mapping.get(&cat).map(|s| &s[..]).unwrap_or(&[])
+    }
+
 }

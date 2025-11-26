@@ -1,55 +1,189 @@
-use rustc_hash::FxHashMap;
-use ustr::Ustr;
-
 use crate::{
     context::Ctx,
     diagnostics::WResult,
     parse::{elaborator::elaborate_name, parse_tree::ParseTreeId},
     semant::{
-        formal_syntax::FormalSyntaxCatId, fragment::FragmentId, notation::NotationPatternPart,
-        scope::Scope,
+        fragment::{FragHead, Fragment, FragmentId},
+        notation::{NotationBinding, NotationInstantiationPart, NotationPatternPart},
+        scope::{Scope, ScopeEntry},
     },
 };
 
-// pub struct UnparsedFrag<'ctx> {
-//     possibilities: Vec<UnparsedFragPossibility<'ctx>>,
-// }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnresolvedFrag<'ctx>(pub ParseTreeId<'ctx>);
 
-// pub struct UnparsedFragPossibility<'ctx> {
-//     notation: NotationPatternId<'ctx>,
-//     children: Vec<UnparsedFragPart<'ctx>>,
-// }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnresolvedFact<'ctx> {
+    pub assumption: Option<UnresolvedFrag<'ctx>>,
+    pub conclusion: UnresolvedFrag<'ctx>
+}
 
-fn parse_fragment<'ctx>(
+pub fn parse_fragment<'ctx>(
+    frag: UnresolvedFrag<'ctx>,
+    scope: &Scope<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<Result<FragmentId<'ctx>, ParseResultErr>> {
+    parse_fragment_impl(frag.0, scope, 0, ctx)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseResultErr {
+    NoSolutions,
+    MultipleSolutions,
+}
+
+fn parse_fragment_impl<'ctx>(
     frag: ParseTreeId<'ctx>,
     scope: &Scope<'ctx>,
-    bindings: &mut Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
-    mem: &mut FxHashMap<ParseTreeId<'ctx>, FragmentId<'ctx>>,
+    binding_depth: usize,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<FragmentId<'ctx>> {
-    if let Some(frag_id) = mem.get(&frag) {
-        return Ok(*frag_id);
-    }
+) -> WResult<Result<FragmentId<'ctx>, ParseResultErr>> {
+    let mut solution = Err(ParseResultErr::NoSolutions);
 
-    for possibility in frag.possibilities() {
+    'possibility: for possibility in frag.possibilities() {
         let rule = possibility.rule();
         let notation = rule.source().get_notation();
 
-        let mut bindings_added = 0;
+        // First let's create the binding that this syntax represented and
+        // look it up in our scope. If it doesn't exist we can move on.
+        let mut instantiations = Vec::new();
+        for (child, part) in possibility.children().iter().zip(notation.parts()) {
+            if let NotationPatternPart::Name = part {
+                let name = elaborate_name(child.as_node().unwrap(), ctx)?;
+                instantiations.push(NotationInstantiationPart::Name(name));
+            }
+        }
+        let binding = NotationBinding::new(notation, instantiations);
+        let binding = ctx.arenas.notation_bindings.intern(binding);
+
+        let Some(replacement) = scope.lookup(binding) else {
+            // If we didn't find anything then this notation isn't bound in this
+            // scope so we should try the next possibility or error out.
+            continue;
+        };
+
+        // Next we want to  create a scope we can parse our children with that
+        // contains the binders this notation introduced.
+        let mut new_scope = scope.clone();
+        let mut new_depth = binding_depth;
+
+        // Check each of the child nodes in the _parse tree_. The notation
+        // definition tells us which of them are binding nodes.
         for (child, part) in possibility.children().iter().zip(notation.parts()) {
             if let NotationPatternPart::Binding(cat) = part {
+                // Extract the name of this binding.
                 let name = elaborate_name(child.as_node().unwrap(), ctx)?;
-                bindings.push((*cat, name));
-                bindings_added += 1;
+
+                // Now we create the fragment this node will get replaced with.
+                // We set the deBruijn index to always be zero. This will be
+                // adjusted later by the binding depth.
+                let head = FragHead::Variable(*cat, 0);
+                let frag = Fragment::new(*cat, head, Vec::new());
+                let frag = ctx.arenas.fragments.intern(frag);
+
+                // The entry contains the fragment we just created but also the
+                // binding depth which tells child nodes who read this binding
+                // how many intermediate bindings there are so that they can fix
+                // the node for their context.
+                let entry = ScopeEntry::new_with_depth(frag, new_depth);
+                new_depth += 1;
+
+                // Finally we need the notation for a single name.
+                let name_pattern = ctx.single_name_notations[cat];
+                let bind_binding =
+                    NotationBinding::new(name_pattern, vec![NotationInstantiationPart::Name(name)]);
+                let bind_binding = ctx.arenas.notation_bindings.intern(bind_binding);
+
+                // And now we can update the scope.
+                new_scope = new_scope.child_with(bind_binding, entry);
             }
         }
 
-        for _ in 0..bindings_added {
-            bindings.pop();
+        // Now we want to evaluate each of the child nodes in the context of
+        // the new scope that we created.
+        let mut children = Vec::new();
+        let mut multiple_solutions = false;
+        for (child, part) in possibility.children().iter().zip(notation.parts()) {
+            if let NotationPatternPart::Cat(_child_cat) = part {
+                let child_node = child.as_node().unwrap();
+                let child_parse = parse_fragment_impl(child_node, &new_scope, new_depth, ctx)?;
+                match child_parse {
+                    Ok(parse) => children.push(parse),
+                    Err(ParseResultErr::NoSolutions) => {
+                        continue 'possibility;
+                    },
+                    Err(ParseResultErr::MultipleSolutions) => multiple_solutions = true,
+                }
+            }
         }
+
+        // We found multiple solutions in the child nodes.
+        if multiple_solutions {
+            return Ok(Err(ParseResultErr::MultipleSolutions));
+        }
+
+        // Now we perform the replacement using the children we have parsed.
+        let intermediates = binding_depth - replacement.binding_depth();
+        let instantiated =
+            instantiate_replacement(replacement.frag(), 0, intermediates, &children, ctx);
+
+        if let Ok(_alternate) = solution {
+            return Ok(Err(ParseResultErr::MultipleSolutions));
+        }
+
+        solution = Ok(instantiated);
     }
 
-    todo!()
+    Ok(solution)
+}
+
+fn instantiate_replacement<'ctx>(
+    frag: FragmentId<'ctx>,
+    // The depth within the replacement fragment.
+    frag_depth: usize,
+    // The n umber of bindings between where the replacement fragment was bound
+    // and the location it is being substituted into.
+    intermediates: usize,
+    children: &[FragmentId<'ctx>],
+    ctx: &mut Ctx<'ctx>,
+) -> FragmentId<'ctx> {
+    if !frag.has_hole() && frag.unclosed_count() == 0 {
+        // There is nothing to replace so we just return the same fragment.
+        return frag;
+    }
+
+    match frag.head() {
+        FragHead::Hole(idx) => children[idx],
+        FragHead::Variable(var_cat, db_idx) => {
+            // We want to check if this variable is bound inside or outside of
+            // the replacement fragment. If it is inside it doesn't need to be
+            // modified. But if it is outside we need to adjust the deBruijn
+            // index.
+            if db_idx < frag_depth {
+                // The binding was inside the fragment
+                frag
+            } else {
+                let new_head = FragHead::Variable(var_cat, db_idx + intermediates);
+                let frag = Fragment::new(frag.cat(), new_head, Vec::new());
+                ctx.arenas.fragments.intern(frag)
+            }
+        }
+        FragHead::RuleApplication(_) | FragHead::TemplateRef(_) => {
+            let new_depth = match frag.head() {
+                FragHead::RuleApplication(rule_app) => frag_depth + rule_app.bindings_added(),
+                _ => frag_depth,
+            };
+            let new_children = frag
+                .children()
+                .iter()
+                .map(|&child| {
+                    instantiate_replacement(child, new_depth, intermediates, children, ctx)
+                })
+                .collect();
+            let new_frag = Fragment::new(frag.cat(), frag.head(), new_children);
+            ctx.arenas.fragments.intern(new_frag)
+        }
+    }
 }
 
 // use rustc_hash::FxHashMap;

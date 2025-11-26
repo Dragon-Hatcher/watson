@@ -65,20 +65,20 @@ pub enum NotationPatternPart<'ctx> {
 
 generate_arena_handle!(NotationBindingId<'ctx> => NotationBinding<'ctx>);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NotationBinding<'ctx> {
     pattern: NotationPatternId<'ctx>,
-    instantiations: Vec<NotationInstantiationPart>
+    instantiations: Vec<NotationInstantiationPart>,
 }
 
 impl<'ctx> NotationBinding<'ctx> {
     pub fn new(
         pattern: NotationPatternId<'ctx>,
-        instantiations: Vec<NotationInstantiationPart>
+        instantiations: Vec<NotationInstantiationPart>,
     ) -> Self {
         Self {
             pattern,
-            instantiations
+            instantiations,
         }
     }
 
@@ -91,7 +91,7 @@ impl<'ctx> NotationBinding<'ctx> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NotationInstantiationPart {
     Name(Ustr),
 }

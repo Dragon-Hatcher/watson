@@ -1,6 +1,9 @@
 use crate::{
     generate_arena_handle,
-    semant::formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId},
+    semant::{
+        formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
+        theorems::Fact,
+    },
 };
 
 generate_arena_handle! { FragmentId<'ctx> => Fragment<'ctx> }
@@ -97,5 +100,40 @@ impl<'ctx> FragRuleApplication<'ctx> {
 
     pub fn bindings_added(&self) -> usize {
         self.bindings_added
+    }
+}
+
+pub fn _debug_fact<'ctx>(fact: &Fact<'ctx>) -> String {
+    let conclusion = _debug_fragment(fact.conclusion());
+    match fact.assumption() {
+        Some(assumption) => format!("{} |- {}", _debug_fragment(assumption), conclusion),
+        None => conclusion,
+    }
+}
+
+pub fn _debug_fragment<'ctx>(frag: FragmentId<'ctx>) -> String {
+    match frag.head() {
+        FragHead::RuleApplication(rule) => {
+            let mut out = String::new();
+            let mut child_idx = 0;
+            for (i, part) in rule.rule().pattern().parts().iter().enumerate() {
+                if i != 0 {
+                    out.push(' ');
+                }
+                match part {
+                    FormalSyntaxPatPart::Cat(_) => {
+                        let child = &frag.children()[child_idx];
+                        out.push_str(&_debug_fragment(*child));
+                        child_idx += 1;
+                    },
+                    FormalSyntaxPatPart::Binding(_) => out.push_str("??"),
+                    FormalSyntaxPatPart::Lit(str) => out.push_str(str),
+                }
+            }
+            out
+        }
+        FragHead::Variable(_cat, idx) => format!("?{}", idx),
+        FragHead::TemplateRef(idx) => format!("${}", idx),
+        FragHead::Hole(idx) => format!("_{}", idx),
     }
 }

@@ -22,7 +22,7 @@ notation parens
     sentence ::= "(" sentence ")"
 end
 
-definition parens.normal
+definition
     (p) := p
 end
 
@@ -41,7 +41,7 @@ notation not
     sentence (400) ::= "¬" sentence
 end
 
-definition not.normal
+definition
     ¬p := p → ⊥
 end
 
@@ -73,7 +73,7 @@ notation or
     sentence (300) ::= sentence "∨" sentence
 end
 
-definition or.normal
+definition
     p ∨ q := ¬p → q
 end
 
@@ -81,7 +81,7 @@ notation and
     sentence (300) ::= sentence "∧" sentence
 end
 
-definition and.normal
+definition
     p ∧ q := ¬(¬p ∨ ¬q)
 end
 
@@ -195,7 +195,7 @@ notation iff
     sentence (100) ::= sentence "↔" sentence
 end
 
-definition iff.normal
+definition
     p ↔ q := (p → q) ∧ (q → p)
 end
 

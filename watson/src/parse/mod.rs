@@ -12,8 +12,18 @@ use ustr::Ustr;
 
 use crate::{
     context::Ctx,
-    parse::{earley::parse_name, elaborator::ElaborateAction, parse_state::{Associativity, Category, ParseAtomPattern, Precedence, SyntaxCategorySource}},
-    semant::{notation::{NotationPattern, NotationPatternPart}, scope::Scope, theorems::TheoremId},
+    parse::{
+        earley::parse_name,
+        elaborator::ElaborateAction,
+        parse_state::{
+            Associativity, Category, ParseAtomPattern, Precedence, SyntaxCategorySource,
+        },
+    },
+    semant::{
+        notation::{NotationBinding, NotationPattern, NotationPatternPart},
+        scope::Scope,
+        theorems::{_debug_theorem, TheoremId},
+    },
 };
 
 pub fn parse<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> Vec<TheoremId<'ctx>> {
@@ -78,13 +88,13 @@ fn parse_source<'ctx>(
                 // The command created a new formal syntax category. We need to
                 // update the state of the parser to include this category.
 
-                let parse_cat = Category::new(cat.name(), SyntaxCategorySource::FormalLang(cat)); 
+                let parse_cat = Category::new(cat.name(), SyntaxCategorySource::FormalLang(cat));
                 let parse_cat = ctx.arenas.parse_cats.alloc(cat.name(), parse_cat);
                 ctx.parse_state.use_cat(parse_cat);
 
                 grammar::add_parse_rules_for_formal_cat(cat, ctx);
 
-                // We also add a notation for this category which is just a 
+                // We also add a notation for this category which is just a
                 // single name. This is needed to allow bindings an also just
                 // for convenience.
                 let name = Ustr::from(&format!("{}.name", cat.name()));
@@ -92,7 +102,7 @@ fn parse_source<'ctx>(
                 let prec = Precedence::default();
                 let assoc = Associativity::default();
                 let notation = NotationPattern::new(name, cat, parts, prec, assoc);
-                let notation = ctx.arenas.notations.alloc(notation);                
+                let notation = ctx.arenas.notations.alloc(notation);
                 grammar::add_parse_rules_for_notation(notation, ctx);
 
                 ctx.single_name_notations.insert(cat, notation);
@@ -103,9 +113,11 @@ fn parse_source<'ctx>(
             ElaborateAction::NewFormalRule(rule) => {
                 // The command created a new formal syntax rule. We need to
                 // update the state of the parser to include this rule.
-                let notation = grammar::formal_rule_to_notation(rule, ctx);
-                grammar::add_parse_rules_for_notation(notation, ctx);
+                let (pattern, binding, scope_entry) = grammar::formal_rule_to_notation(rule, ctx);
+                grammar::add_parse_rules_for_notation(pattern, ctx);
                 ctx.parse_state.recompute_initial_atoms();
+
+                *scope = scope.child_with(binding, scope_entry);
             }
             ElaborateAction::NewNotation(notation) => {
                 // The command created new notation. We need to update the state
@@ -119,6 +131,7 @@ fn parse_source<'ctx>(
                 *scope = new_scope;
             }
             ElaborateAction::NewTheorem(new_theorem) => {
+                println!("{}", _debug_theorem(new_theorem));
                 theorems.push(new_theorem);
             }
             ElaborateAction::None => {}

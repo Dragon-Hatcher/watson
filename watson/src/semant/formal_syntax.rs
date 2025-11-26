@@ -90,7 +90,6 @@ impl<'ctx> FormalSyntaxPat<'ctx> {
 pub enum FormalSyntaxPatPart<'ctx> {
     Cat(FormalSyntaxCatId<'ctx>),
     Binding(FormalSyntaxCatId<'ctx>),
-    Var(FormalSyntaxCatId<'ctx>),
     Lit(Ustr),
 }
 

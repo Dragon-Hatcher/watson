@@ -1,7 +1,14 @@
 use crate::{
-    context::arena::ScopeId, generate_arena_handle, parse::parse_tree::ParseTreeId, semant::{
-        formal_syntax::FormalSyntaxCatId, fragment::FragmentId, notation::NotationBindingId, presentation::{FactPresentation, PresentationTreeId}, scope::Scope
-    }
+    context::arena::ScopeId,
+    generate_arena_handle,
+    parse::parse_tree::ParseTreeId,
+    semant::{
+        formal_syntax::FormalSyntaxCatId,
+        fragment::{_debug_fact, _debug_fragment, FragmentId},
+        notation::{_debug_binding, NotationBindingId},
+        presentation::{FactPresentation, PresentationTreeId},
+        scope::Scope,
+    },
 };
 use ustr::Ustr;
 
@@ -65,11 +72,15 @@ pub struct Template<'ctx> {
 }
 
 impl<'ctx> Template<'ctx> {
-    pub fn new(cat: FormalSyntaxCatId<'ctx>, binding: NotationBindingId<'ctx>, hole_names: Vec<Ustr>) -> Self {
+    pub fn new(
+        cat: FormalSyntaxCatId<'ctx>,
+        binding: NotationBindingId<'ctx>,
+        hole_names: Vec<Ustr>,
+    ) -> Self {
         Self {
             cat,
             binding,
-            hole_names
+            hole_names,
         }
     }
 
@@ -113,4 +124,22 @@ impl<'ctx> Fact<'ctx> {
     pub fn conclusion(&self) -> FragmentId<'ctx> {
         self.conclusion
     }
+}
+
+pub fn _debug_theorem<'ctx>(theorem: TheoremId<'ctx>) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("Theorem: {}\n", theorem.name()));
+    for template in theorem.templates() {
+        out.push_str(&format!(
+            "  [{} : {}]\n",
+            _debug_binding(template.binding()),
+            template.cat().name(),
+        ));
+    }
+    for hypothesis in theorem.hypotheses() {
+        out.push_str(&format!("  ({})\n", _debug_fact(hypothesis)));
+    }
+    out.push_str(&format!("  |- {}\n", _debug_fragment(theorem.conclusion())));
+
+    out
 }

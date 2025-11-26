@@ -284,7 +284,6 @@ fn elaborate_syntax_pat_part<'ctx>(
 ) -> WResult<FormalSyntaxPatPart<'ctx>> {
     // syntax_pat_part ::= (syntax_pat_cat)     name
     //                   | (syntax_pat_binding) "@" kw"binding" "(" name ")"
-    //                   | (syntax_pat_var)     "@" kw"variable" "(" name ")"
     //                   | (syntax_pat_lit)     str
 
     match_rule! { (ctx, pat) =>
@@ -309,19 +308,6 @@ fn elaborate_syntax_pat_part<'ctx>(
             };
 
             Ok(FormalSyntaxPatPart::Binding(cat))
-        },
-        syntax_pat_part_var ::= [at, var_kw, l_paren, cat_name_node, r_paren] => {
-            debug_assert!(at.is_lit(*strings::AT));
-            debug_assert!(var_kw.is_kw(*strings::VARIABLE));
-            debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
-            debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
-
-            let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
-            let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
-            };
-
-            Ok(FormalSyntaxPatPart::Var(cat))
         },
         syntax_pat_part_lit ::= [lit] => {
             let lit = elaborate_str_lit(lit.as_node().unwrap(), ctx)?;

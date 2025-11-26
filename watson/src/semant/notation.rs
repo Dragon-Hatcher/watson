@@ -1,3 +1,5 @@
+use std::ops::Not;
+
 use crate::{
     generate_arena_handle,
     parse::parse_state::{Associativity, Precedence},
@@ -94,4 +96,37 @@ impl<'ctx> NotationBinding<'ctx> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NotationInstantiationPart {
     Name(Ustr),
+}
+
+pub fn _debug_binding<'ctx>(binding: NotationBindingId<'ctx>) -> String {
+    let mut out = String::new();
+    let mut names = 0;
+    for (i, part) in binding.pattern().parts().iter().enumerate() {
+        if i != 0 {
+            out.push(' ');
+        }
+        match part {
+            NotationPatternPart::Lit(lit) => {
+                out.push_str(lit.as_str());
+            }
+            NotationPatternPart::Kw(kw) => {
+                out.push_str(kw.as_str());
+            }
+            NotationPatternPart::Name => {
+                match &binding.instantiations()[names] {
+                    NotationInstantiationPart::Name(name) => {
+                        out.push_str(name.as_str());
+                    },
+                }
+                names += 1;
+            }
+            NotationPatternPart::Cat(cat) => {
+                out.push_str(&format!("<{}>", cat.name()));
+            }
+            NotationPatternPart::Binding(binding) => {
+                out.push_str(&format!("?{}", binding.name()));
+            }
+        }
+    }
+    out
 }

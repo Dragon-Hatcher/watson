@@ -115,6 +115,8 @@ pub fn _debug_fragment<'ctx>(frag: FragmentId<'ctx>) -> String {
     match frag.head() {
         FragHead::RuleApplication(rule) => {
             let mut out = String::new();
+            out.push('(');
+
             let mut child_idx = 0;
             for (i, part) in rule.rule().pattern().parts().iter().enumerate() {
                 if i != 0 {
@@ -130,6 +132,8 @@ pub fn _debug_fragment<'ctx>(frag: FragmentId<'ctx>) -> String {
                     FormalSyntaxPatPart::Lit(str) => out.push_str(str),
                 }
             }
+
+            out.push(')');
             out
         }
         FragHead::Variable(_cat, idx) => format!("?{}", idx),

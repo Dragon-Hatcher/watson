@@ -217,7 +217,7 @@ impl<'ctx> DiagManager<'ctx> {
         }
 
         let expected = if possible_atoms.is_empty() {
-            "what".to_string()
+            "impossible".to_string()
         } else if let [atom] = possible_atoms {
             format!("expected {}", format_atom(atom))
         } else if let [atom1, atom2] = possible_atoms {

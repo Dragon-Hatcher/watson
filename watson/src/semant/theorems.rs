@@ -68,19 +68,19 @@ impl<'ctx> TheoremStatement<'ctx> {
 pub struct Template<'ctx> {
     cat: FormalSyntaxCatId<'ctx>,
     binding: NotationBindingId<'ctx>,
-    hole_names: Vec<Ustr>,
+    holes: Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
 }
 
 impl<'ctx> Template<'ctx> {
     pub fn new(
         cat: FormalSyntaxCatId<'ctx>,
         binding: NotationBindingId<'ctx>,
-        hole_names: Vec<Ustr>,
+        holes: Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
     ) -> Self {
         Self {
             cat,
             binding,
-            hole_names,
+            holes,
         }
     }
 
@@ -92,8 +92,8 @@ impl<'ctx> Template<'ctx> {
         self.cat
     }
 
-    pub fn hole_names(&self) -> &[Ustr] {
-        &self.hole_names
+    pub fn holes(&self) -> &[(FormalSyntaxCatId<'ctx>, Ustr)] {
+        &self.holes
     }
 }
 

@@ -6,10 +6,6 @@ syntax false
     sentence (000) ::= "⊥"
 end
 
-notation name
-    sentence ::= @name
-end
-
 axiom imp.intro [p q : sentence] : (assume p |- q)
     |- p → q
 end

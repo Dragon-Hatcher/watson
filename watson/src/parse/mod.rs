@@ -20,9 +20,7 @@ use crate::{
         },
     },
     semant::{
-        notation::{NotationBinding, NotationPattern, NotationPatternPart},
-        scope::Scope,
-        theorems::{_debug_theorem, TheoremId},
+        formal_syntax::FormalSyntaxCatId, notation::{NotationBinding, NotationPattern, NotationPatternPart}, scope::Scope, theorems::{_debug_theorem, TheoremId}
     },
 };
 
@@ -38,6 +36,7 @@ pub fn parse<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> Vec<TheoremId<'ctx>> 
 
     theorems
 }
+
 fn parse_source<'ctx>(
     loc: Location,
     ctx: &mut Ctx<'ctx>,
@@ -87,28 +86,11 @@ fn parse_source<'ctx>(
             ElaborateAction::NewFormalCat(cat) => {
                 // The command created a new formal syntax category. We need to
                 // update the state of the parser to include this category.
-
                 let parse_cat = Category::new(cat.name(), SyntaxCategorySource::FormalLang(cat));
                 let parse_cat = ctx.arenas.parse_cats.alloc(cat.name(), parse_cat);
                 ctx.parse_state.use_cat(parse_cat);
 
-                grammar::add_parse_rules_for_formal_cat(cat, ctx);
-
-                // We also add a notation for this category which is just a
-                // single name. This is needed to allow bindings an also just
-                // for convenience.
-                let name = Ustr::from(&format!("{}.name", cat.name()));
-                let parts = vec![NotationPatternPart::Name];
-                let prec = Precedence::default();
-                let assoc = Associativity::default();
-                let notation = NotationPattern::new(name, cat, parts, prec, assoc);
-                let notation = ctx.arenas.notations.alloc(notation);
-                grammar::add_parse_rules_for_notation(notation, ctx);
-
-                ctx.single_name_notations.insert(cat, notation);
-
-                // Update the parse state given all the rules we have added.
-                ctx.parse_state.recompute_initial_atoms();
+                add_formal_cat(cat, ctx);
             }
             ElaborateAction::NewFormalRule(rule) => {
                 // The command created a new formal syntax rule. We need to
@@ -140,6 +122,26 @@ fn parse_source<'ctx>(
         // This line doesn't start a command so we can skip to the next line.
         sources_stack.push(next_line(text, loc));
     }
+}
+
+pub fn add_formal_cat<'ctx>(cat: FormalSyntaxCatId<'ctx>, ctx: &mut Ctx<'ctx>) {
+    grammar::add_parse_rules_for_formal_cat(cat, ctx);
+
+    // We also add a notation for this category which is just a
+    // single name. This is needed to allow bindings an also just
+    // for convenience.
+    let name = Ustr::from(&format!("{}.name", cat.name()));
+    let parts = vec![NotationPatternPart::Name];
+    let prec = Precedence::default();
+    let assoc = Associativity::default();
+    let notation = NotationPattern::new(name, cat, parts, prec, assoc);
+    let notation = ctx.arenas.notations.alloc(notation);
+    grammar::add_parse_rules_for_notation(notation, ctx);
+
+    ctx.single_name_notations.insert(cat, notation);
+
+    // Update the parse state given all the rules we have added.
+    ctx.parse_state.recompute_initial_atoms();
 }
 
 fn can_start_command(text: &str, loc: Location, ctx: &Ctx) -> bool {

@@ -3,9 +3,9 @@ use crate::{
     diagnostics::WResult,
     parse::{elaborator::elaborate_name, parse_tree::ParseTreeId},
     semant::{
-        fragment::{FragHead, Fragment, FragmentId},
+        fragment::{_debug_fragment, FragHead, Fragment, FragmentId},
         notation::{NotationBinding, NotationInstantiationPart, NotationPatternPart},
-        scope::{Scope, ScopeEntry},
+        scope::{Scope, ScopeEntry, ScopeReplacement},
     },
 };
 
@@ -15,7 +15,7 @@ pub struct UnresolvedFrag<'ctx>(pub ParseTreeId<'ctx>);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnresolvedFact<'ctx> {
     pub assumption: Option<UnresolvedFrag<'ctx>>,
-    pub conclusion: UnresolvedFrag<'ctx>
+    pub conclusion: UnresolvedFrag<'ctx>,
 }
 
 pub fn parse_fragment<'ctx>(
@@ -111,7 +111,7 @@ fn parse_fragment_impl<'ctx>(
                     Ok(parse) => children.push(parse),
                     Err(ParseResultErr::NoSolutions) => {
                         continue 'possibility;
-                    },
+                    }
                     Err(ParseResultErr::MultipleSolutions) => multiple_solutions = true,
                 }
             }
@@ -124,8 +124,15 @@ fn parse_fragment_impl<'ctx>(
 
         // Now we perform the replacement using the children we have parsed.
         let intermediates = binding_depth - replacement.binding_depth();
-        let instantiated =
-            instantiate_replacement(replacement.frag(), 0, intermediates, &children, ctx);
+        let instantiated = match replacement.replacement() {
+            ScopeReplacement::Frag(frag) => {
+                instantiate_replacement(frag, 0, intermediates, &children, ctx)
+            }
+            ScopeReplacement::Hole(cat, idx) => {
+                let frag = Fragment::new(cat, FragHead::Hole(idx), Vec::new());
+                ctx.arenas.fragments.intern(frag)
+            }
+        };
 
         if let Ok(_alternate) = solution {
             return Ok(Err(ParseResultErr::MultipleSolutions));

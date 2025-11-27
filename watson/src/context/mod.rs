@@ -4,10 +4,7 @@ use crate::{
     context::arena::{InternedArena, NamedArena, PlainArena, ScopeArena},
     diagnostics::DiagManager,
     parse::{
-        SourceCache,
-        grammar::{BuiltinCats, BuiltinRules, add_builtin_rules, add_parse_rules_for_formal_cat},
-        parse_state::{Category, CategoryId, ParseState, Rule, RuleId},
-        parse_tree::{ParseTree, ParseTreeId},
+        SourceCache, add_formal_cat, grammar::{BuiltinCats, BuiltinRules, add_builtin_rules, add_parse_rules_for_formal_cat}, parse_state::{Category, CategoryId, ParseState, Rule, RuleId}, parse_tree::{ParseTree, ParseTreeId}
     },
     semant::{
         check_proof::{ProofState, ProofStateKey},
@@ -70,8 +67,7 @@ impl<'ctx> Ctx<'ctx> {
             single_name_notations: FxHashMap::default(),
         };
 
-        add_parse_rules_for_formal_cat(sentence_formal_cat, &mut ctx);
-        ctx.parse_state.recompute_initial_atoms();
+        add_formal_cat(sentence_formal_cat, &mut ctx);
 
         ctx
     }

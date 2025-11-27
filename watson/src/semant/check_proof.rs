@@ -29,7 +29,7 @@ pub fn check_proofs<'ctx>(
     _theorems: &[TheoremId<'ctx>],
     _ctx: &mut Ctx<'ctx>,
 ) -> ProofStatuses<'ctx> {
-    todo!()
+    ProofStatuses::new()
 }
 
 // pub fn check_proofs<'ctx>(

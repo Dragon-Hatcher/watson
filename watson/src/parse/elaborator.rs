@@ -445,16 +445,23 @@ fn elaborate_definition<'ctx>(
                 if matching_bindings.is_empty() { continue; }
                 if matching_bindings.len() > 1 { todo!("Error: ambiguous notation binding.")}
 
-                let (binding, hole_names) = &matching_bindings[0];
+                let (binding, holes) = &matching_bindings[0];
+
+                let mut scope = scope.clone();
+                for (i, (hole_cat, hole_name)) in holes.iter().enumerate() {
+                    let binding = NotationBinding::new(ctx.single_name_notations[hole_cat], vec![NotationInstantiationPart::Name(*hole_name)]);
+                    let binding = ctx.arenas.notation_bindings.intern(binding);
+                    let entry = ScopeEntry::new_hole(*hole_cat, i);
+                    scope = scope.child_with(binding, entry);
+                }
 
                 let frag = UnresolvedFrag(frag);
-                let Ok(parse) = parse_fragment(frag, scope, ctx)? else {
+                let Ok(parse) = parse_fragment(frag, &scope, ctx)? else {
                     // TODO: do something with the errors here.
                     continue;
                 };
 
                 solution = Some((*binding, parse));
-                todo!("We need to actually make the new scope above.");
             }
 
             match solution {
@@ -485,12 +492,12 @@ fn elaborate_any_fragment<'ctx>(
 fn elaborate_notation_binding<'ctx>(
     notation_binding: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<CatMap<'ctx, (NotationBindingId<'ctx>, Vec<Ustr>)>> {
+) -> WResult<CatMap<'ctx, (NotationBindingId<'ctx>, Vec<(FormalSyntaxCatId<'ctx>, Ustr)>)>> {
     fn children_to_binding<'ctx>(
         children: &ParseTreeChildren<'ctx>,
         pattern: NotationPatternId<'ctx>,
         ctx: &mut Ctx<'ctx>,
-    ) -> (NotationBindingId<'ctx>, Vec<Ustr>) {
+    ) -> (NotationBindingId<'ctx>, Vec<(FormalSyntaxCatId<'ctx>, Ustr)>) {
         let mut instantiations = Vec::new();
         let mut hole_names = Vec::new();
         for (child, part) in children.children().iter().zip(pattern.parts()) {
@@ -499,9 +506,9 @@ fn elaborate_notation_binding<'ctx>(
                     let name = elaborate_name(child.as_node().unwrap(), ctx).unwrap();
                     instantiations.push(NotationInstantiationPart::Name(name));
                 }
-                NotationPatternPart::Cat(_) => {
+                NotationPatternPart::Cat(cat) => {
                     let name = elaborate_name(child.as_node().unwrap(), ctx).unwrap();
-                    hole_names.push(name);
+                    hole_names.push((*cat, name));
                 }
                 _ => {}
             }
@@ -530,7 +537,7 @@ fn elaborate_notation_binding_with_cat<'ctx>(
     notation_binding: ParseTreeId<'ctx>,
     cat: FormalSyntaxCatId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<(NotationBindingId<'ctx>, Vec<Ustr>)> {
+) -> WResult<(NotationBindingId<'ctx>, Vec<(FormalSyntaxCatId<'ctx>, Ustr)>)> {
     let by_cat = elaborate_notation_binding(notation_binding, ctx)?;
     let solutions = by_cat.get(cat);
 
@@ -752,8 +759,8 @@ fn elaborate_template_bindings<'ctx>(
             },
             template_bindings_many ::= [binding, rest] => {
                 let binding = binding.as_node().unwrap();
-                let (binding, names) = elaborate_notation_binding_with_cat(binding, cat, ctx)?;
-                let template = Template::new(cat, binding, names);
+                let (binding, holes) = elaborate_notation_binding_with_cat(binding, cat, ctx)?;
+                let template = Template::new(cat, binding, holes);
 
                 binding_list.push(template);
                 bindings = rest.as_node().unwrap();

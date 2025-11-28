@@ -130,7 +130,7 @@ impl<'ctx> PresTree<'ctx> {
         self.pres
     }
 
-    pub fn expanded(&self) -> Option<PresTreeId<'ctx>> {
+    pub fn _expanded(&self) -> Option<PresTreeId<'ctx>> {
         self.expanded
     }
 

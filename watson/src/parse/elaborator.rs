@@ -12,7 +12,6 @@ use crate::{
             CatMap, FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxPat, FormalSyntaxPatPart,
             FormalSyntaxRule, FormalSyntaxRuleId,
         },
-        fragment::{FragHead, Fragment, FragmentId},
         notation::{
             NotationBinding, NotationBindingId, NotationInstantiationPart, NotationPattern,
             NotationPatternId, NotationPatternPart,
@@ -63,7 +62,6 @@ pub enum ElaborateAction<'ctx> {
     NewNotation(NotationPatternId<'ctx>),
     NewDefinition(Scope<'ctx>),
     NewTheorem(TheoremId<'ctx>),
-    None,
 }
 
 pub fn elaborate_command<'ctx>(

@@ -119,7 +119,6 @@ fn parse_source<'ctx>(
                 println!("{}", _debug_theorem(new_theorem));
                 theorems.push(new_theorem);
             }
-            ElaborateAction::None => {}
         }
     } else {
         // This line doesn't start a command so we can skip to the next line.

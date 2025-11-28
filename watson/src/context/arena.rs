@@ -159,7 +159,7 @@ impl<'ctx> ScopeArena<'ctx> {
         id
     }
 
-    pub fn get(&self, id: ScopeId) -> Scope<'ctx> {
+    pub fn _get(&self, id: ScopeId) -> Scope<'ctx> {
         self.scopes[id.0].clone()
     }
 }

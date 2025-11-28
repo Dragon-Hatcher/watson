@@ -10,7 +10,6 @@ use crate::{
         parse_tree::{ParseTree, ParseTreeId},
     },
     semant::{
-        check_proof::{ProofState, ProofStateKey},
         formal_syntax::{FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxRule, FormalSyntaxRuleId},
         fragment::{Fragment, FragmentId},
         notation::{NotationBinding, NotationBindingId, NotationPattern, NotationPatternId},
@@ -35,7 +34,6 @@ pub struct Ctx<'ctx> {
     /// Source code cache for storing and retrieving the text of source files.
     pub sources: SourceCache,
 
-    pub sentence_formal_cat: FormalSyntaxCatId<'ctx>,
     pub builtin_cats: BuiltinCats<'ctx>,
     pub builtin_rules: BuiltinRules<'ctx>,
     pub single_name_notations: FxHashMap<FormalSyntaxCatId<'ctx>, NotationPatternId<'ctx>>,
@@ -64,7 +62,6 @@ impl<'ctx> Ctx<'ctx> {
             parse_state,
             diags: DiagManager::new(),
             sources,
-            sentence_formal_cat,
             builtin_cats,
             builtin_rules,
             single_name_notations: FxHashMap::default(),
@@ -88,7 +85,6 @@ pub struct Arenas<'ctx> {
     pub presentations: InternedArena<Pres<'ctx>, PresId<'ctx>>,
     pub presentation_trees: InternedArena<PresTree<'ctx>, PresTreeId<'ctx>>,
     pub theorem_stmts: NamedArena<TheoremStatement<'ctx>, TheoremId<'ctx>>,
-    pub proof_states: PlainArena<ProofState<'ctx>, ProofStateKey<'ctx>>,
 }
 
 impl<'ctx> Arenas<'ctx> {
@@ -105,7 +101,6 @@ impl<'ctx> Arenas<'ctx> {
             presentations: InternedArena::new(),
             presentation_trees: InternedArena::new(),
             theorem_stmts: NamedArena::new(),
-            proof_states: PlainArena::new(),
         }
     }
 }

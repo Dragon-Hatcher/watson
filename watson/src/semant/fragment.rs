@@ -94,7 +94,7 @@ impl<'ctx> FragRuleApplication<'ctx> {
         }
     }
 
-    pub fn rule(&self) -> FormalSyntaxRuleId<'ctx> {
+    pub fn _rule(&self) -> FormalSyntaxRuleId<'ctx> {
         self.rule
     }
 
@@ -118,7 +118,7 @@ pub fn _debug_fragment<'ctx>(frag: FragmentId<'ctx>) -> String {
             out.push('(');
 
             let mut child_idx = 0;
-            for (i, part) in rule.rule().pattern().parts().iter().enumerate() {
+            for (i, part) in rule._rule().pattern().parts().iter().enumerate() {
                 if i != 0 {
                     out.push(' ');
                 }

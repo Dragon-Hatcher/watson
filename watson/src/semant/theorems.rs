@@ -4,7 +4,7 @@ use crate::{
     parse::parse_tree::ParseTreeId,
     semant::{
         formal_syntax::FormalSyntaxCatId,
-        fragment::{_debug_fact, _debug_fragment, FragHead, Fragment, FragmentId},
+        fragment::{FragHead, Fragment, FragmentId},
         notation::{_debug_binding, NotationBindingId},
         presentation::{Pres, PresFrag, PresHead, PresId, PresTree, PresTreeId},
         scope::{Scope, ScopeEntry},
@@ -59,7 +59,7 @@ impl<'ctx> TheoremStatement<'ctx> {
         self.conclusion
     }
 
-    pub fn proof(&self) -> &UnresolvedProof<'ctx> {
+    pub fn _proof(&self) -> &UnresolvedProof<'ctx> {
         &self.proof
     }
 }

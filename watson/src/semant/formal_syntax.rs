@@ -111,5 +111,4 @@ impl<'ctx, T> CatMap<'ctx, T> {
     pub fn get(&self, cat: FormalSyntaxCatId<'ctx>) -> &[T] {
         self.mapping.get(&cat).map(|s| &s[..]).unwrap_or(&[])
     }
-
 }

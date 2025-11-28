@@ -142,7 +142,7 @@ macro_rules! generate_arena_handle {
 }
 
 pub struct ScopeArena<'ctx> {
-    scopes: Vec<Scope<'ctx>>
+    scopes: Vec<Scope<'ctx>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

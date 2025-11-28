@@ -23,7 +23,11 @@
 
 use std::marker::PhantomData;
 
-use crate::{context::Ctx, generate_arena_handle, semant::{proof_status::ProofStatuses, theorems::TheoremId}};
+use crate::{
+    context::Ctx,
+    generate_arena_handle,
+    semant::{proof_status::ProofStatuses, theorems::TheoremId},
+};
 
 pub fn check_proofs<'ctx>(
     _theorems: &[TheoremId<'ctx>],
@@ -51,12 +55,12 @@ pub fn check_proofs<'ctx>(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProofState<'ctx> {
     data: PhantomData<&'ctx ()>,
-//     knowns: FxHashMap<Fact<'ctx>, FactPresentation<'ctx>>,
-//     goal: (FragmentId<'ctx>, PresentationTreeId<'ctx>),
-//     templates: FxHashMap<Ustr, Template<'ctx>>,
-//     shorthands: FxHashMap<Ustr, (FragmentId<'ctx>, PresentationTreeId<'ctx>)>,
+    //     knowns: FxHashMap<Fact<'ctx>, FactPresentation<'ctx>>,
+    //     goal: (FragmentId<'ctx>, PresentationTreeId<'ctx>),
+    //     templates: FxHashMap<Ustr, Template<'ctx>>,
+    //     shorthands: FxHashMap<Ustr, (FragmentId<'ctx>, PresentationTreeId<'ctx>)>,
 
-//     reasoning_chain: Vec<ReasoningStep<'ctx>>,
+    //     reasoning_chain: Vec<ReasoningStep<'ctx>>,
 }
 
 // #[derive(Debug, Clone, Copy, PartialEq, Eq)]

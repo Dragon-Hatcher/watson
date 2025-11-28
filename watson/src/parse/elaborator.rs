@@ -2,7 +2,7 @@ use crate::{
     context::Ctx,
     diagnostics::WResult,
     parse::{
-        SourceId, Span,
+        SourceId,
         parse_state::{Associativity, ParseRuleSource, Precedence, SyntaxCategorySource},
         parse_tree::{ParseTreeChildren, ParseTreeId},
         source_cache::{SourceDecl, source_id_to_path},
@@ -18,12 +18,15 @@ use crate::{
             NotationPatternId, NotationPatternPart,
         },
         parse_fragment::{UnresolvedFact, UnresolvedFrag, parse_fragment},
+        presentation::PresFrag,
         scope::{Scope, ScopeEntry},
-        theorems::{Fact, Template, TheoremId, TheoremStatement, UnresolvedProof},
+        theorems::{
+            Fact, Template, TheoremId, TheoremStatement, UnresolvedProof, add_templates_to_scope,
+        },
     },
     strings,
 };
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 use ustr::Ustr;
 
 macro_rules! failed_to_match_builtin {
@@ -492,12 +495,23 @@ fn elaborate_any_fragment<'ctx>(
 fn elaborate_notation_binding<'ctx>(
     notation_binding: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<CatMap<'ctx, (NotationBindingId<'ctx>, Vec<(FormalSyntaxCatId<'ctx>, Ustr)>)>> {
+) -> WResult<
+    CatMap<
+        'ctx,
+        (
+            NotationBindingId<'ctx>,
+            Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
+        ),
+    >,
+> {
     fn children_to_binding<'ctx>(
         children: &ParseTreeChildren<'ctx>,
         pattern: NotationPatternId<'ctx>,
         ctx: &mut Ctx<'ctx>,
-    ) -> (NotationBindingId<'ctx>, Vec<(FormalSyntaxCatId<'ctx>, Ustr)>) {
+    ) -> (
+        NotationBindingId<'ctx>,
+        Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
+    ) {
         let mut instantiations = Vec::new();
         let mut hole_names = Vec::new();
         for (child, part) in children.children().iter().zip(pattern.parts()) {
@@ -537,7 +551,10 @@ fn elaborate_notation_binding_with_cat<'ctx>(
     notation_binding: ParseTreeId<'ctx>,
     cat: FormalSyntaxCatId<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<(NotationBindingId<'ctx>, Vec<(FormalSyntaxCatId<'ctx>, Ustr)>)> {
+) -> WResult<(
+    NotationBindingId<'ctx>,
+    Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
+)> {
     let by_cat = elaborate_notation_binding(notation_binding, ctx)?;
     let solutions = by_cat.get(cat);
 
@@ -552,44 +569,12 @@ fn elaborate_notation_binding_with_cat<'ctx>(
     Ok(solutions[0].clone())
 }
 
-fn templates_to_scope<'ctx>(
-    templates: &[Template<'ctx>],
-    parent_scope: &Scope<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> Scope<'ctx> {
-    let mut my_scope = parent_scope.clone();
-
-    for (i, template) in templates.iter().enumerate() {
-        let args = template
-            .binding()
-            .pattern()
-            .parts()
-            .iter()
-            .filter_map(|part| match part {
-                NotationPatternPart::Cat(cat) => Some(*cat),
-                _ => None,
-            })
-            .enumerate()
-            .map(|(i, cat)| {
-                let frag = Fragment::new(cat, FragHead::Hole(i), Vec::new());
-                ctx.arenas.fragments.intern(frag)
-            })
-            .collect();
-        let frag = Fragment::new(template.cat(), FragHead::TemplateRef(i), args);
-        let frag = ctx.arenas.fragments.intern(frag);
-        let entry = ScopeEntry::new(frag);
-        my_scope = my_scope.child_with(template.binding(), entry)
-    }
-
-    my_scope
-}
-
 fn parse_hypotheses_and_conclusion<'ctx>(
     un_hypotheses: Vec<UnresolvedFact<'ctx>>,
     un_conclusion: UnresolvedFrag<'ctx>,
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<(Vec<Fact<'ctx>>, FragmentId<'ctx>)> {
+) -> WResult<(Vec<Fact<'ctx>>, PresFrag<'ctx>)> {
     let mut hypotheses = Vec::new();
     for un_hypothesis in un_hypotheses {
         let assumption = match un_hypothesis.assumption {
@@ -631,7 +616,7 @@ fn elaborate_axiom<'ctx>(
             let name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
             let templates = elaborate_templates(templates.as_node().unwrap(), ctx)?;
 
-            let my_scope = templates_to_scope(&templates, scope, ctx);
+            let my_scope = add_templates_to_scope(&templates, scope, ctx);
 
             let hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
             let conclusion = UnresolvedFrag(conclusion.as_node().unwrap());
@@ -666,7 +651,7 @@ fn elaborate_theorem<'ctx>(
             let name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
             let templates = elaborate_templates(templates.as_node().unwrap(), ctx)?;
 
-            let my_scope = templates_to_scope(&templates, scope, ctx);
+            let my_scope = add_templates_to_scope(&templates, scope, ctx);
 
             let hypotheses = elaborate_hypotheses(hypotheses.as_node().unwrap(), ctx)?;
             let conclusion = UnresolvedFrag(conclusion.as_node().unwrap());

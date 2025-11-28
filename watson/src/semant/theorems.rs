@@ -1,13 +1,13 @@
 use crate::{
-    context::arena::ScopeId,
+    context::{Ctx, arena::ScopeId},
     generate_arena_handle,
     parse::parse_tree::ParseTreeId,
     semant::{
         formal_syntax::FormalSyntaxCatId,
-        fragment::{_debug_fact, _debug_fragment, FragmentId},
+        fragment::{_debug_fact, _debug_fragment, FragHead, Fragment, FragmentId},
         notation::{_debug_binding, NotationBindingId},
-        presentation::{FactPresentation, PresentationTreeId},
-        scope::Scope,
+        presentation::{Pres, PresFrag, PresHead, PresId, PresTree, PresTreeId},
+        scope::{Scope, ScopeEntry},
     },
 };
 use ustr::Ustr;
@@ -19,7 +19,7 @@ pub struct TheoremStatement<'ctx> {
     name: Ustr,
     templates: Vec<Template<'ctx>>,
     hypotheses: Vec<Fact<'ctx>>,
-    conclusion: FragmentId<'ctx>,
+    conclusion: PresFrag<'ctx>,
     scope: ScopeId,
     proof: UnresolvedProof<'ctx>,
 }
@@ -29,7 +29,7 @@ impl<'ctx> TheoremStatement<'ctx> {
         name: Ustr,
         templates: Vec<Template<'ctx>>,
         hypotheses: Vec<Fact<'ctx>>,
-        conclusion: FragmentId<'ctx>,
+        conclusion: PresFrag<'ctx>,
         scope: ScopeId,
         proof: UnresolvedProof<'ctx>,
     ) -> Self {
@@ -55,7 +55,7 @@ impl<'ctx> TheoremStatement<'ctx> {
         &self.hypotheses
     }
 
-    pub fn conclusion(&self) -> FragmentId<'ctx> {
+    pub fn conclusion(&self) -> PresFrag<'ctx> {
         self.conclusion
     }
 
@@ -97,6 +97,61 @@ impl<'ctx> Template<'ctx> {
     }
 }
 
+pub fn add_templates_to_scope<'ctx>(
+    templates: &[Template<'ctx>],
+    parent_scope: &Scope<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> Scope<'ctx> {
+    fn template_to_frag<'ctx>(
+        template: &Template<'ctx>,
+        idx: usize,
+        ctx: &mut Ctx<'ctx>,
+    ) -> FragmentId<'ctx> {
+        let args = template
+            .holes()
+            .iter()
+            .enumerate()
+            .map(|(i, (cat, _name))| {
+                let frag = Fragment::new(*cat, FragHead::Hole(i), Vec::new());
+                ctx.arenas.fragments.intern(frag)
+            })
+            .collect();
+        let frag = Fragment::new(template.cat(), FragHead::TemplateRef(idx), args);
+        ctx.arenas.fragments.intern(frag)
+    }
+
+    fn template_to_pres<'ctx>(template: &Template<'ctx>, ctx: &mut Ctx<'ctx>) -> PresTreeId<'ctx> {
+        let (children, trees): (Vec<PresId>, Vec<PresTreeId>) = template
+            .holes()
+            .iter()
+            .enumerate()
+            .map(|(i, _)| {
+                let pres = Pres::new(PresHead::Hole(i), Vec::new());
+                let pres = ctx.arenas.presentations.intern(pres);
+                let tree = PresTree::new(pres, Vec::new());
+                let tree = ctx.arenas.presentation_trees.intern(tree);
+                (pres, tree)
+            })
+            .unzip();
+
+        let parent_pres = Pres::new(PresHead::Notation(template.binding), children);
+        let parent_pres = ctx.arenas.presentations.intern(parent_pres);
+        let parent_tree = PresTree::new(parent_pres, trees);
+        ctx.arenas.presentation_trees.intern(parent_tree)
+    }
+
+    let mut my_scope = parent_scope.clone();
+
+    for (i, template) in templates.iter().enumerate() {
+        let frag = template_to_frag(template, i, ctx);
+        let pres = template_to_pres(template, ctx);
+        let entry = ScopeEntry::new(PresFrag(frag, pres));
+        my_scope = my_scope.child_with(template.binding(), entry)
+    }
+
+    my_scope
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum UnresolvedProof<'ctx> {
     Axiom,
@@ -105,24 +160,31 @@ pub enum UnresolvedProof<'ctx> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Fact<'ctx> {
-    assumption: Option<FragmentId<'ctx>>,
-    conclusion: FragmentId<'ctx>,
+    assumption: Option<PresFrag<'ctx>>,
+    conclusion: PresFrag<'ctx>,
 }
 
 impl<'ctx> Fact<'ctx> {
-    pub fn new(assumption: Option<FragmentId<'ctx>>, conclusion: FragmentId<'ctx>) -> Self {
+    pub fn new(assumption: Option<PresFrag<'ctx>>, conclusion: PresFrag<'ctx>) -> Self {
         Self {
             assumption,
             conclusion,
         }
     }
 
-    pub fn assumption(&self) -> Option<FragmentId<'ctx>> {
+    pub fn assumption(&self) -> Option<PresFrag<'ctx>> {
         self.assumption
     }
 
-    pub fn conclusion(&self) -> FragmentId<'ctx> {
+    pub fn conclusion(&self) -> PresFrag<'ctx> {
         self.conclusion
+    }
+
+    pub fn print(&self) -> String {
+        match self.assumption() {
+            Some(assumption) => format!("{} |- {}", assumption.print(), self.conclusion().print()),
+            None => self.conclusion().print(),
+        }
     }
 }
 
@@ -137,9 +199,9 @@ pub fn _debug_theorem<'ctx>(theorem: TheoremId<'ctx>) -> String {
         ));
     }
     for hypothesis in theorem.hypotheses() {
-        out.push_str(&format!("  ({})\n", _debug_fact(hypothesis)));
+        out.push_str(&format!("  ({})\n", hypothesis.print()));
     }
-    out.push_str(&format!("  |- {}\n", _debug_fragment(theorem.conclusion())));
+    out.push_str(&format!("  |- {}\n", theorem.conclusion().print()));
 
     out
 }

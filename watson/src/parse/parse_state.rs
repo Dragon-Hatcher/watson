@@ -1,6 +1,6 @@
 use crate::{
     generate_arena_handle,
-    semant::{formal_syntax::{FormalSyntaxCatId, FormalSyntaxRuleId}, notation::NotationPatternId},
+    semant::{formal_syntax::FormalSyntaxCatId, notation::NotationPatternId},
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use ustr::Ustr;

@@ -1,4 +1,6 @@
-use crate::semant::{formal_syntax::FormalSyntaxCatId, fragment::FragmentId, notation::NotationBindingId};
+use crate::semant::{
+    formal_syntax::FormalSyntaxCatId, notation::NotationBindingId, presentation::PresFrag,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Scope<'ctx> {
@@ -14,7 +16,9 @@ impl<'ctx> Scope<'ctx> {
     }
 
     pub fn lookup(&self, binding: NotationBindingId<'ctx>) -> Option<&ScopeEntry<'ctx>> {
-        self.bindings.get(&binding).map(|v| v.as_slice().last().unwrap())
+        self.bindings
+            .get(&binding)
+            .map(|v| v.as_slice().last().unwrap())
     }
 
     pub fn child_with(&self, binding: NotationBindingId<'ctx>, entry: ScopeEntry<'ctx>) -> Self {
@@ -39,21 +43,29 @@ pub struct ScopeEntry<'ctx> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScopeReplacement<'ctx> {
-    Frag(FragmentId<'ctx>),
+    Frag(PresFrag<'ctx>),
     Hole(FormalSyntaxCatId<'ctx>, usize),
 }
 
 impl<'ctx> ScopeEntry<'ctx> {
-    pub fn new(frag: FragmentId<'ctx>) -> Self {
+    pub fn new(frag: PresFrag<'ctx>) -> Self {
         Self::new_with_depth(frag, 0)
     }
 
     pub fn new_hole(cat: FormalSyntaxCatId<'ctx>, idx: usize) -> Self {
-        Self { replacement: ScopeReplacement::Hole(cat, idx), binding_depth: 0, source: () }
+        Self {
+            replacement: ScopeReplacement::Hole(cat, idx),
+            binding_depth: 0,
+            source: (),
+        }
     }
 
-    pub fn new_with_depth(frag: FragmentId<'ctx>, binding_depth: usize) -> Self {
-        Self { replacement: ScopeReplacement::Frag(frag), binding_depth, source: () }
+    pub fn new_with_depth(frag: PresFrag<'ctx>, binding_depth: usize) -> Self {
+        Self {
+            replacement: ScopeReplacement::Frag(frag),
+            binding_depth,
+            source: (),
+        }
     }
 
     pub fn replacement(&self) -> ScopeReplacement<'ctx> {

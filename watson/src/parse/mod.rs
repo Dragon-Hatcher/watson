@@ -20,7 +20,10 @@ use crate::{
         },
     },
     semant::{
-        formal_syntax::FormalSyntaxCatId, notation::{NotationBinding, NotationPattern, NotationPatternPart}, scope::Scope, theorems::{_debug_theorem, TheoremId}
+        formal_syntax::FormalSyntaxCatId,
+        notation::{NotationPattern, NotationPatternPart},
+        scope::Scope,
+        theorems::{_debug_theorem, TheoremId},
     },
 };
 

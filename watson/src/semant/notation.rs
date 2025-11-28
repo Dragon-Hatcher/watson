@@ -1,5 +1,3 @@
-use std::ops::Not;
-
 use crate::{
     generate_arena_handle,
     parse::parse_state::{Associativity, Precedence},
@@ -116,7 +114,7 @@ pub fn _debug_binding<'ctx>(binding: NotationBindingId<'ctx>) -> String {
                 match &binding.instantiations()[names] {
                     NotationInstantiationPart::Name(name) => {
                         out.push_str(name.as_str());
-                    },
+                    }
                 }
                 names += 1;
             }

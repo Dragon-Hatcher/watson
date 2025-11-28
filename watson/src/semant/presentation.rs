@@ -1,233 +1,234 @@
-use crate::generate_arena_handle;
-use ustr::Ustr;
+use rustc_hash::FxHashMap;
+
+use crate::{
+    context::Ctx,
+    generate_arena_handle,
+    semant::{
+        fragment::FragmentId,
+        notation::{NotationBindingId, NotationInstantiationPart, NotationPatternPart},
+    },
+};
+
+generate_arena_handle! { PresId<'ctx> => Pres<'ctx> }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PresentationTree<'ctx> {
-    pres: PresentationId<'ctx>,
-    data: PresTreeData<'ctx>,
+pub struct Pres<'ctx> {
+    head: PresHead<'ctx>,
+    children: Vec<PresId<'ctx>>,
+    has_hole: bool,
 }
 
-impl<'ctx> PresentationTree<'ctx> {
-    pub fn new(pres: PresentationId<'ctx>, data: PresTreeData<'ctx>) -> Self {
-        Self { pres, data }
-    }
-
-    pub fn render_str(&self) -> String {
-        self.pres.render_str(self.data())
-    }
-
-    pub fn pres(&self) -> PresentationId<'ctx> {
-        self.pres
-    }
-
-    pub fn data(&self) -> &PresTreeData<'ctx> {
-        &self.data
-    }
-}
-
-generate_arena_handle! { PresentationTreeId<'ctx> => PresentationTree<'ctx> }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct FactPresentation<'ctx> {
-    assumption: Option<PresentationTreeId<'ctx>>,
-    conclusion: PresentationTreeId<'ctx>,
-}
-
-impl<'ctx> FactPresentation<'ctx> {
-    pub fn render_str(&self) -> String {
-        if let Some(assumption) = self.assumption {
-            format!(
-                "assume {} |- {}",
-                assumption.render_str(),
-                self.conclusion.render_str()
-            )
-        } else {
-            self.conclusion.render_str()
-        }
-    }
-
-    pub fn assumption(&self) -> Option<PresentationTreeId<'ctx>> {
-        self.assumption
-    }
-
-    pub fn conclusion(&self) -> PresentationTreeId<'ctx> {
-        self.conclusion
-    }
-}
-
-impl<'ctx> FactPresentation<'ctx> {
-    pub fn new(
-        assumption: Option<PresentationTreeId<'ctx>>,
-        conclusion: PresentationTreeId<'ctx>,
-    ) -> Self {
+impl<'ctx> Pres<'ctx> {
+    pub fn new(head: PresHead<'ctx>, children: Vec<PresId<'ctx>>) -> Self {
+        let has_hole = matches!(head, PresHead::Hole(_)) || children.iter().any(|c| c.has_hole());
         Self {
-            assumption,
-            conclusion,
+            head,
+            children,
+            has_hole,
         }
     }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PresTreeData<'ctx> {
-    Rule(PresTreeRuleApp<'ctx>),
-    Template(PresTreeTemplate<'ctx>),
-    Hole,
-}
-
-impl<'ctx> PresTreeData<'ctx> {
-    pub fn child_on_path(&self, path: &[usize]) -> PresentationTreeId<'ctx> {
-        let next = match path {
-            [idx] | [idx, ..] => match self {
-                PresTreeData::Rule(rule) => {
-                    let child = rule.children()[*idx];
-                    let PresTreeChild::Fragment(tree) = child else {
-                        unreachable!();
-                    };
-                    tree
-                }
-                PresTreeData::Template(temp) => temp.args()[*idx],
-                PresTreeData::Hole => unreachable!(),
-            },
-            _ => unreachable!(),
-        };
-
-        match path {
-            [_one] => next,
-            [_one, rest @ ..] => next.data().child_on_path(rest),
-            _ => unreachable!(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PresTreeRuleApp<'ctx> {
-    children: Vec<PresTreeChild<'ctx>>,
-}
-
-impl<'ctx> PresTreeRuleApp<'ctx> {
-    pub fn new(children: Vec<PresTreeChild<'ctx>>) -> Self {
-        Self { children }
+    pub fn head(&self) -> PresHead<'ctx> {
+        self.head
     }
 
-    pub fn children(&self) -> &[PresTreeChild<'ctx>] {
+    pub fn children(&self) -> &[PresId<'ctx>] {
         &self.children
     }
-}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PresTreeTemplate<'ctx> {
-    args: Vec<PresentationTreeId<'ctx>>,
-}
-
-impl<'ctx> PresTreeTemplate<'ctx> {
-    pub fn new(args: Vec<PresentationTreeId<'ctx>>) -> Self {
-        Self { args }
+    pub fn has_hole(&self) -> bool {
+        self.has_hole
     }
 
-    pub fn args(&self) -> &[PresentationTreeId<'ctx>] {
-        &self.args
+    pub fn print(&self) -> String {
+        match self.head() {
+            PresHead::Notation(binding) => {
+                let mut out = String::new();
+                // if binding.pattern().parts().len() > 1 {
+                //     out.push('(');
+                // }
+
+                let mut instantiations = binding.instantiations().iter();
+                let mut children = self.children().iter();
+                for (i, part) in binding.pattern().parts().iter().enumerate() {
+                    if i != 0 {
+                        out.push(' ');
+                    }
+
+                    match part {
+                        NotationPatternPart::Lit(lit) => {
+                            out.push_str(lit);
+                        }
+                        NotationPatternPart::Kw(kw) => {
+                            out.push_str(kw);
+                        }
+                        NotationPatternPart::Name => match instantiations.next().unwrap() {
+                            NotationInstantiationPart::Name(name) => {
+                                out.push_str(name);
+                            }
+                        },
+                        NotationPatternPart::Cat(_cat) => {
+                            out.push_str(&children.next().unwrap().print())
+                        }
+                        NotationPatternPart::Binding(_binding) => todo!(),
+                    }
+                }
+
+                // if binding.pattern().parts().len() > 1 {
+                //     out.push(')');
+                // }
+                out
+            }
+            PresHead::Hole(idx) => format!("_{idx}"),
+        }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PresTreeChild<'ctx> {
-    Fragment(PresentationTreeId<'ctx>),
-    Variable,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Presentation<'ctx> {
-    Rule(PresRuleApplication<'ctx>),
-    Template(PresTemplate<'ctx>),
+pub enum PresHead<'ctx> {
+    Notation(NotationBindingId<'ctx>),
     Hole(usize),
 }
 
-impl<'ctx> Presentation<'ctx> {
-    pub fn render_str(&self, tree: &PresTreeData) -> String {
-        match self {
-            Presentation::Rule(rule_app) => rule_app.render_str(tree),
-            Presentation::Template(temp) => temp.render_str(tree),
-            Presentation::Hole(idx) => format!("_{idx}"),
+generate_arena_handle! { PresTreeId<'ctx> => PresTree<'ctx> }
+
+/// Provides the presentation for each node of a formal syntax tree.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PresTree<'ctx> {
+    pres: PresId<'ctx>,
+    expanded: Option<PresTreeId<'ctx>>,
+    children: Vec<PresTreeId<'ctx>>,
+    has_hole: bool,
+}
+
+impl<'ctx> PresTree<'ctx> {
+    pub fn new_expanded(
+        pres: PresId<'ctx>,
+        expanded: PresTreeId<'ctx>,
+        children: Vec<PresTreeId<'ctx>>,
+    ) -> Self {
+        let has_hole = pres.has_hole() || children.iter().any(|c| c.has_hole);
+        Self {
+            pres,
+            expanded: Some(expanded),
+            children,
+            has_hole,
         }
     }
-}
 
-generate_arena_handle! { PresentationId<'ctx> => Presentation<'ctx> }
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PresRuleApplication<'ctx> {
-    pub parts: Vec<PresPart<'ctx>>,
-}
-
-impl<'ctx> PresRuleApplication<'ctx> {
-    pub fn new(parts: Vec<PresPart<'ctx>>) -> Self {
-        Self { parts }
-    }
-
-    pub fn _parts(&self) -> &[PresPart<'ctx>] {
-        &self.parts
-    }
-
-    pub fn render_str(&self, tree: &PresTreeData) -> String {
-        let mut str = String::new();
-        for (i, part) in self.parts.iter().enumerate() {
-            if i != 0 {
-                str += " ";
-            }
-
-            match part {
-                PresPart::Str(lit) => str += lit,
-                PresPart::Binding(name) | PresPart::Variable(name) => str += name,
-                PresPart::Subpart(path) => {
-                    let target = tree.child_on_path(path);
-                    str += &target.render_str();
-                }
-                PresPart::Chain(pres) => str += &pres.render_str(tree),
-            }
+    pub fn new(pres: PresId<'ctx>, children: Vec<PresTreeId<'ctx>>) -> Self {
+        let has_hole = pres.has_hole() || children.iter().any(|c| c.has_hole);
+        Self {
+            pres,
+            expanded: None,
+            children,
+            has_hole,
         }
-        str
+    }
+
+    pub fn pres(&self) -> PresId<'ctx> {
+        self.pres
+    }
+
+    pub fn expanded(&self) -> Option<PresTreeId<'ctx>> {
+        self.expanded
+    }
+
+    pub fn children(&self) -> &[PresTreeId<'ctx>] {
+        &self.children
+    }
+
+    pub fn has_hole(&self) -> bool {
+        self.has_hole
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PresPart<'ctx> {
-    Str(Ustr),
-    Binding(Ustr),
-    Variable(Ustr),
-    Subpart(Vec<usize>),
-    Chain(Box<Presentation<'ctx>>),
+pub fn abstract_pres_tree_root<'ctx>(
+    tree: PresTreeId<'ctx>,
+    new_pres: PresId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> PresTreeId<'ctx> {
+    let new_tree = PresTree::new_expanded(new_pres, tree, tree.children.clone());
+    ctx.arenas.presentation_trees.intern(new_tree)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PresTemplate<'ctx> {
-    name: Ustr,
-    args: Vec<PresentationId<'ctx>>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PresFrag<'ctx>(pub FragmentId<'ctx>, pub PresTreeId<'ctx>);
+
+impl<'ctx> PresFrag<'ctx> {
+    pub fn frag(&self) -> FragmentId<'ctx> {
+        self.0
+    }
+
+    pub fn pres(&self) -> PresTreeId<'ctx> {
+        self.1
+    }
+
+    pub fn print(&self) -> String {
+        self.pres().pres().print()
+    }
 }
 
-impl<'ctx> PresTemplate<'ctx> {
-    pub fn new(name: Ustr, args: Vec<PresentationId<'ctx>>) -> Self {
-        Self { name, args }
-    }
-
-    pub fn _name(&self) -> Ustr {
-        self.name
-    }
-
-    pub fn render_str(&self, tree: &PresTreeData) -> String {
-        let mut str = String::new();
-        str += &self.name;
-
-        if !self.args.is_empty() {
-            str += "(";
-            for (i, arg) in self.args.iter().enumerate() {
-                if i != 0 {
-                    str += ", "
-                }
-                str += &arg.render_str(tree);
-            }
-            str += ")"
+pub fn instantiate_pres_tree<'ctx>(
+    tree: PresTreeId<'ctx>,
+    children: &[PresFrag<'ctx>],
+    ctx: &mut Ctx<'ctx>,
+) -> PresTreeId<'ctx> {
+    fn instantiate_in_pres<'ctx>(
+        pres: PresId<'ctx>,
+        children: &[PresFrag<'ctx>],
+        cache: &mut FxHashMap<PresId<'ctx>, PresId<'ctx>>,
+        ctx: &mut Ctx<'ctx>,
+    ) -> PresId<'ctx> {
+        if !pres.has_hole() {
+            return pres;
         }
 
-        str
+        if let Some(cached) = cache.get(&pres) {
+            return *cached;
+        }
+
+        let solution = match pres.head {
+            PresHead::Notation(binding) => {
+                let new_children = pres
+                    .children()
+                    .iter()
+                    .map(|&child| instantiate_in_pres(child, children, cache, ctx))
+                    .collect();
+                let new_pres = Pres::new(PresHead::Notation(binding), new_children);
+                ctx.arenas.presentations.intern(new_pres)
+            }
+            PresHead::Hole(idx) => children[idx].pres().pres(),
+        };
+        cache.insert(pres, solution);
+
+        solution
     }
+
+    fn inner<'ctx>(
+        tree: PresTreeId<'ctx>,
+        children: &[PresFrag<'ctx>],
+        cache: &mut FxHashMap<PresId<'ctx>, PresId<'ctx>>,
+        ctx: &mut Ctx<'ctx>,
+    ) -> PresTreeId<'ctx> {
+        if !tree.has_hole() {
+            return tree;
+        }
+
+        match tree.pres().head() {
+            PresHead::Notation(_) => {
+                let new_pres = instantiate_in_pres(tree.pres(), children, cache, ctx);
+                let new_children = tree
+                    .children()
+                    .iter()
+                    .map(|&c| inner(c, children, cache, ctx))
+                    .collect();
+                let new_tree = PresTree::new(new_pres, new_children);
+                ctx.arenas.presentation_trees.intern(new_tree)
+            }
+            PresHead::Hole(idx) => children[idx].pres(),
+        }
+    }
+
+    inner(tree, children, &mut FxHashMap::default(), ctx)
 }

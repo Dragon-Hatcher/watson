@@ -104,9 +104,9 @@ impl<'ctx> FragRuleApplication<'ctx> {
 }
 
 pub fn _debug_fact<'ctx>(fact: &Fact<'ctx>) -> String {
-    let conclusion = _debug_fragment(fact.conclusion());
+    let conclusion = _debug_fragment(fact.conclusion().frag());
     match fact.assumption() {
-        Some(assumption) => format!("{} |- {}", _debug_fragment(assumption), conclusion),
+        Some(assumption) => format!("{} |- {}", _debug_fragment(assumption.frag()), conclusion),
         None => conclusion,
     }
 }
@@ -127,7 +127,7 @@ pub fn _debug_fragment<'ctx>(frag: FragmentId<'ctx>) -> String {
                         let child = &frag.children()[child_idx];
                         out.push_str(&_debug_fragment(*child));
                         child_idx += 1;
-                    },
+                    }
                     FormalSyntaxPatPart::Binding(_) => out.push_str("??"),
                     FormalSyntaxPatPart::Lit(str) => out.push_str(str),
                 }

@@ -2,9 +2,8 @@ use crate::context::Ctx;
 use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
-use crate::semant::check_proof::{ProofStateKey};
+use crate::semant::check_proof::ProofStateKey;
 use crate::semant::formal_syntax::FormalSyntaxCatId;
-use crate::semant::presentation::{FactPresentation, PresentationTreeId};
 use crate::semant::theorems::TheoremId;
 use crate::util::plural;
 use annotate_snippets::{Level, Message, Renderer, Snippet};
@@ -360,39 +359,39 @@ impl<'ctx> DiagManager<'ctx> {
         self.add_diag(diag);
     }
 
-    pub fn err_goal_conclusion_mismatch(
-        &mut self,
-        in_proof: impl Into<InProof<'ctx>>,
-        at: Span,
-        conclusion: PresentationTreeId<'ctx>,
-    ) {
-        let in_proof = in_proof.into();
-        // let goal_txt = in_proof.proof_state.goal().1.render_str();
-        let goal_txt = "TODO";
-        let conclusion_txt = conclusion.render_str();
+    // pub fn err_goal_conclusion_mismatch(
+    //     &mut self,
+    //     in_proof: impl Into<InProof<'ctx>>,
+    //     at: Span,
+    //     conclusion: PresentationTreeId<'ctx>,
+    // ) {
+    //     let in_proof = in_proof.into();
+    //     // let goal_txt = in_proof.proof_state.goal().1.render_str();
+    //     let goal_txt = "TODO";
+    //     let conclusion_txt = conclusion.render_str();
 
-        let diag = Diagnostic::new(&format!(
-            "mismatch between goal `{goal_txt}` and conclusion `{conclusion_txt}`"
-        ))
-        .with_error("", at)
-        .in_proof(in_proof);
+    //     let diag = Diagnostic::new(&format!(
+    //         "mismatch between goal `{goal_txt}` and conclusion `{conclusion_txt}`"
+    //     ))
+    //     .with_error("", at)
+    //     .in_proof(in_proof);
 
-        self.add_diag(diag);
-    }
+    //     self.add_diag(diag);
+    // }
 
-    pub fn err_missing_hypothesis(
-        &mut self,
-        in_proof: impl Into<InProof<'ctx>>,
-        at: Span,
-        hyp: FactPresentation<'ctx>,
-    ) {
-        let in_proof = in_proof.into();
-        let hyp_txt = hyp.render_str();
+    // pub fn err_missing_hypothesis(
+    //     &mut self,
+    //     in_proof: impl Into<InProof<'ctx>>,
+    //     at: Span,
+    //     hyp: FactPresentation<'ctx>,
+    // ) {
+    //     let in_proof = in_proof.into();
+    //     let hyp_txt = hyp.render_str();
 
-        let diag = Diagnostic::new(&format!("missing hypothesis `{hyp_txt}`"))
-            .with_error("", at)
-            .in_proof(in_proof);
+    //     let diag = Diagnostic::new(&format!("missing hypothesis `{hyp_txt}`"))
+    //         .with_error("", at)
+    //         .in_proof(in_proof);
 
-        self.add_diag(diag);
-    }
+    //     self.add_diag(diag);
+    // }
 }

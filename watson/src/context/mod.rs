@@ -34,6 +34,7 @@ pub struct Ctx<'ctx> {
     /// Source code cache for storing and retrieving the text of source files.
     pub sources: SourceCache,
 
+    pub sentence_cat: FormalSyntaxCatId<'ctx>,
     pub builtin_cats: BuiltinCats<'ctx>,
     pub builtin_rules: BuiltinRules<'ctx>,
     pub single_name_notations: FxHashMap<FormalSyntaxCatId<'ctx>, NotationPatternId<'ctx>>,
@@ -62,6 +63,7 @@ impl<'ctx> Ctx<'ctx> {
             parse_state,
             diags: DiagManager::new(),
             sources,
+            sentence_cat: sentence_formal_cat,
             builtin_cats,
             builtin_rules,
             single_name_notations: FxHashMap::default(),

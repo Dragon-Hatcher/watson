@@ -2,7 +2,6 @@ use crate::context::Ctx;
 use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
-use crate::semant::check_proof::ProofStateKey;
 use crate::semant::formal_syntax::FormalSyntaxCatId;
 use crate::semant::theorems::TheoremId;
 use crate::util::plural;
@@ -44,17 +43,17 @@ struct Diagnostic<'ctx> {
 
 pub struct InProof<'ctx> {
     theorem: TheoremId<'ctx>,
-    proof_state: ProofStateKey<'ctx>,
+    // proof_state: ProofStateKey<'ctx>,
 }
 
-impl<'ctx> From<(TheoremId<'ctx>, ProofStateKey<'ctx>)> for InProof<'ctx> {
-    fn from(value: (TheoremId<'ctx>, ProofStateKey<'ctx>)) -> Self {
-        Self {
-            theorem: value.0,
-            proof_state: value.1,
-        }
-    }
-}
+// impl<'ctx> From<(TheoremId<'ctx>, ProofStateKey<'ctx>)> for InProof<'ctx> {
+//     fn from(value: (TheoremId<'ctx>, ProofStateKey<'ctx>)) -> Self {
+//         Self {
+//             theorem: value.0,
+//             proof_state: value.1,
+//         }
+//     }
+// }
 
 enum DiagnosticPart {
     Error(&'static str, Span),
@@ -119,47 +118,47 @@ impl<'ctx> Diagnostic<'ctx> {
             msg = msg.snippet(snippet);
         }
 
-        if let Some(in_proof) = &self.in_proof {
-            let title = format!("While checking theorem `{}`", in_proof.theorem.name());
-            let title = Ustr::from(&title);
-            msg = msg.footer(Level::Help.title(title.as_str()));
+        // if let Some(in_proof) = &self.in_proof {
+        //     let title = format!("While checking theorem `{}`", in_proof.theorem.name());
+        //     let title = Ustr::from(&title);
+        //     msg = msg.footer(Level::Help.title(title.as_str()));
 
-            let title = render_proof_state(in_proof.proof_state);
-            let title = Ustr::from(&title);
-            msg = msg.footer(Level::Help.title(title.as_str()));
-        }
+        //     let title = render_proof_state(in_proof.proof_state);
+        //     let title = Ustr::from(&title);
+        //     msg = msg.footer(Level::Help.title(title.as_str()));
+        // }
 
         msg
     }
 }
 
-fn render_proof_state<'ctx>(_state: ProofStateKey<'ctx>) -> String {
-    let mut res = String::new();
+// fn render_proof_state<'ctx>(_state: ProofStateKey<'ctx>) -> String {
+//     let mut res = String::new();
 
-    res += "Proof state:\n";
+//     res += "Proof state:\n";
 
-    // for &step in state.reasoning_chain() {
-    //     res += "  ";
+// for &step in state.reasoning_chain() {
+//     res += "  ";
 
-    //     match step {
-    //         ReasoningStep::Hypothesis((_, pres)) => res += &pres.render_str(),
-    //         ReasoningStep::Deduce((_, pres)) => res += &pres.render_str(),
-    //         ReasoningStep::Assume((_, pres)) => res += &pres.render_str(),
-    //         ReasoningStep::_Shorthand(name, (_, pres)) => {
-    //             res += &name;
-    //             res += " := ";
-    //             res += &pres.render_str();
-    //         }
-    //     }
+//     match step {
+//         ReasoningStep::Hypothesis((_, pres)) => res += &pres.render_str(),
+//         ReasoningStep::Deduce((_, pres)) => res += &pres.render_str(),
+//         ReasoningStep::Assume((_, pres)) => res += &pres.render_str(),
+//         ReasoningStep::_Shorthand(name, (_, pres)) => {
+//             res += &name;
+//             res += " := ";
+//             res += &pres.render_str();
+//         }
+//     }
 
-    //     res += "\n";
-    // }
+//     res += "\n";
+// }
 
-    // res += "⊢ ";
-    // res += &state.goal().1.render_str();
+// res += "⊢ ";
+// res += &state.goal().1.render_str();
 
-    res
-}
+//     res
+// }
 
 impl<'ctx> DiagManager<'ctx> {
     fn add_diag(&mut self, diag: Diagnostic<'ctx>) {

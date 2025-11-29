@@ -4,7 +4,7 @@ use crate::{
     parse::parse_tree::ParseTreeId,
     semant::{
         formal_syntax::FormalSyntaxCatId,
-        fragment::{FragHead, Fragment, FragmentId},
+        fragment::{Fact, FragHead, Fragment, FragmentId},
         notation::{_debug_binding, NotationBindingId},
         presentation::{Pres, PresFrag, PresHead, PresId, PresTree, PresTreeId},
         scope::{Scope, ScopeEntry},
@@ -18,7 +18,7 @@ generate_arena_handle!(TheoremId<'ctx> => TheoremStatement<'ctx>);
 pub struct TheoremStatement<'ctx> {
     name: Ustr,
     templates: Vec<Template<'ctx>>,
-    hypotheses: Vec<Fact<'ctx>>,
+    hypotheses: Vec<PresFact<'ctx>>,
     conclusion: PresFrag<'ctx>,
     scope: ScopeId,
     proof: UnresolvedProof<'ctx>,
@@ -28,7 +28,7 @@ impl<'ctx> TheoremStatement<'ctx> {
     pub fn new(
         name: Ustr,
         templates: Vec<Template<'ctx>>,
-        hypotheses: Vec<Fact<'ctx>>,
+        hypotheses: Vec<PresFact<'ctx>>,
         conclusion: PresFrag<'ctx>,
         scope: ScopeId,
         proof: UnresolvedProof<'ctx>,
@@ -51,7 +51,7 @@ impl<'ctx> TheoremStatement<'ctx> {
         &self.templates
     }
 
-    pub fn hypotheses(&self) -> &[Fact<'ctx>] {
+    pub fn hypotheses(&self) -> &[PresFact<'ctx>] {
         &self.hypotheses
     }
 
@@ -159,17 +159,24 @@ pub enum UnresolvedProof<'ctx> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Fact<'ctx> {
+pub struct PresFact<'ctx> {
     assumption: Option<PresFrag<'ctx>>,
     conclusion: PresFrag<'ctx>,
 }
 
-impl<'ctx> Fact<'ctx> {
+impl<'ctx> PresFact<'ctx> {
     pub fn new(assumption: Option<PresFrag<'ctx>>, conclusion: PresFrag<'ctx>) -> Self {
         Self {
             assumption,
             conclusion,
         }
+    }
+
+    pub fn fact(&self) -> Fact<'ctx> {
+        Fact::new(
+            self.assumption().map(|a| a.frag()),
+            self.conclusion().frag(),
+        )
     }
 
     pub fn assumption(&self) -> Option<PresFrag<'ctx>> {

@@ -2,7 +2,7 @@ use crate::{
     generate_arena_handle,
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
-        theorems::Fact,
+        theorems::PresFact,
     },
 };
 
@@ -16,6 +16,7 @@ pub struct Fragment<'ctx> {
 
     // flags for efficient search:
     has_hole: bool,
+    has_template: bool,
     unclosed_count: usize,
 }
 
@@ -25,7 +26,13 @@ impl<'ctx> Fragment<'ctx> {
         head: FragHead<'ctx>,
         children: Vec<FragmentId<'ctx>>,
     ) -> Self {
+        let has_template =
+            matches!(head, FragHead::TemplateRef(_)) || children.iter().any(|c| c.has_template);
         let has_hole = matches!(head, FragHead::Hole(_)) || children.iter().any(|c| c.has_hole);
+
+        if matches!(head, FragHead::Hole(_) | FragHead::Variable(_, _)) {
+            assert!(children.is_empty());
+        }
 
         let children_unclosed = children
             .iter()
@@ -47,6 +54,7 @@ impl<'ctx> Fragment<'ctx> {
             head,
             children,
             has_hole,
+            has_template,
             unclosed_count,
         }
     }
@@ -65,6 +73,10 @@ impl<'ctx> Fragment<'ctx> {
 
     pub fn has_hole(&self) -> bool {
         self.has_hole
+    }
+
+    pub fn has_template(&self) -> bool {
+        self.has_template
     }
 
     pub fn unclosed_count(&self) -> usize {
@@ -103,7 +115,30 @@ impl<'ctx> FragRuleApplication<'ctx> {
     }
 }
 
-pub fn _debug_fact<'ctx>(fact: &Fact<'ctx>) -> String {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Fact<'ctx> {
+    assumption: Option<FragmentId<'ctx>>,
+    conclusion: FragmentId<'ctx>,
+}
+
+impl<'ctx> Fact<'ctx> {
+    pub fn new(assumption: Option<FragmentId<'ctx>>, conclusion: FragmentId<'ctx>) -> Self {
+        Self {
+            assumption,
+            conclusion,
+        }
+    }
+
+    pub fn assumption(&self) -> Option<FragmentId<'ctx>> {
+        self.assumption
+    }
+
+    pub fn conclusion(&self) -> FragmentId<'ctx> {
+        self.conclusion
+    }
+}
+
+pub fn _debug_fact<'ctx>(fact: &PresFact<'ctx>) -> String {
     let conclusion = _debug_fragment(fact.conclusion().frag());
     match fact.assumption() {
         Some(assumption) => format!("{} |- {}", _debug_fragment(assumption.frag()), conclusion),

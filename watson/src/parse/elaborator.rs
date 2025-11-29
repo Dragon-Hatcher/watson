@@ -20,7 +20,8 @@ use crate::{
         presentation::PresFrag,
         scope::{Scope, ScopeEntry},
         theorems::{
-            Fact, Template, TheoremId, TheoremStatement, UnresolvedProof, add_templates_to_scope,
+            PresFact, Template, TheoremId, TheoremStatement, UnresolvedProof,
+            add_templates_to_scope,
         },
     },
     strings,
@@ -572,7 +573,7 @@ fn parse_hypotheses_and_conclusion<'ctx>(
     un_conclusion: UnresolvedFrag<'ctx>,
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<(Vec<Fact<'ctx>>, PresFrag<'ctx>)> {
+) -> WResult<(Vec<PresFact<'ctx>>, PresFrag<'ctx>)> {
     let mut hypotheses = Vec::new();
     for un_hypothesis in un_hypotheses {
         let assumption = match un_hypothesis.assumption {
@@ -586,7 +587,7 @@ fn parse_hypotheses_and_conclusion<'ctx>(
             Ok(conclusion) => conclusion,
             Err(err) => todo!("Error: failed to parse conclusion {err:?}"),
         };
-        hypotheses.push(Fact::new(assumption, conclusion));
+        hypotheses.push(PresFact::new(assumption, conclusion));
     }
 
     let conclusion = match parse_fragment(un_conclusion, scope, ctx)? {

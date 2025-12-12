@@ -34,7 +34,7 @@ tactic templates.some
 end
 
 tactic template
-    template ::= "[" f:@fragment "]"
+    template ::= "[" f:@any_fragment "]"
 end
 
 tactic empty_tactic
@@ -47,6 +47,10 @@ end
 
 tactic have_tactic
     tactic ::= @kw"have" show:@fact t1:tactic ";" t2:tactic
+end
+
+tactic let_tactic
+    tactic ::= @kw"let" n:@name ":=" s:@fragment(sentence) ";" t2:tactic
 end
 
 theorem imp.refl [p : sentence] :

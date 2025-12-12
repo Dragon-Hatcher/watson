@@ -556,12 +556,13 @@ fn elaborate_tactic_pat_part_core<'ctx>(
     core: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<TacticPatPartCore<'ctx>> {
-    // tactic_pat_part_core ::= (core_lit)      str
-    //                        | (core_kw)       "@" kw"kw" str
-    //                        | (core_name)     "@" kw"name"
-    //                        | (core_cat)      name
-    //                        | (core_fragment) "@" kw"fragment"
-    //                        | (core_fact)     "@" kw"fact"
+    // tactic_pat_part_core ::= (core_lit)          str
+    //                        | (core_kw)           "@" kw"kw" str
+    //                        | (core_name)         "@" kw"name"
+    //                        | (core_cat)          name
+    //                        | (core_fragment)     "@" kw"fragment" "(" name ")"
+    //                        | (core_any_fragment) "@" kw"any_fragment"
+    //                        | (core_fact)         "@" kw"fact"
 
     match_rule! { (ctx, core) =>
         core_lit ::= [lit] => {
@@ -590,11 +591,25 @@ fn elaborate_tactic_pat_part_core<'ctx>(
 
             Ok(TacticPatPartCore::Cat(cat))
         },
-        core_fragment ::= [at, fragment_kw] => {
+        core_fragment ::= [at, fragment_kw, lparen, cat_name_node, rparen] => {
             debug_assert!(at.is_lit(*strings::AT));
             debug_assert!(fragment_kw.is_kw(*strings::FRAGMENT));
+            debug_assert!(lparen.is_lit(*strings::LEFT_PAREN));
+            debug_assert!(rparen.is_lit(*strings::RIGHT_PAREN));
 
-            Ok(TacticPatPartCore::Fragment)
+            let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
+
+            let Some(cat) = ctx.arenas.parse_cats.get(cat_name) else {
+                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
+            };
+
+            Ok(TacticPatPartCore::Fragment(cat))
+        },
+        core_any_fragment ::= [at, any_fragment_kw] => {
+            debug_assert!(at.is_lit(*strings::AT));
+            debug_assert!(any_fragment_kw.is_kw(*strings::ANY_FRAGMENT));
+
+            Ok(TacticPatPartCore::AnyFragment)
         },
         core_fact ::= [at, fact_kw] => {
             debug_assert!(at.is_lit(*strings::AT));

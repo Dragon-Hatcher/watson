@@ -28,6 +28,7 @@ str_const! {
     HAVE = "have";
     TODO = "todo";
     FRAGMENT = "fragment";
+    ANY_FRAGMENT = "any_fragment";
     FACT = "fact";
 }
 

@@ -1,4 +1,4 @@
-use crate::{generate_arena_handle, parse::parse_state::{Associativity, Precedence}};
+use crate::{generate_arena_handle, parse::parse_state::{Associativity, CategoryId, Precedence}};
 use ustr::Ustr;
 
 generate_arena_handle!(TacticCatId<'ctx> => TacticCat);
@@ -107,6 +107,7 @@ pub enum TacticPatPartCore<'ctx> {
     Kw(Ustr),
     Name,
     Cat(TacticCatId<'ctx>),
-    Fragment,
+    Fragment(CategoryId<'ctx>),
+    AnyFragment,
     Fact,
 }

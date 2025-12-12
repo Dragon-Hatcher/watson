@@ -112,12 +112,13 @@ tactic_pat_part ::= (tactic_pat_part) maybe_label tactic_pat_part_core
 maybe_label ::= (label_none)
               | (label_some) name ":"
 
-tactic_pat_part_core ::= (core_lit)      str
-                       | (core_kw)       "@" kw"kw" str
-                       | (core_name)     "@" kw"name"
-                       | (core_cat)      name
-                       | (core_fragment) "@" kw"fragment"
-                       | (core_fact)     "@" kw"fact"
+tactic_pat_part_core ::= (core_lit)          str
+                       | (core_kw)           "@" kw"kw" str
+                       | (core_name)         "@" kw"name"
+                       | (core_cat)          name
+                       | (core_fragment)     "@" kw"fragment" "(" name ")"
+                       | (core_any_fragment) "@" kw"any_fragment"
+                       | (core_fact)         "@" kw"fact"
 
 definition_command ::= (definition) kw"definition" notation_binding ":=" any_fragment kw"end"
 
@@ -246,6 +247,7 @@ builtin_rules! {
         core_name,
         core_cat,
         core_fragment,
+        core_any_fragment,
         core_fact,
         definition,
         theorem,
@@ -597,7 +599,18 @@ pub fn add_builtin_rules<'ctx>(
         core_fragment: rule(
             "core_fragment",
             cats.tactic_pat_part_core,
-            vec![lit(*strings::AT), kw(*strings::FRAGMENT)],
+            vec![
+                lit(*strings::AT),
+                kw(*strings::FRAGMENT),
+                lit(*strings::LEFT_PAREN),
+                cat(cats.name),
+                lit(*strings::RIGHT_PAREN),
+            ],
+        ),
+        core_any_fragment: rule(
+            "core_any_fragment",
+            cats.tactic_pat_part_core,
+            vec![lit(*strings::AT), kw(*strings::ANY_FRAGMENT)],
         ),
         core_fact: rule(
             "core_fact",
@@ -865,7 +878,8 @@ fn tactic_rule_to_parse_rule<'ctx>(
                 let cat = ctx.parse_state.cat_for_tactic_cat(*tactic_cat);
                 RulePatternPart::Cat(cat)
             }
-            TacticPatPartCore::Fragment => cat(ctx.builtin_cats.any_fragment),
+            TacticPatPartCore::Fragment(cat_id) => cat(*cat_id),
+            TacticPatPartCore::AnyFragment => cat(ctx.builtin_cats.any_fragment),
             TacticPatPartCore::Fact => cat(ctx.builtin_cats.fact),
         };
         parts.push(part);

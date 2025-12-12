@@ -1,4 +1,7 @@
-use crate::{generate_arena_handle, parse::parse_state::{Associativity, CategoryId, Precedence}};
+use crate::{
+    generate_arena_handle,
+    parse::parse_state::{Associativity, CategoryId, Precedence},
+};
 use ustr::Ustr;
 
 generate_arena_handle!(TacticCatId<'ctx> => TacticCat);

@@ -296,8 +296,8 @@ impl<'ctx> DiagManager<'ctx> {
     }
 
     pub fn err_unknown_tactic_cat<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
-        let diag = Diagnostic::new(&format!("unknown tactic category `{name}`"))
-            .with_error("", span);
+        let diag =
+            Diagnostic::new(&format!("unknown tactic category `{name}`")).with_error("", span);
 
         self.add_diag(diag);
         Err(())

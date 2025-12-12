@@ -1,10 +1,10 @@
 pub mod check_circularity;
-pub mod proof_kernel;
 pub mod formal_syntax;
 pub mod fragment;
 pub mod notation;
 pub mod parse_fragment;
 pub mod presentation;
+pub mod proof_kernel;
 pub mod proof_status;
 pub mod scope;
 pub mod tactic;

@@ -1,8 +1,8 @@
 use crate::{
     context::Ctx,
     semant::{
-        proof_kernel::safe::{SafeFact, SafeFrag},
         fragment::{Fact, FragHead, Fragment, FragmentId},
+        proof_kernel::safe::{SafeFact, SafeFrag},
         proof_status::ProofStatuses,
         theorems::TheoremId,
     },

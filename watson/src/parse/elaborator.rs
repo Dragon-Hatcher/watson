@@ -13,15 +13,15 @@ use crate::{
             FormalSyntaxRule, FormalSyntaxRuleId,
         },
         notation::{
-            NotationBinding, NotationBindingId, NotationPattern,
-            NotationPatternId, NotationPatternPart,
+            NotationBinding, NotationBindingId, NotationPattern, NotationPatternId,
+            NotationPatternPart,
         },
         parse_fragment::{UnresolvedFact, UnresolvedFrag, parse_fragment},
         presentation::PresFrag,
         scope::{Scope, ScopeEntry},
         tactic::{
-            TacticCat, TacticCatId, TacticPat, TacticPatPart, TacticPatPartCore,
-            TacticRule, TacticRuleId,
+            TacticCat, TacticCatId, TacticPat, TacticPatPart, TacticPatPartCore, TacticRule,
+            TacticRuleId,
         },
         theorems::{
             PresFact, Template, TheoremId, TheoremStatement, UnresolvedProof,

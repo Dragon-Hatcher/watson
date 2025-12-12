@@ -901,10 +901,7 @@ fn tactic_rule_to_parse_rule<'ctx>(
     ctx.arenas.parse_rules.alloc(parse_rule)
 }
 
-pub fn add_parse_rules_for_tactic_rule<'ctx>(
-    tactic_rule: TacticRuleId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) {
+pub fn add_parse_rules_for_tactic_rule<'ctx>(tactic_rule: TacticRuleId<'ctx>, ctx: &mut Ctx<'ctx>) {
     let parse_rule = tactic_rule_to_parse_rule(tactic_rule, ctx);
     ctx.parse_state.use_rule(parse_rule);
 }

@@ -95,8 +95,7 @@ fn parse_fragment_impl<'ctx>(
 
                 // Finally we need the notation for a single name.
                 let name_pattern = ctx.single_name_notations[cat];
-                let bind_binding =
-                    NotationBinding::new(name_pattern, vec![name]);
+                let bind_binding = NotationBinding::new(name_pattern, vec![name]);
                 let bind_binding = ctx.arenas.notation_bindings.intern(bind_binding);
 
                 // And now we can update the scope.

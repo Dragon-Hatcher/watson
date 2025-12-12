@@ -65,7 +65,7 @@ impl<'ctx> Pres<'ctx> {
                         NotationPatternPart::Name => {
                             let name = name_instantiations.next().unwrap();
                             out.push_str(name);
-                        },
+                        }
                         NotationPatternPart::Cat(_cat) => {
                             out.push_str(&children.next().unwrap().print())
                         }

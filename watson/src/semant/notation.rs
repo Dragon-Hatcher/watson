@@ -72,10 +72,7 @@ pub struct NotationBinding<'ctx> {
 }
 
 impl<'ctx> NotationBinding<'ctx> {
-    pub fn new(
-        pattern: NotationPatternId<'ctx>,
-        name_instantiations: Vec<Ustr>,
-    ) -> Self {
+    pub fn new(pattern: NotationPatternId<'ctx>, name_instantiations: Vec<Ustr>) -> Self {
         Self {
             pattern,
             name_instantiations,

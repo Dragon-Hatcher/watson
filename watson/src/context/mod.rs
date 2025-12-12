@@ -59,7 +59,9 @@ impl<'ctx> Ctx<'ctx> {
             tactic_tactic_cat.name(),
             crate::parse::parse_state::SyntaxCategorySource::Tactic(tactic_tactic_cat),
         );
-        let tactic_parse_cat = arenas.parse_cats.alloc(tactic_tactic_cat.name(), tactic_parse_cat);
+        let tactic_parse_cat = arenas
+            .parse_cats
+            .alloc(tactic_tactic_cat.name(), tactic_parse_cat);
         parse_state.use_cat(tactic_parse_cat);
 
         let builtin_cats = BuiltinCats::new(arenas, &mut parse_state);

@@ -13,7 +13,7 @@ use crate::{
             FormalSyntaxRule, FormalSyntaxRuleId,
         },
         notation::{
-            NotationBinding, NotationBindingId, NotationInstantiationPart, NotationPattern,
+            NotationBinding, NotationBindingId, NotationPattern,
             NotationPatternId, NotationPatternPart,
         },
         parse_fragment::{UnresolvedFact, UnresolvedFrag, parse_fragment},
@@ -451,7 +451,7 @@ fn elaborate_definition<'ctx>(
 
                 let mut scope = scope.clone();
                 for (i, (hole_cat, hole_name)) in holes.iter().enumerate() {
-                    let binding = NotationBinding::new(ctx.single_name_notations[hole_cat], vec![NotationInstantiationPart::Name(*hole_name)]);
+                    let binding = NotationBinding::new(ctx.single_name_notations[hole_cat], vec![*hole_name]);
                     let binding = ctx.arenas.notation_bindings.intern(binding);
                     let entry = ScopeEntry::new_hole(*hole_cat, i);
                     scope = scope.child_with(binding, entry);
@@ -511,13 +511,13 @@ fn elaborate_notation_binding<'ctx>(
         NotationBindingId<'ctx>,
         Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
     ) {
-        let mut instantiations = Vec::new();
+        let mut name_instantiations = Vec::new();
         let mut hole_names = Vec::new();
         for (child, part) in children.children().iter().zip(pattern.parts()) {
             match part {
                 NotationPatternPart::Name => {
                     let name = elaborate_name(child.as_node().unwrap(), ctx).unwrap();
-                    instantiations.push(NotationInstantiationPart::Name(name));
+                    name_instantiations.push(name);
                 }
                 NotationPatternPart::Cat(cat) => {
                     let name = elaborate_name(child.as_node().unwrap(), ctx).unwrap();
@@ -526,7 +526,7 @@ fn elaborate_notation_binding<'ctx>(
                 _ => {}
             }
         }
-        let binding = NotationBinding::new(pattern, instantiations);
+        let binding = NotationBinding::new(pattern, name_instantiations);
         let binding = ctx.arenas.notation_bindings.intern(binding);
         (binding, hole_names)
     }

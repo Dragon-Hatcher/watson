@@ -2,7 +2,7 @@ use crate::{
     context::{Arenas, Ctx},
     parse::{SourceCache, SourceId, parse, source_cache::SourceDecl},
     report::{ProofReport, display_report},
-    semant::{check_circularity::find_circular_dependency_groups, check_proof::check_proofs},
+    semant::{check_circularity::find_circular_dependency_groups, proof_kernel::check_proofs},
 };
 use argh::FromArgs;
 use crossterm::{

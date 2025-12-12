@@ -1,5 +1,5 @@
 pub mod check_circularity;
-pub mod check_proof;
+pub mod proof_kernel;
 pub mod formal_syntax;
 pub mod fragment;
 pub mod notation;

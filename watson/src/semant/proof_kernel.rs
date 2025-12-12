@@ -1,7 +1,7 @@
 use crate::{
     context::Ctx,
     semant::{
-        check_proof::safe::{SafeFact, SafeFrag},
+        proof_kernel::safe::{SafeFact, SafeFrag},
         fragment::{Fact, FragHead, Fragment, FragmentId},
         proof_status::ProofStatuses,
         theorems::TheoremId,

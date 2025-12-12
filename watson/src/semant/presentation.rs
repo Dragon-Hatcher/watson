@@ -5,7 +5,7 @@ use crate::{
     generate_arena_handle,
     semant::{
         fragment::FragmentId,
-        notation::{NotationBindingId, NotationInstantiationPart, NotationPatternPart},
+        notation::{NotationBindingId, NotationPatternPart},
     },
 };
 
@@ -48,7 +48,7 @@ impl<'ctx> Pres<'ctx> {
                 //     out.push('(');
                 // }
 
-                let mut instantiations = binding.instantiations().iter();
+                let mut name_instantiations = binding.name_instantiations().iter();
                 let mut children = self.children().iter();
                 for (i, part) in binding.pattern().parts().iter().enumerate() {
                     if i != 0 {
@@ -62,10 +62,9 @@ impl<'ctx> Pres<'ctx> {
                         NotationPatternPart::Kw(kw) => {
                             out.push_str(kw);
                         }
-                        NotationPatternPart::Name => match instantiations.next().unwrap() {
-                            NotationInstantiationPart::Name(name) => {
-                                out.push_str(name);
-                            }
+                        NotationPatternPart::Name => {
+                            let name = name_instantiations.next().unwrap();
+                            out.push_str(name);
                         },
                         NotationPatternPart::Cat(_cat) => {
                             out.push_str(&children.next().unwrap().print())

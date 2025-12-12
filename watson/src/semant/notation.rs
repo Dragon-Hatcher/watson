@@ -68,17 +68,17 @@ generate_arena_handle!(NotationBindingId<'ctx> => NotationBinding<'ctx>);
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct NotationBinding<'ctx> {
     pattern: NotationPatternId<'ctx>,
-    instantiations: Vec<NotationInstantiationPart>,
+    name_instantiations: Vec<Ustr>,
 }
 
 impl<'ctx> NotationBinding<'ctx> {
     pub fn new(
         pattern: NotationPatternId<'ctx>,
-        instantiations: Vec<NotationInstantiationPart>,
+        name_instantiations: Vec<Ustr>,
     ) -> Self {
         Self {
             pattern,
-            instantiations,
+            name_instantiations,
         }
     }
 
@@ -86,14 +86,9 @@ impl<'ctx> NotationBinding<'ctx> {
         self.pattern
     }
 
-    pub fn instantiations(&self) -> &[NotationInstantiationPart] {
-        &self.instantiations
+    pub fn name_instantiations(&self) -> &[Ustr] {
+        &self.name_instantiations
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum NotationInstantiationPart {
-    Name(Ustr),
 }
 
 pub fn _debug_binding<'ctx>(binding: NotationBindingId<'ctx>) -> String {
@@ -111,11 +106,8 @@ pub fn _debug_binding<'ctx>(binding: NotationBindingId<'ctx>) -> String {
                 out.push_str(kw.as_str());
             }
             NotationPatternPart::Name => {
-                match &binding.instantiations()[names] {
-                    NotationInstantiationPart::Name(name) => {
-                        out.push_str(name.as_str());
-                    }
-                }
+                let name = binding.name_instantiations()[names];
+                out.push_str(name.as_str());
                 names += 1;
             }
             NotationPatternPart::Cat(cat) => {

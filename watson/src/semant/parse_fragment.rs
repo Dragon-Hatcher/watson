@@ -4,7 +4,7 @@ use crate::{
     parse::{elaborator::elaborate_name, parse_tree::ParseTreeId},
     semant::{
         fragment::{FragHead, Fragment, FragmentId},
-        notation::{NotationBinding, NotationInstantiationPart, NotationPatternPart},
+        notation::{NotationBinding, NotationPatternPart},
         presentation::{
             Pres, PresFrag, PresHead, PresTree, abstract_pres_tree_root, instantiate_pres_tree,
         },
@@ -49,14 +49,14 @@ fn parse_fragment_impl<'ctx>(
 
         // First let's create the binding that this syntax represented and
         // look it up in our scope. If it doesn't exist we can move on.
-        let mut instantiations = Vec::new();
+        let mut name_instantiations = Vec::new();
         for (child, part) in possibility.children().iter().zip(notation.parts()) {
             if let NotationPatternPart::Name = part {
                 let name = elaborate_name(child.as_node().unwrap(), ctx)?;
-                instantiations.push(NotationInstantiationPart::Name(name));
+                name_instantiations.push(name);
             }
         }
-        let binding = NotationBinding::new(notation, instantiations);
+        let binding = NotationBinding::new(notation, name_instantiations);
         let binding = ctx.arenas.notation_bindings.intern(binding);
 
         let Some(replacement) = scope.lookup(binding) else {
@@ -96,7 +96,7 @@ fn parse_fragment_impl<'ctx>(
                 // Finally we need the notation for a single name.
                 let name_pattern = ctx.single_name_notations[cat];
                 let bind_binding =
-                    NotationBinding::new(name_pattern, vec![NotationInstantiationPart::Name(name)]);
+                    NotationBinding::new(name_pattern, vec![name]);
                 let bind_binding = ctx.arenas.notation_bindings.intern(bind_binding);
 
                 // And now we can update the scope.

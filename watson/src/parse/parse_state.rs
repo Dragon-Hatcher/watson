@@ -3,7 +3,7 @@ use crate::{
     semant::{
         formal_syntax::FormalSyntaxCatId,
         notation::NotationPatternId,
-        tactic::{TacticCatId, TacticRuleId},
+        tactic::syntax::{TacticCatId, TacticRuleId},
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};

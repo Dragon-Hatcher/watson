@@ -16,7 +16,7 @@ use crate::{
         },
         presentation::{Pres, PresFrag, PresHead, PresTree, PresTreeId},
         scope::ScopeEntry,
-        tactic::{TacticPatPartCore, TacticRuleId},
+        tactic::syntax::{TacticPatPartCore, TacticRuleId},
     },
     strings,
 };
@@ -74,7 +74,7 @@ syntax_cat_command ::= (syntax_cat) kw"syntax_cat" name
 syntax_command ::= (syntax) kw"syntax" name name prec_assoc "::=" syntax_pat kw"end"
 
 tactic_category_command ::= (tactic_category) kw"tactic_category" name
-tactic_command ::= (tactic) kw"tactic" name name "::=" tactic_pat kw"end"
+tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" tactic_pat kw"end"
 
 prec_assoc ::= (prec_assoc_none)
              | (prec_assoc_some) "(" maybe_prec maybe_assoc ")"
@@ -187,11 +187,6 @@ builtin_cats! {
         hypotheses,
         hypothesis,
         fact,
-        template_instantiations,
-        template_instantiation,
-        maybe_shorthand_args,
-        shorthand_args,
-        shorthand_arg,
         any_fragment,
         name,
         str,
@@ -878,8 +873,8 @@ fn tactic_rule_to_parse_rule<'ctx>(
                 let cat = ctx.parse_state.cat_for_tactic_cat(*tactic_cat);
                 RulePatternPart::Cat(cat)
             }
-            TacticPatPartCore::Fragment(cat_id) => cat(*cat_id),
-            TacticPatPartCore::AnyFragment => cat(ctx.builtin_cats.any_fragment),
+            TacticPatPartCore::Frag(cat_id) => cat(*cat_id),
+            TacticPatPartCore::AnyFrag => cat(ctx.builtin_cats.any_fragment),
             TacticPatPartCore::Fact => cat(ctx.builtin_cats.fact),
         };
         parts.push(part);

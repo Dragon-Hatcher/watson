@@ -24,9 +24,6 @@ str_const! {
     PROOF = "proof";
     QED = "qed";
     ASSUME = "assume";
-    BY = "by";
-    HAVE = "have";
-    TODO = "todo";
     FRAGMENT = "fragment";
     ANY_FRAGMENT = "any_fragment";
     FACT = "fact";
@@ -45,8 +42,6 @@ str_const! {
     RIGHT_BRACKET = "]";
     LEFT_ARROW = "<";
     RIGHT_ARROW = ">";
-    COMMA = ",";
-    SEMICOLON = ";";
 }
 
 str_const! {

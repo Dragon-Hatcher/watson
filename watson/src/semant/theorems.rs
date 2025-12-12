@@ -1,7 +1,6 @@
 use crate::{
     context::{Ctx, arena::ScopeId},
     generate_arena_handle,
-    parse::parse_tree::ParseTreeId,
     semant::{
         formal_syntax::FormalSyntaxCatId,
         fragment::{Fact, FragHead, Fragment, FragmentId},
@@ -21,7 +20,6 @@ pub struct TheoremStatement<'ctx> {
     hypotheses: Vec<PresFact<'ctx>>,
     conclusion: PresFrag<'ctx>,
     scope: ScopeId,
-    proof: UnresolvedProof<'ctx>,
 }
 
 impl<'ctx> TheoremStatement<'ctx> {
@@ -31,7 +29,6 @@ impl<'ctx> TheoremStatement<'ctx> {
         hypotheses: Vec<PresFact<'ctx>>,
         conclusion: PresFrag<'ctx>,
         scope: ScopeId,
-        proof: UnresolvedProof<'ctx>,
     ) -> Self {
         Self {
             name,
@@ -39,7 +36,6 @@ impl<'ctx> TheoremStatement<'ctx> {
             hypotheses,
             conclusion,
             scope,
-            proof,
         }
     }
 
@@ -57,10 +53,6 @@ impl<'ctx> TheoremStatement<'ctx> {
 
     pub fn conclusion(&self) -> PresFrag<'ctx> {
         self.conclusion
-    }
-
-    pub fn _proof(&self) -> &UnresolvedProof<'ctx> {
-        &self.proof
     }
 }
 
@@ -150,12 +142,6 @@ pub fn add_templates_to_scope<'ctx>(
     }
 
     my_scope
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum UnresolvedProof<'ctx> {
-    Axiom,
-    Theorem(ParseTreeId<'ctx>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

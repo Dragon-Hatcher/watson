@@ -23,7 +23,6 @@ use crate::{
         formal_syntax::FormalSyntaxCatId,
         notation::{NotationPattern, NotationPatternPart},
         scope::Scope,
-        tactic::TacticCatId,
         theorems::{_debug_theorem, TheoremId},
     },
 };
@@ -116,7 +115,7 @@ fn parse_source<'ctx>(
                 // old scope with the new one.
                 *scope = new_scope;
             }
-            ElaborateAction::NewTheorem(new_theorem) => {
+            ElaborateAction::NewTheorem(new_theorem, _proof) => {
                 println!("{}", _debug_theorem(new_theorem));
                 theorems.push(new_theorem);
             }

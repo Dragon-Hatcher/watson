@@ -110,7 +110,7 @@ pub enum TacticPatPartCore<'ctx> {
     Kw(Ustr),
     Name,
     Cat(TacticCatId<'ctx>),
-    Fragment(CategoryId<'ctx>),
-    AnyFragment,
+    Frag(CategoryId<'ctx>),
+    AnyFrag,
     Fact,
 }

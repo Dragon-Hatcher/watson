@@ -16,6 +16,9 @@ use crate::{
 pub struct UnresolvedFrag<'ctx>(pub ParseTreeId<'ctx>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UnresolvedAnyFrag<'ctx>(pub ParseTreeId<'ctx>);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnresolvedFact<'ctx> {
     pub assumption: Option<UnresolvedFrag<'ctx>>,
     pub conclusion: UnresolvedFrag<'ctx>,

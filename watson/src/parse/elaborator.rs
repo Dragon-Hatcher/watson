@@ -16,17 +16,17 @@ use crate::{
             NotationBinding, NotationBindingId, NotationPattern, NotationPatternId,
             NotationPatternPart,
         },
-        parse_fragment::{UnresolvedFact, UnresolvedFrag, parse_fragment},
+        parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag, parse_fragment},
         presentation::PresFrag,
         scope::{Scope, ScopeEntry},
         tactic::{
-            TacticCat, TacticCatId, TacticPat, TacticPatPart, TacticPatPartCore, TacticRule,
-            TacticRuleId,
+            syntax::{
+                TacticCat, TacticCatId, TacticPat, TacticPatPart, TacticPatPartCore, TacticRule,
+                TacticRuleId,
+            },
+            unresolved_proof::{TacticInst, TacticInstPart, UnresolvedProof},
         },
-        theorems::{
-            PresFact, Template, TheoremId, TheoremStatement, UnresolvedProof,
-            add_templates_to_scope,
-        },
+        theorems::{PresFact, Template, TheoremId, TheoremStatement, add_templates_to_scope},
     },
     strings,
 };
@@ -66,7 +66,7 @@ pub enum ElaborateAction<'ctx> {
     NewFormalRule(FormalSyntaxRuleId<'ctx>),
     NewNotation(NotationPatternId<'ctx>),
     NewDefinition(Scope<'ctx>),
-    NewTheorem(TheoremId<'ctx>),
+    NewTheorem(TheoremId<'ctx>, UnresolvedProof<'ctx>),
     NewTacticCat(TacticCatId<'ctx>),
     NewTacticRule(TacticRuleId<'ctx>),
 }
@@ -108,19 +108,19 @@ pub fn elaborate_command<'ctx>(
             Ok(ElaborateAction::NewDefinition(new_scope))
         },
         axiom_command ::= [axiom_cmd] => {
-            let thm_id = elaborate_axiom(axiom_cmd.as_node().unwrap(), scope, ctx)?;
-            Ok(ElaborateAction::NewTheorem(thm_id))
+            let (thm_id, proof) = elaborate_axiom(axiom_cmd.as_node().unwrap(), scope, ctx)?;
+            Ok(ElaborateAction::NewTheorem(thm_id, proof))
         },
         theorem_command ::= [theorem_cmd] => {
-            let thm_id = elaborate_theorem(theorem_cmd.as_node().unwrap(), scope, ctx)?;
-            Ok(ElaborateAction::NewTheorem(thm_id))
+            let (thm_id, proof) = elaborate_theorem(theorem_cmd.as_node().unwrap(), scope, ctx)?;
+            Ok(ElaborateAction::NewTheorem(thm_id, proof))
         },
         tactic_category_command ::= [tactic_cat_cmd] => {
             let cat = elaborate_tactic_category(tactic_cat_cmd.as_node().unwrap(), ctx)?;
             Ok(ElaborateAction::NewTacticCat(cat))
         },
         tactic_command ::= [tactic_cmd] => {
-            let rule = elaborate_tactic(tactic_cmd.as_node().unwrap(), ctx)?;
+            let rule = elaborate_tactic_def(tactic_cmd.as_node().unwrap(), ctx)?;
             Ok(ElaborateAction::NewTacticRule(rule))
         },
     }
@@ -463,7 +463,7 @@ fn elaborate_tactic_category<'ctx>(
     }
 }
 
-fn elaborate_tactic<'ctx>(
+fn elaborate_tactic_def<'ctx>(
     tactic: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<TacticRuleId<'ctx>> {
@@ -603,13 +603,13 @@ fn elaborate_tactic_pat_part_core<'ctx>(
                 return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
-            Ok(TacticPatPartCore::Fragment(cat))
+            Ok(TacticPatPartCore::Frag(cat))
         },
         core_any_fragment ::= [at, any_fragment_kw] => {
             debug_assert!(at.is_lit(*strings::AT));
             debug_assert!(any_fragment_kw.is_kw(*strings::ANY_FRAGMENT));
 
-            Ok(TacticPatPartCore::AnyFragment)
+            Ok(TacticPatPartCore::AnyFrag)
         },
         core_fact ::= [at, fact_kw] => {
             debug_assert!(at.is_lit(*strings::AT));
@@ -797,7 +797,7 @@ fn elaborate_axiom<'ctx>(
     axiom: ParseTreeId<'ctx>,
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<TheoremId<'ctx>> {
+) -> WResult<(TheoremId<'ctx>, UnresolvedProof<'ctx>)> {
     // axiom_command ::= (axiom) kw"axiom" name templates ":" hypotheses "|-" sentence kw"end"
 
     match_rule! { (ctx, axiom) =>
@@ -819,10 +819,10 @@ fn elaborate_axiom<'ctx>(
 
             let scope_id = ctx.scopes.alloc(my_scope);
 
-            let theorem_stmt = TheoremStatement::new(name, templates, hypotheses, conclusion, scope_id, UnresolvedProof::Axiom);
+            let theorem_stmt = TheoremStatement::new(name, templates, hypotheses, conclusion, scope_id);
             let theorem_stmt = ctx.arenas.theorem_stmts.alloc(name, theorem_stmt);
 
-            Ok(theorem_stmt)
+            Ok((theorem_stmt, UnresolvedProof::Axiom))
         }
     }
 }
@@ -831,7 +831,7 @@ fn elaborate_theorem<'ctx>(
     theorem: ParseTreeId<'ctx>,
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<TheoremId<'ctx>> {
+) -> WResult<(TheoremId<'ctx>, UnresolvedProof<'ctx>)> {
     // theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactic kw"qed"
 
     match_rule! { (ctx, theorem) =>
@@ -854,12 +854,13 @@ fn elaborate_theorem<'ctx>(
 
             let scope_id = ctx.scopes.alloc(my_scope);
 
-            let proof = UnresolvedProof::Theorem(tactic.as_node().unwrap());
-
-            let theorem_stmt = TheoremStatement::new(name, templates, hypotheses, conclusion, scope_id, proof);
+            let theorem_stmt = TheoremStatement::new(name, templates, hypotheses, conclusion, scope_id);
             let theorem_stmt = ctx.arenas.theorem_stmts.alloc(name, theorem_stmt);
 
-            Ok(theorem_stmt)
+            let proof = elaborate_tactic(tactic.as_node().unwrap(), ctx)?;
+            let proof = UnresolvedProof::Theorem(proof);
+
+            Ok((theorem_stmt, proof))
         }
     }
 }
@@ -1022,6 +1023,50 @@ fn elaborate_fact<'ctx>(
             })
         }
     }
+}
+
+fn elaborate_tactic<'ctx>(
+    tactic: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<TacticInst<'ctx>> {
+    let children = expect_unambiguous(tactic, ctx)?;
+    let rule = children.rule();
+    let tactic_rule = rule.source().get_tactic_rule();
+
+    let mut tactic_children = Vec::new();
+    for (part, child) in tactic_rule
+        .pattern()
+        .parts()
+        .iter()
+        .zip(children.children().iter())
+    {
+        let t_child = match part.part() {
+            TacticPatPartCore::Lit(_) | TacticPatPartCore::Kw(_) => TacticInstPart::NoInstantiation,
+            TacticPatPartCore::Name => {
+                let name = elaborate_name(child.as_node().unwrap(), ctx)?;
+                TacticInstPart::Name(name)
+            },
+            TacticPatPartCore::Cat(_) => {
+                let inst = elaborate_tactic(child.as_node().unwrap(), ctx)?;
+                TacticInstPart::SubInst(inst)
+            },
+            TacticPatPartCore::Frag(_) => {
+                let frag = UnresolvedFrag(child.as_node().unwrap());
+                TacticInstPart::Frag(frag)
+            },
+            TacticPatPartCore::AnyFrag => {
+                let frag = UnresolvedAnyFrag(child.as_node().unwrap());
+                TacticInstPart::AnyFrag(frag)
+            },
+            TacticPatPartCore::Fact => {
+                let fact = elaborate_fact(child.as_node().unwrap(), ctx)?;
+                TacticInstPart::Fact(fact)
+            },
+        };
+        tactic_children.push(t_child);
+    }
+
+    Ok(TacticInst::new(tactic_rule, tactic_children))
 }
 
 pub fn elaborate_name<'ctx>(name: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WResult<Ustr> {

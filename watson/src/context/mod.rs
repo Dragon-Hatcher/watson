@@ -14,7 +14,7 @@ use crate::{
         fragment::{Fragment, FragmentId},
         notation::{NotationBinding, NotationBindingId, NotationPattern, NotationPatternId},
         presentation::{Pres, PresId, PresTree, PresTreeId},
-        tactic::{TacticCat, TacticCatId, TacticRule, TacticRuleId},
+        tactic::syntax::{TacticCat, TacticCatId, TacticRule, TacticRuleId},
         theorems::{TheoremId, TheoremStatement},
     },
     strings,

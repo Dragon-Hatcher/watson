@@ -119,6 +119,12 @@ fn parse_source<'ctx>(
                 println!("{}", _debug_theorem(new_theorem));
                 theorems.push(new_theorem);
             }
+            ElaborateAction::NewTacticCat(_cat) => {
+                // Tactic categories are stored but don't affect parsing for now
+            }
+            ElaborateAction::NewTacticRule(_rule) => {
+                // Tactic rules are stored but don't affect parsing for now
+            }
         }
     } else {
         // This line doesn't start a command so we can skip to the next line.

@@ -281,6 +281,28 @@ impl<'ctx> DiagManager<'ctx> {
         Err(())
     }
 
+    pub fn err_duplicate_tactic_cat<T>(&mut self) -> WResult<T> {
+        let diag = Diagnostic::new("err_duplicate_tactic_cat");
+
+        self.add_diag(diag);
+        Err(())
+    }
+
+    pub fn err_duplicate_tactic_rule<T>(&mut self) -> WResult<T> {
+        let diag = Diagnostic::new("err_duplicate_tactic_rule");
+
+        self.add_diag(diag);
+        Err(())
+    }
+
+    pub fn err_unknown_tactic_cat<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
+        let diag = Diagnostic::new(&format!("unknown tactic category `{name}`"))
+            .with_error("", span);
+
+        self.add_diag(diag);
+        Err(())
+    }
+
     pub fn err_ambiguous_parse<T>(&mut self, span: Span) -> WResult<T> {
         let diag = Diagnostic::new("ambiguous parse").with_error("", span);
 

@@ -22,9 +22,29 @@ definition
     (p) := p
 end
 
--- macro parens
---     sentence ::= "(" $p:sentence ")" => $p
--- end
+tactic_category templates
+tactic_category template
+tactic_category tactic
+
+tactic templates.none
+    templates ::= 
+end
+
+tactic templates.some
+    templates ::= template templates
+end
+
+tactic template
+    template ::= "[" f:@fragment "]"
+end
+
+tactic by_tactic
+    tactic ::= @kw"by" thm:@name tmps:templates
+end
+
+tactic have_tactic
+    tactic ::= @kw"have" show:@fact t1:tactic ";" t2:tactic
+end
 
 theorem imp.refl [p : sentence] :
     |- p → p
@@ -40,10 +60,6 @@ end
 definition
     ¬p := p → ⊥
 end
-
--- macro not
---     sentence (400) ::= "¬" $p:sentence => $p → ⊥
--- end
 
 theorem not.intro [p : sentence] : (assume p |- ⊥)
     |- ¬p
@@ -80,14 +96,6 @@ end
 definition
     p ∧ q := ¬(¬p ∨ ¬q)
 end
-
--- macro or
---     sentence (300) ::= $p:sentence "∨" $q:sentence => ¬$p → $q 
--- end
-
--- macro and
---     sentence (300) ::= $p:sentence "∧" $q:sentence => ¬(¬$p ∨  ¬$q)
--- end
 
 theorem or.intro_right [p q : sentence] : (q)
     |- p ∨ q
@@ -194,10 +202,6 @@ end
 definition
     p ↔ q := (p → q) ∧ (q → p)
 end
-
--- macro iff
-    -- sentence (100) ::= $p:sentence "↔" $q:sentence => ($p → $q) ∧ ($q → $p)
--- end
 
 theorem iff.intro [p q : sentence] : (p → q) (q → p)
     |- p ↔ q

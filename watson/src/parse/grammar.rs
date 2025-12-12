@@ -57,18 +57,23 @@ macro_rules! builtin_rules {
 /*
 Grammar of the Watson language:
 
-command ::= (module_command)     module_command
-          | (syntax_cat_command) syntax_cat_command
-          | (syntax_command)     syntax_command
-          | (notation_command)   notation_command
-          | (definition_command) definition_command
-          | (axiom_command)      axiom_command
-          | (theorem_command)    theorem_command
+command ::= (module_command)          module_command
+          | (syntax_cat_command)       syntax_cat_command
+          | (syntax_command)           syntax_command
+          | (notation_command)         notation_command
+          | (definition_command)       definition_command
+          | (axiom_command)            axiom_command
+          | (theorem_command)          theorem_command
+          | (tactic_category_command)  tactic_category_command
+          | (tactic_command)           tactic_command
 
 module_command ::= (module) kw"module" name
 
 syntax_cat_command ::= (syntax_cat) kw"syntax_cat" name
 syntax_command ::= (syntax) kw"syntax" name name prec_assoc "::=" syntax_pat kw"end"
+
+tactic_category_command ::= (tactic_category) kw"tactic_category" name
+tactic_command ::= (tactic) kw"tactic" name name "::=" tactic_pat kw"end"
 
 prec_assoc ::= (prec_assoc_none)
              | (prec_assoc_some) "(" maybe_prec maybe_assoc ")"
@@ -98,12 +103,27 @@ notation_pat ::= (notation_pat_lit)     str
                | (notation_pat_cat)     name
                | (notation_pat_binding) "@" kw"binding" "(" name ")"
 
+tactic_pat ::= (tactic_pat_none)
+             | (tactic_pat_many) tactic_pat_part tactic_pat
+
+tactic_pat_part ::= (tactic_pat_part) maybe_label tactic_pat_part_core
+
+maybe_label ::= (label_none)
+              | (label_some) name ":"
+
+tactic_pat_part_core ::= (core_lit)      str
+                       | (core_kw)       "@" kw"kw" str
+                       | (core_name)     "@" kw"name"
+                       | (core_cat)      name
+                       | (core_fragment) "@" kw"fragment"
+                       | (core_fact)     "@" kw"fact"
+
 definition_command ::= (definition) kw"definition" notation_binding ":=" any_fragment kw"end"
 
 // notation_binding is created from each notation command
 
 axiom_command ::= (axiom) kw"axiom" name templates ":" hypotheses "|-" sentence kw"end"
-theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactics kw"qed"
+theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" <tactic_cat> kw"qed"
 
 templates ::= (template_none)
             | (template_many) template templates
@@ -121,15 +141,7 @@ hypothesis ::= (hypothesis) "(" fact ")"
 fact ::= (fact_assumption) kw"assume" sentence "|-" sentence
        | (fact_sentence)   sentence
 
-tactic ::= (tactic_none)
-         | (tactic_have) kw"have" fact tactics ";" tactics
-         | (tactic_by)   kw"by" name template_instantiations
-         | (tactic_todo) kw"todo"
-
-template_instantiations ::= (template_instantiations_none)
-                          | (template_instantiations_many) template_instantiation template_instantiations
-
-template_instantiation ::= "[" any_fragment "]"
+// tactic syntax is now user-defined via tactic_category and tactic commands
 
 <formal_cat> ::= name maybe_shorthand_args
 
@@ -153,6 +165,8 @@ builtin_cats! {
         definition_command,
         axiom_command,
         theorem_command,
+        tactic_category_command,
+        tactic_command,
         prec_assoc,
         maybe_prec,
         maybe_assoc,
@@ -160,6 +174,10 @@ builtin_cats! {
         syntax_pat_part,
         notation_pat,
         notation_pat_part,
+        tactic_pat,
+        tactic_pat_part,
+        maybe_label,
+        tactic_pat_part_core,
         notation_binding,
         templates,
         template,
@@ -190,9 +208,13 @@ builtin_rules! {
         definition_command,
         axiom_command,
         theorem_command,
+        tactic_category_command,
+        tactic_command,
         module,
         syntax_cat,
         syntax,
+        tactic_category,
+        tactic,
         prec_assoc_none,
         prec_assoc_some,
         prec_none,
@@ -214,6 +236,17 @@ builtin_rules! {
         notation_pat_cat,
         notation_pat_name,
         notation_pat_binding,
+        tactic_pat_none,
+        tactic_pat_many,
+        tactic_pat_part,
+        label_none,
+        label_some,
+        core_lit,
+        core_kw,
+        core_name,
+        core_cat,
+        core_fragment,
+        core_fact,
         definition,
         theorem,
         axiom,
@@ -227,10 +260,6 @@ builtin_rules! {
         hypothesis,
         fact_assumption,
         fact_sentence,
-        tactic_none,
-        tactic_have,
-        tactic_by,
-        tactic_todo,
         template_instantiations_none,
         template_instantiations_many,
         template_instantiation,
@@ -325,6 +354,16 @@ pub fn add_builtin_rules<'ctx>(
             cats.command,
             vec![cat(cats.theorem_command)],
         ),
+        tactic_category_command: rule(
+            "tactic_category_command",
+            cats.command,
+            vec![cat(cats.tactic_category_command)],
+        ),
+        tactic_command: rule(
+            "tactic_command",
+            cats.command,
+            vec![cat(cats.tactic_command)],
+        ),
         module: rule(
             "module",
             cats.module_command,
@@ -345,6 +384,23 @@ pub fn add_builtin_rules<'ctx>(
                 cat(cats.prec_assoc),
                 lit(*strings::BNF_REPLACE),
                 cat(cats.syntax_pat),
+                kw(*strings::END),
+            ],
+        ),
+        tactic_category: rule(
+            "tactic_category",
+            cats.tactic_category_command,
+            vec![kw(*strings::TACTIC_CATEGORY), cat(cats.name)],
+        ),
+        tactic: rule(
+            "tactic",
+            cats.tactic_command,
+            vec![
+                kw(*strings::TACTIC),
+                cat(cats.name),
+                cat(cats.name),
+                lit(*strings::BNF_REPLACE),
+                cat(cats.tactic_pat),
                 kw(*strings::END),
             ],
         ),
@@ -514,6 +570,48 @@ pub fn add_builtin_rules<'ctx>(
             ],
         ),
 
+        tactic_pat_none: rule("tactic_pat_none", cats.tactic_pat, vec![]),
+        tactic_pat_many: rule(
+            "tactic_pat_many",
+            cats.tactic_pat,
+            vec![cat(cats.tactic_pat_part), cat(cats.tactic_pat)],
+        ),
+        tactic_pat_part: rule(
+            "tactic_pat_part",
+            cats.tactic_pat_part,
+            vec![cat(cats.maybe_label), cat(cats.tactic_pat_part_core)],
+        ),
+
+        label_none: rule("label_none", cats.maybe_label, vec![]),
+        label_some: rule(
+            "label_some",
+            cats.maybe_label,
+            vec![cat(cats.name), lit(*strings::COLON)],
+        ),
+
+        core_lit: rule("core_lit", cats.tactic_pat_part_core, vec![cat(cats.str)]),
+        core_kw: rule(
+            "core_kw",
+            cats.tactic_pat_part_core,
+            vec![lit(*strings::AT), kw(*strings::KW), cat(cats.str)],
+        ),
+        core_name: rule(
+            "core_name",
+            cats.tactic_pat_part_core,
+            vec![lit(*strings::AT), kw(*strings::NAME)],
+        ),
+        core_cat: rule("core_cat", cats.tactic_pat_part_core, vec![cat(cats.name)]),
+        core_fragment: rule(
+            "core_fragment",
+            cats.tactic_pat_part_core,
+            vec![lit(*strings::AT), kw(*strings::FRAGMENT)],
+        ),
+        core_fact: rule(
+            "core_fact",
+            cats.tactic_pat_part_core,
+            vec![lit(*strings::AT), kw(*strings::FACT)],
+        ),
+
         template_none: rule("template_none", cats.templates, vec![]),
         template_many: rule(
             "template_many",
@@ -568,29 +666,6 @@ pub fn add_builtin_rules<'ctx>(
             ],
         ),
         fact_sentence: rule("fact_sentence", cats.fact, vec![cat(sentence_cat)]),
-
-        tactic_none: rule("tactic_none", cats.tactic, vec![]),
-        tactic_have: rule(
-            "tactic_have",
-            cats.tactic,
-            vec![
-                kw(*strings::HAVE),
-                cat(cats.fact),
-                cat(cats.tactic),
-                lit(*strings::SEMICOLON),
-                cat(cats.tactic),
-            ],
-        ),
-        tactic_by: rule(
-            "tactic_by",
-            cats.tactic,
-            vec![
-                kw(*strings::BY),
-                cat(cats.name),
-                cat(cats.template_instantiations),
-            ],
-        ),
-        tactic_todo: rule("tactic_todo", cats.tactic, vec![kw(*strings::TODO)]),
 
         template_instantiations_none: rule(
             "template_instantiations_none",

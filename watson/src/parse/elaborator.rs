@@ -19,6 +19,10 @@ use crate::{
         parse_fragment::{UnresolvedFact, UnresolvedFrag, parse_fragment},
         presentation::PresFrag,
         scope::{Scope, ScopeEntry},
+        tactic::{
+            TacticCat, TacticCatId, TacticPat, TacticPatPart, TacticPatPartCore,
+            TacticRule, TacticRuleId,
+        },
         theorems::{
             PresFact, Template, TheoremId, TheoremStatement, UnresolvedProof,
             add_templates_to_scope,
@@ -63,6 +67,8 @@ pub enum ElaborateAction<'ctx> {
     NewNotation(NotationPatternId<'ctx>),
     NewDefinition(Scope<'ctx>),
     NewTheorem(TheoremId<'ctx>),
+    NewTacticCat(TacticCatId<'ctx>),
+    NewTacticRule(TacticRuleId<'ctx>),
 }
 
 pub fn elaborate_command<'ctx>(
@@ -70,13 +76,15 @@ pub fn elaborate_command<'ctx>(
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<ElaborateAction<'ctx>> {
-    // command ::= (module_command)     module_command
-    //           | (syntax_cat_command) syntax_cat_command
-    //           | (syntax_command)     syntax_command
-    //           | (notation_command)   notation_command
-    //           | (definition_command) definition_command
-    //           | (axiom_command)      axiom_command
-    //           | (theorem_command)    theorem_command
+    // command ::= (module_command)          module_command
+    //           | (syntax_cat_command)       syntax_cat_command
+    //           | (syntax_command)           syntax_command
+    //           | (notation_command)         notation_command
+    //           | (definition_command)       definition_command
+    //           | (axiom_command)            axiom_command
+    //           | (theorem_command)          theorem_command
+    //           | (tactic_category_command)  tactic_category_command
+    //           | (tactic_command)           tactic_command
 
     match_rule! { (ctx, command) =>
         module_command ::= [module_cmd] => {
@@ -106,6 +114,14 @@ pub fn elaborate_command<'ctx>(
         theorem_command ::= [theorem_cmd] => {
             let thm_id = elaborate_theorem(theorem_cmd.as_node().unwrap(), scope, ctx)?;
             Ok(ElaborateAction::NewTheorem(thm_id))
+        },
+        tactic_category_command ::= [tactic_cat_cmd] => {
+            let cat = elaborate_tactic_category(tactic_cat_cmd.as_node().unwrap(), ctx)?;
+            Ok(ElaborateAction::NewTacticCat(cat))
+        },
+        tactic_command ::= [tactic_cmd] => {
+            let rule = elaborate_tactic(tactic_cmd.as_node().unwrap(), ctx)?;
+            Ok(ElaborateAction::NewTacticRule(rule))
         },
     }
 }
@@ -421,6 +437,170 @@ fn elaborate_notation_pat_part<'ctx>(
             };
 
             Ok(NotationPatternPart::Binding(cat))
+        }
+    }
+}
+
+fn elaborate_tactic_category<'ctx>(
+    cat: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<TacticCatId<'ctx>> {
+    // tactic_category_command ::= (tactic_category) kw"tactic_category" name
+
+    match_rule! { (ctx, cat) =>
+        tactic_category ::= [tactic_category_kw, cat_name] => {
+            debug_assert!(tactic_category_kw.is_kw(*strings::TACTIC_CATEGORY));
+            let cat_name = elaborate_name(cat_name.as_node().unwrap(), ctx)?;
+
+            if ctx.arenas.tactic_cats.get(cat_name).is_some() {
+                return ctx.diags.err_duplicate_tactic_cat();
+            }
+
+            let tactic_cat = TacticCat::new(cat_name);
+            let tactic_cat = ctx.arenas.tactic_cats.alloc(cat_name, tactic_cat);
+            Ok(tactic_cat)
+        }
+    }
+}
+
+fn elaborate_tactic<'ctx>(
+    tactic: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<TacticRuleId<'ctx>> {
+    // tactic_command ::= (tactic) kw"tactic" name name "::=" tactic_pat kw"end"
+
+    match_rule! { (ctx, tactic) =>
+        tactic ::= [tactic_kw, rule_name, cat, bnf_replace, pat_list, end_kw] => {
+            debug_assert!(tactic_kw.is_kw(*strings::TACTIC));
+            debug_assert!(bnf_replace.is_lit(*strings::BNF_REPLACE));
+            debug_assert!(end_kw.is_kw(*strings::END));
+
+            let rule_name = elaborate_name(rule_name.as_node().unwrap(), ctx)?;
+            let cat_name = elaborate_name(cat.as_node().unwrap(), ctx)?;
+            let pat = elaborate_tactic_pat(pat_list.as_node().unwrap(), ctx)?;
+
+            let Some(cat) = ctx.arenas.tactic_cats.get(cat_name) else {
+                return ctx.diags.err_unknown_tactic_cat(cat_name, cat.span());
+            };
+
+            if ctx.arenas.tactic_rules.get(rule_name).is_some() {
+                return ctx.diags.err_duplicate_tactic_rule();
+            }
+
+            let rule = TacticRule::new(rule_name, cat, pat);
+            let rule_id = ctx.arenas.tactic_rules.alloc(rule_name, rule);
+
+            Ok(rule_id)
+        }
+    }
+}
+
+fn elaborate_tactic_pat<'ctx>(
+    mut pat_list: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<TacticPat<'ctx>> {
+    // tactic_pat ::= (tactic_pat_none)
+    //              | (tactic_pat_many) tactic_pat_part tactic_pat
+
+    let mut parts = Vec::new();
+
+    loop {
+        match_rule! { (ctx, pat_list) =>
+            tactic_pat_none ::= [] => {
+                break;
+            },
+            tactic_pat_many ::= [pat, rest] => {
+                let pat = pat.as_node().unwrap();
+                parts.push(elaborate_tactic_pat_part(pat, ctx)?);
+                pat_list = rest.as_node().unwrap();
+            }
+        }
+    }
+
+    Ok(TacticPat::new(parts))
+}
+
+fn elaborate_tactic_pat_part<'ctx>(
+    pat: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<TacticPatPart<'ctx>> {
+    // tactic_pat_part ::= (tactic_pat_part) maybe_label tactic_pat_part_core
+
+    match_rule! { (ctx, pat) =>
+        tactic_pat_part ::= [maybe_label, core] => {
+            let label = elaborate_maybe_label(maybe_label.as_node().unwrap(), ctx)?;
+            let core = elaborate_tactic_pat_part_core(core.as_node().unwrap(), ctx)?;
+            Ok(TacticPatPart::new(label, core))
+        }
+    }
+}
+
+fn elaborate_maybe_label<'ctx>(
+    maybe_label: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<Option<Ustr>> {
+    // maybe_label ::= (label_none)
+    //               | (label_some) name ":"
+
+    match_rule! { (ctx, maybe_label) =>
+        label_none ::= [] => Ok(None),
+        label_some ::= [label, colon] => {
+            debug_assert!(colon.is_lit(*strings::COLON));
+            let label = elaborate_name(label.as_node().unwrap(), ctx)?;
+            Ok(Some(label))
+        }
+    }
+}
+
+fn elaborate_tactic_pat_part_core<'ctx>(
+    core: ParseTreeId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<TacticPatPartCore<'ctx>> {
+    // tactic_pat_part_core ::= (core_lit)      str
+    //                        | (core_kw)       "@" kw"kw" str
+    //                        | (core_name)     "@" kw"name"
+    //                        | (core_cat)      name
+    //                        | (core_fragment) "@" kw"fragment"
+    //                        | (core_fact)     "@" kw"fact"
+
+    match_rule! { (ctx, core) =>
+        core_lit ::= [lit] => {
+            let lit = elaborate_str_lit(lit.as_node().unwrap(), ctx)?;
+            Ok(TacticPatPartCore::Lit(lit))
+        },
+        core_kw ::= [at, kw_kw, lit] => {
+            debug_assert!(at.is_lit(*strings::AT));
+            debug_assert!(kw_kw.is_kw(*strings::KW));
+
+            let lit = elaborate_str_lit(lit.as_node().unwrap(), ctx)?;
+            Ok(TacticPatPartCore::Kw(lit))
+        },
+        core_name ::= [at, name_kw] => {
+            debug_assert!(at.is_lit(*strings::AT));
+            debug_assert!(name_kw.is_kw(*strings::NAME));
+
+            Ok(TacticPatPartCore::Name)
+        },
+        core_cat ::= [cat_name_node] => {
+            let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
+
+            let Some(cat) = ctx.arenas.tactic_cats.get(cat_name) else {
+                return ctx.diags.err_unknown_tactic_cat(cat_name, cat_name_node.span());
+            };
+
+            Ok(TacticPatPartCore::Cat(cat))
+        },
+        core_fragment ::= [at, fragment_kw] => {
+            debug_assert!(at.is_lit(*strings::AT));
+            debug_assert!(fragment_kw.is_kw(*strings::FRAGMENT));
+
+            Ok(TacticPatPartCore::Fragment)
+        },
+        core_fact ::= [at, fact_kw] => {
+            debug_assert!(at.is_lit(*strings::AT));
+            debug_assert!(fact_kw.is_kw(*strings::FACT));
+
+            Ok(TacticPatPartCore::Fact)
         }
     }
 }

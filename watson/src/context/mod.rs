@@ -14,6 +14,7 @@ use crate::{
         fragment::{Fragment, FragmentId},
         notation::{NotationBinding, NotationBindingId, NotationPattern, NotationPatternId},
         presentation::{Pres, PresId, PresTree, PresTreeId},
+        tactic::{TacticCat, TacticCatId, TacticRule, TacticRuleId},
         theorems::{TheoremId, TheoremStatement},
     },
     strings,
@@ -86,6 +87,8 @@ pub struct Arenas<'ctx> {
     pub fragments: InternedArena<Fragment<'ctx>, FragmentId<'ctx>>,
     pub presentations: InternedArena<Pres<'ctx>, PresId<'ctx>>,
     pub presentation_trees: InternedArena<PresTree<'ctx>, PresTreeId<'ctx>>,
+    pub tactic_cats: NamedArena<TacticCat, TacticCatId<'ctx>>,
+    pub tactic_rules: NamedArena<TacticRule<'ctx>, TacticRuleId<'ctx>>,
     pub theorem_stmts: NamedArena<TheoremStatement<'ctx>, TheoremId<'ctx>>,
 }
 
@@ -102,6 +105,8 @@ impl<'ctx> Arenas<'ctx> {
             fragments: InternedArena::new(),
             presentations: InternedArena::new(),
             presentation_trees: InternedArena::new(),
+            tactic_cats: NamedArena::new(),
+            tactic_rules: NamedArena::new(),
             theorem_stmts: NamedArena::new(),
         }
     }

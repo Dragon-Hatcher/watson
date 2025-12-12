@@ -17,6 +17,8 @@ str_const! {
     DEFINITION = "definition";
     AXIOM = "axiom";
     THEOREM = "theorem";
+    TACTIC_CATEGORY = "tactic_category";
+    TACTIC = "tactic";
     NAME = "name";
     KW = "kw";
     PROOF = "proof";
@@ -25,6 +27,8 @@ str_const! {
     BY = "by";
     HAVE = "have";
     TODO = "todo";
+    FRAGMENT = "fragment";
+    FACT = "fact";
 }
 
 // Symbols:

@@ -7,4 +7,5 @@ pub mod parse_fragment;
 pub mod presentation;
 pub mod proof_status;
 pub mod scope;
+pub mod tactic;
 pub mod theorems;

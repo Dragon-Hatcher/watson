@@ -467,17 +467,18 @@ fn elaborate_tactic_def<'ctx>(
     tactic: ParseTreeId<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<TacticRuleId<'ctx>> {
-    // tactic_command ::= (tactic) kw"tactic" name name "::=" tactic_pat kw"end"
+    // tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" tactic_pat kw"end"
 
     match_rule! { (ctx, tactic) =>
-        tactic ::= [tactic_kw, rule_name, cat, bnf_replace, pat_list, end_kw] => {
+        tactic ::= [tactic_kw, rule_name, cat, prec_assoc, bnf_replace, pat_list, end_kw] => {
             debug_assert!(tactic_kw.is_kw(*strings::TACTIC));
             debug_assert!(bnf_replace.is_lit(*strings::BNF_REPLACE));
             debug_assert!(end_kw.is_kw(*strings::END));
 
             let rule_name = elaborate_name(rule_name.as_node().unwrap(), ctx)?;
             let cat_name = elaborate_name(cat.as_node().unwrap(), ctx)?;
-            let pat = elaborate_tactic_pat(pat_list.as_node().unwrap(), ctx)?;
+            let (prec, assoc) = elaborate_prec_assoc(prec_assoc.as_node().unwrap(), ctx)?;
+            let pat = elaborate_tactic_pat(pat_list.as_node().unwrap(), prec, assoc, ctx)?;
 
             let Some(cat) = ctx.arenas.tactic_cats.get(cat_name) else {
                 return ctx.diags.err_unknown_tactic_cat(cat_name, cat.span());
@@ -497,6 +498,8 @@ fn elaborate_tactic_def<'ctx>(
 
 fn elaborate_tactic_pat<'ctx>(
     mut pat_list: ParseTreeId<'ctx>,
+    prec: Precedence,
+    assoc: Associativity,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<TacticPat<'ctx>> {
     // tactic_pat ::= (tactic_pat_none)
@@ -517,7 +520,7 @@ fn elaborate_tactic_pat<'ctx>(
         }
     }
 
-    Ok(TacticPat::new(parts))
+    Ok(TacticPat::new(parts, prec, assoc))
 }
 
 fn elaborate_tactic_pat_part<'ctx>(

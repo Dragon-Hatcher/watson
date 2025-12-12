@@ -73,9 +73,6 @@ module_command ::= (module) kw"module" name
 syntax_cat_command ::= (syntax_cat) kw"syntax_cat" name
 syntax_command ::= (syntax) kw"syntax" name name prec_assoc "::=" syntax_pat kw"end"
 
-tactic_category_command ::= (tactic_category) kw"tactic_category" name
-tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" tactic_pat kw"end"
-
 prec_assoc ::= (prec_assoc_none)
              | (prec_assoc_some) "(" maybe_prec maybe_assoc ")"
 
@@ -103,6 +100,9 @@ notation_pat ::= (notation_pat_lit)     str
                | (notation_pat_name)    "@" kw"name"
                | (notation_pat_cat)     name
                | (notation_pat_binding) "@" kw"binding" "(" name ")"
+
+tactic_category_command ::= (tactic_category) kw"tactic_category" name
+tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" tactic_pat kw"end"
 
 tactic_pat ::= (tactic_pat_none)
              | (tactic_pat_many) tactic_pat_part tactic_pat
@@ -389,6 +389,7 @@ pub fn add_builtin_rules<'ctx>(
                 kw(*strings::TACTIC),
                 cat(cats.name),
                 cat(cats.name),
+                cat(cats.prec_assoc),
                 lit(*strings::BNF_REPLACE),
                 cat(cats.tactic_pat),
                 kw(*strings::END),

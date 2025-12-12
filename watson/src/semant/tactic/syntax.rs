@@ -55,20 +55,12 @@ pub struct TacticPat<'ctx> {
 }
 
 impl<'ctx> TacticPat<'ctx> {
-    pub fn new(parts: Vec<TacticPatPart<'ctx>>) -> Self {
+    pub fn new(parts: Vec<TacticPatPart<'ctx>>, precedence: Precedence, associativity: Associativity) -> Self {
         Self {
             parts,
-            precedence: Precedence(0),
-            associativity: Associativity::NonAssoc,
+            precedence,
+            associativity,
         }
-    }
-
-    pub fn set_prec(&mut self, prec: Precedence) {
-        self.precedence = prec;
-    }
-
-    pub fn set_assoc(&mut self, assoc: Associativity) {
-        self.associativity = assoc;
     }
 
     pub fn parts(&self) -> &[TacticPatPart<'ctx>] {

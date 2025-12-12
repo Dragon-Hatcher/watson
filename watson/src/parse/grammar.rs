@@ -16,6 +16,7 @@ use crate::{
         },
         presentation::{Pres, PresFrag, PresHead, PresTree, PresTreeId},
         scope::ScopeEntry,
+        tactic::{TacticPatPartCore, TacticRuleId},
     },
     strings,
 };
@@ -123,7 +124,7 @@ definition_command ::= (definition) kw"definition" notation_binding ":=" any_fra
 // notation_binding is created from each notation command
 
 axiom_command ::= (axiom) kw"axiom" name templates ":" hypotheses "|-" sentence kw"end"
-theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" <tactic_cat> kw"qed"
+theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactic kw"qed"
 
 templates ::= (template_none)
             | (template_many) template templates
@@ -185,7 +186,6 @@ builtin_cats! {
         hypotheses,
         hypothesis,
         fact,
-        tactic,
         template_instantiations,
         template_instantiation,
         maybe_shorthand_args,
@@ -260,14 +260,6 @@ builtin_rules! {
         hypothesis,
         fact_assumption,
         fact_sentence,
-        template_instantiations_none,
-        template_instantiations_many,
-        template_instantiation,
-        maybe_shorthand_args_none,
-        maybe_shorthand_args_some,
-        shorthand_args_one,
-        shorthand_args_many,
-        shorthand_arg,
     }
 }
 
@@ -292,6 +284,7 @@ pub fn add_builtin_rules<'ctx>(
     categories: &'ctx NamedArena<Category<'ctx>, CategoryId<'ctx>>,
     state: &mut ParseState<'ctx>,
     formal_sentence_cat: FormalSyntaxCatId<'ctx>,
+    tactic_parse_cat: CategoryId<'ctx>,
     cats: &BuiltinCats<'ctx>,
 ) -> BuiltinRules<'ctx> {
     let sentence_cat = Category::new(
@@ -454,7 +447,7 @@ pub fn add_builtin_rules<'ctx>(
                 lit(*strings::TURNSTILE),
                 cat(sentence_cat),
                 kw(*strings::PROOF),
-                cat(cats.tactic),
+                cat(tactic_parse_cat),
                 kw(*strings::QED),
             ],
         ),
@@ -666,62 +659,6 @@ pub fn add_builtin_rules<'ctx>(
             ],
         ),
         fact_sentence: rule("fact_sentence", cats.fact, vec![cat(sentence_cat)]),
-
-        template_instantiations_none: rule(
-            "template_instantiations_none",
-            cats.template_instantiations,
-            vec![],
-        ),
-        template_instantiations_many: rule(
-            "template_instantiations_many",
-            cats.template_instantiations,
-            vec![
-                cat(cats.template_instantiation),
-                cat(cats.template_instantiations),
-            ],
-        ),
-        template_instantiation: rule(
-            "template_instantiation",
-            cats.template_instantiation,
-            vec![
-                lit(*strings::LEFT_BRACKET),
-                cat(cats.any_fragment),
-                lit(*strings::RIGHT_BRACKET),
-            ],
-        ),
-        maybe_shorthand_args_none: rule(
-            "maybe_shorthand_args_none",
-            cats.maybe_shorthand_args,
-            vec![],
-        ),
-        maybe_shorthand_args_some: rule(
-            "maybe_shorthand_args_some",
-            cats.maybe_shorthand_args,
-            vec![
-                lit(*strings::LEFT_PAREN),
-                cat(cats.shorthand_args),
-                lit(*strings::RIGHT_PAREN),
-            ],
-        ),
-        shorthand_args_one: rule(
-            "shorthand_args_one",
-            cats.shorthand_args,
-            vec![cat(cats.shorthand_arg)],
-        ),
-        shorthand_args_many: rule(
-            "shorthand_args_many",
-            cats.shorthand_args,
-            vec![
-                cat(cats.shorthand_arg),
-                lit(*strings::COMMA),
-                cat(cats.shorthand_args),
-            ],
-        ),
-        shorthand_arg: rule(
-            "shorthand_arg",
-            cats.shorthand_arg,
-            vec![cat(cats.any_fragment)],
-        ),
     };
     state.recompute_initial_atoms();
     rules
@@ -912,4 +849,48 @@ pub fn add_parse_rules_for_notation<'ctx>(notation: NotationPatternId<'ctx>, ctx
 
     let binding_rule = binding_parse_rule_for_notation(notation, ctx);
     ctx.parse_state.use_rule(binding_rule);
+}
+
+fn tactic_rule_to_parse_rule<'ctx>(
+    tactic_rule: TacticRuleId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> RuleId<'ctx> {
+    let mut parts = Vec::new();
+    for tactic_part in tactic_rule.pattern().parts() {
+        let part = match tactic_part.part() {
+            TacticPatPartCore::Lit(lit_str) => lit(*lit_str),
+            TacticPatPartCore::Kw(kw_str) => kw(*kw_str),
+            TacticPatPartCore::Name => cat(ctx.builtin_cats.name),
+            TacticPatPartCore::Cat(tactic_cat) => {
+                let cat = ctx.parse_state.cat_for_tactic_cat(*tactic_cat);
+                RulePatternPart::Cat(cat)
+            }
+            TacticPatPartCore::Fragment => cat(ctx.builtin_cats.any_fragment),
+            TacticPatPartCore::Fact => cat(ctx.builtin_cats.fact),
+        };
+        parts.push(part);
+    }
+
+    let parse_pat = RulePattern::new(
+        parts,
+        tactic_rule.pattern().precedence(),
+        tactic_rule.pattern().associativity(),
+    );
+
+    let parse_rule = Rule::new(
+        tactic_rule.name(),
+        ctx.parse_state.cat_for_tactic_cat(tactic_rule.cat()),
+        ParseRuleSource::TacticRule(tactic_rule),
+        parse_pat,
+    );
+
+    ctx.arenas.parse_rules.alloc(parse_rule)
+}
+
+pub fn add_parse_rules_for_tactic_rule<'ctx>(
+    tactic_rule: TacticRuleId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) {
+    let parse_rule = tactic_rule_to_parse_rule(tactic_rule, ctx);
+    ctx.parse_state.use_rule(parse_rule);
 }

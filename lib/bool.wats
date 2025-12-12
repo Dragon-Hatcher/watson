@@ -24,7 +24,6 @@ end
 
 tactic_category templates
 tactic_category template
-tactic_category tactic
 
 tactic templates.none
     templates ::= 
@@ -36,6 +35,10 @@ end
 
 tactic template
     template ::= "[" f:@fragment "]"
+end
+
+tactic empty_tactic
+    tactic ::=
 end
 
 tactic by_tactic

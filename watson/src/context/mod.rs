@@ -36,6 +36,7 @@ pub struct Ctx<'ctx> {
     pub sources: SourceCache,
 
     pub sentence_cat: FormalSyntaxCatId<'ctx>,
+    pub tactic_cat: TacticCatId<'ctx>,
     pub builtin_cats: BuiltinCats<'ctx>,
     pub builtin_rules: BuiltinRules<'ctx>,
     pub single_name_notations: FxHashMap<FormalSyntaxCatId<'ctx>, NotationPatternId<'ctx>>,
@@ -49,12 +50,25 @@ impl<'ctx> Ctx<'ctx> {
             .formal_cats
             .alloc(*strings::SENTENCE, FormalSyntaxCat::new(*strings::SENTENCE));
 
+        let tactic_tactic_cat = arenas
+            .tactic_cats
+            .alloc(*strings::TACTIC, TacticCat::new(*strings::TACTIC));
+
+        // Create the tactic parse category before calling add_builtin_rules
+        let tactic_parse_cat = crate::parse::parse_state::Category::new(
+            tactic_tactic_cat.name(),
+            crate::parse::parse_state::SyntaxCategorySource::Tactic(tactic_tactic_cat),
+        );
+        let tactic_parse_cat = arenas.parse_cats.alloc(tactic_tactic_cat.name(), tactic_parse_cat);
+        parse_state.use_cat(tactic_parse_cat);
+
         let builtin_cats = BuiltinCats::new(arenas, &mut parse_state);
         let builtin_rules = add_builtin_rules(
             &arenas.parse_rules,
             &arenas.parse_cats,
             &mut parse_state,
             sentence_formal_cat,
+            tactic_parse_cat,
             &builtin_cats,
         );
 
@@ -65,6 +79,7 @@ impl<'ctx> Ctx<'ctx> {
             diags: DiagManager::new(),
             sources,
             sentence_cat: sentence_formal_cat,
+            tactic_cat: tactic_tactic_cat,
             builtin_cats,
             builtin_rules,
             single_name_notations: FxHashMap::default(),

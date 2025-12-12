@@ -1,6 +1,10 @@
 use crate::{
     generate_arena_handle,
-    semant::{formal_syntax::FormalSyntaxCatId, notation::NotationPatternId},
+    semant::{
+        formal_syntax::FormalSyntaxCatId,
+        notation::NotationPatternId,
+        tactic::{TacticCatId, TacticRuleId},
+    },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
 use ustr::Ustr;
@@ -8,6 +12,7 @@ use ustr::Ustr;
 pub struct ParseState<'ctx> {
     // Category info
     categories_by_formal_cat: FxHashMap<FormalSyntaxCatId<'ctx>, CategoryId<'ctx>>,
+    categories_by_tactic_cat: FxHashMap<TacticCatId<'ctx>, CategoryId<'ctx>>,
 
     // Rule info
     all_rules: FxHashSet<RuleId<'ctx>>,
@@ -22,6 +27,7 @@ impl<'ctx> ParseState<'ctx> {
     pub fn new() -> Self {
         Self {
             categories_by_formal_cat: FxHashMap::default(),
+            categories_by_tactic_cat: FxHashMap::default(),
             all_rules: FxHashSet::default(),
             rules_by_cat: FxHashMap::default(),
             can_be_empty: FxHashMap::default(),
@@ -33,8 +39,14 @@ impl<'ctx> ParseState<'ctx> {
         self.rules_by_cat.insert(cat, Vec::new());
         self.can_be_empty.insert(cat, false);
         self.initial_atoms.insert(cat, FxHashSet::default());
-        if let SyntaxCategorySource::FormalLang(formal) = cat.source() {
-            self.categories_by_formal_cat.insert(formal, cat);
+        match cat.source() {
+            SyntaxCategorySource::FormalLang(formal) => {
+                self.categories_by_formal_cat.insert(formal, cat);
+            }
+            SyntaxCategorySource::Tactic(tactic) => {
+                self.categories_by_tactic_cat.insert(tactic, cat);
+            }
+            SyntaxCategorySource::Builtin => {}
         }
     }
 
@@ -111,6 +123,10 @@ impl<'ctx> ParseState<'ctx> {
         self.categories_by_formal_cat[&formal_cat]
     }
 
+    pub fn cat_for_tactic_cat(&self, tactic_cat: TacticCatId<'ctx>) -> CategoryId<'ctx> {
+        self.categories_by_tactic_cat[&tactic_cat]
+    }
+
     pub fn initial_atoms(&self, cat: CategoryId<'ctx>) -> &FxHashSet<ParseAtomPattern> {
         &self.initial_atoms[&cat]
     }
@@ -148,6 +164,7 @@ impl<'ctx> Category<'ctx> {
 pub enum SyntaxCategorySource<'ctx> {
     Builtin,
     FormalLang(FormalSyntaxCatId<'ctx>),
+    Tactic(TacticCatId<'ctx>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -211,6 +228,7 @@ impl<'ctx> Rule<'ctx> {
 pub enum ParseRuleSource<'ctx> {
     Builtin,
     Notation(NotationPatternId<'ctx>),
+    TacticRule(TacticRuleId<'ctx>),
 }
 
 impl<'ctx> ParseRuleSource<'ctx> {
@@ -218,6 +236,13 @@ impl<'ctx> ParseRuleSource<'ctx> {
         match self {
             ParseRuleSource::Notation(id) => *id,
             _ => panic!("ParseRuleSource is not Notation"),
+        }
+    }
+
+    pub fn get_tactic_rule(&self) -> TacticRuleId<'ctx> {
+        match self {
+            ParseRuleSource::TacticRule(id) => *id,
+            _ => panic!("ParseRuleSource is not TacticRule"),
         }
     }
 }

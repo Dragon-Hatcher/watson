@@ -23,6 +23,7 @@ use crate::{
         formal_syntax::FormalSyntaxCatId,
         notation::{NotationPattern, NotationPatternPart},
         scope::Scope,
+        tactic::TacticCatId,
         theorems::{_debug_theorem, TheoremId},
     },
 };
@@ -119,11 +120,19 @@ fn parse_source<'ctx>(
                 println!("{}", _debug_theorem(new_theorem));
                 theorems.push(new_theorem);
             }
-            ElaborateAction::NewTacticCat(_cat) => {
-                // Tactic categories are stored but don't affect parsing for now
+            ElaborateAction::NewTacticCat(cat) => {
+                // The command created a new tactic category. We need to
+                // update the state of the parser to include this category.
+                let parse_cat = Category::new(cat.name(), SyntaxCategorySource::Tactic(cat));
+                let parse_cat = ctx.arenas.parse_cats.alloc(cat.name(), parse_cat);
+                ctx.parse_state.use_cat(parse_cat);
+                ctx.parse_state.recompute_initial_atoms();
             }
-            ElaborateAction::NewTacticRule(_rule) => {
-                // Tactic rules are stored but don't affect parsing for now
+            ElaborateAction::NewTacticRule(rule) => {
+                // The command created a new tactic rule. We need to
+                // update the state of the parser to include this rule.
+                grammar::add_parse_rules_for_tactic_rule(rule, ctx);
+                ctx.parse_state.recompute_initial_atoms();
             }
         }
     } else {

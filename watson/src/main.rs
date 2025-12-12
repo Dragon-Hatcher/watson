@@ -1,8 +1,5 @@
 use crate::{
-    context::{Arenas, Ctx},
-    parse::{SourceCache, SourceId, parse, source_cache::SourceDecl},
-    report::{ProofReport, display_report},
-    semant::{check_circularity::find_circular_dependency_groups, proof_kernel::check_proofs},
+    config::{WatsonConfig, find_config_file}, context::{Arenas, Ctx}, parse::{SourceCache, SourceId, parse, source_cache::SourceDecl}, report::{ProofReport, display_report}, semant::{check_circularity::find_circular_dependency_groups, proof_kernel::check_proofs}
 };
 use argh::FromArgs;
 use crossterm::{
@@ -18,6 +15,7 @@ use std::{
 };
 use ustr::Ustr;
 
+mod config;
 mod context;
 mod diagnostics;
 mod parse;
@@ -33,25 +31,33 @@ struct Args {
     #[argh(switch, short = 'w')]
     watch: bool,
 
-    /// the root file of the project.
-    #[argh(positional)]
-    root: PathBuf,
+    /// path to watson.toml config file (if not provided, searches up from current directory).
+    #[argh(option, short = 'c')]
+    config: Option<PathBuf>,
 }
 
 fn main() {
     let args: Args = argh::from_env();
 
+    // Find watson.toml config file
+    let config_file_path = match args.config {
+        Some(file) => file.canonicalize().unwrap(),
+        None => find_config_file().unwrap(),
+    };
+
     if args.watch {
+        let config = WatsonConfig::from_file(&config_file_path).unwrap();
+
         let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
         let mut watcher = notify::recommended_watcher(tx).unwrap();
         watcher
-            .watch(&args.root, notify::RecursiveMode::Recursive)
+            .watch(config.project_dir(), notify::RecursiveMode::Recursive)
             .unwrap();
 
         for i in 1.. {
             let _ = rx.try_iter().count();
             let arenas = Arenas::new();
-            let (ctx, report) = run(&args, &arenas);
+            let (ctx, report) = run(&config, &arenas);
 
             // Clear the screen to print the new info
             _ = execute!(io::stdout(), Clear(ClearType::Purge), MoveTo(0, 0));
@@ -68,8 +74,10 @@ fn main() {
             }
         }
     } else {
+        let config = WatsonConfig::from_file(&config_file_path).unwrap();
+
         let arenas = Arenas::new();
-        let (ctx, report) = run(&args, &arenas);
+        let (ctx, report) = run(&config, &arenas);
 
         display_report(&report, ctx.diags.has_errors(), None);
 
@@ -80,22 +88,20 @@ fn main() {
     }
 }
 
-fn run<'ctx>(args: &Args, arenas: &'ctx Arenas<'ctx>) -> (Ctx<'ctx>, ProofReport<'ctx>) {
-    let (source_cache, root_id) = make_source_cache(&args.root);
+fn run<'ctx>(config: &WatsonConfig, arenas: &'ctx Arenas<'ctx>) -> (Ctx<'ctx>, ProofReport<'ctx>) {
+    let (source_cache, root_id) = make_source_cache(config);
     let mut ctx = Ctx::new(source_cache, arenas);
     let report = compile(root_id, &mut ctx);
     (ctx, report)
 }
 
-fn make_source_cache(root_file: &Path) -> (SourceCache, SourceId) {
-    let root_file = root_file.canonicalize().unwrap(); // TODO.
-    let root_dir = root_file.parent().unwrap().to_path_buf();
-    let source_cache = SourceCache::new(root_dir);
+fn make_source_cache(config: &WatsonConfig) -> (SourceCache, SourceId) {
+    let source_cache = SourceCache::new(config.project_dir().into());
 
-    let text = std::fs::read_to_string(&root_file).unwrap();
-    let root_id = Ustr::from(&root_file.file_stem().unwrap().to_string_lossy());
-    let root_id = SourceId::new(root_id);
-    source_cache.add(root_id, text, SourceDecl::Root);
+    let root_path = config.project_dir().join("src").join("main.wats");
+    let root_text = std::fs::read_to_string(&root_path).unwrap();
+    let root_id = SourceId::new(Ustr::from("main"));
+    source_cache.add(root_id, root_text, SourceDecl::Root);
 
     (source_cache, root_id)
 }

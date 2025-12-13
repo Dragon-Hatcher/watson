@@ -44,6 +44,11 @@ str_const! {
     RIGHT_ARROW = ">";
 }
 
+// Reserved names:
+str_const! {
+    RESERVED_RULE = "_rule";
+}
+
 str_const! {
     SENTENCE = "sentence";
     BINDING = "binding";

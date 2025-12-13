@@ -303,14 +303,22 @@ impl<'ctx> DiagManager<'ctx> {
         Err(())
     }
 
+    pub fn err_reserved_tactic_label<T>(&mut self, label: Ustr, span: Span) -> WResult<T> {
+        let diag = Diagnostic::new(&format!(
+            "tactic label `{label}` is reserved (the label `_rule` is reserved for the tactic rule name)"
+        ))
+        .with_error("reserved label used here", span);
+
+        self.add_diag(diag);
+        Err(())
+    }
+
     pub fn err_ambiguous_parse<T>(&mut self, span: Span) -> WResult<T> {
         let diag = Diagnostic::new("ambiguous parse").with_error("", span);
 
         self.add_diag(diag);
         Err(())
     }
-
-
 }
 
 // Below are errors relating specifically to proofs.

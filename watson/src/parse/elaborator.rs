@@ -547,9 +547,16 @@ fn elaborate_maybe_label<'ctx>(
 
     match_rule! { (ctx, maybe_label) =>
         label_none ::= [] => Ok(None),
-        label_some ::= [label, colon] => {
+        label_some ::= [label_node, colon] => {
             debug_assert!(colon.is_lit(*strings::COLON));
-            let label = elaborate_name(label.as_node().unwrap(), ctx)?;
+            let label = elaborate_name(label_node.as_node().unwrap(), ctx)?;
+
+            // Check for reserved label names
+            if label == *strings::RESERVED_RULE {
+                _ = ctx.diags.err_reserved_tactic_label::<()>(label, label_node.span());
+                return Ok(None);
+            }
+
             Ok(Some(label))
         }
     }

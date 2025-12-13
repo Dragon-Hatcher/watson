@@ -7,6 +7,8 @@ use mlua::{Lua, LuaOptions, StdLib};
 use std::ops::Deref;
 
 mod file_loader;
+mod tactic_to_lua;
+mod unresolved_to_lua;
 
 pub struct WLua<'ctx> {
     lua: Lua,

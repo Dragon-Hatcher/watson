@@ -18,6 +18,14 @@ impl<'ctx> TacticInst<'ctx> {
     pub fn new(rule: TacticRuleId<'ctx>, children: Vec<TacticInstPart<'ctx>>) -> Self {
         Self { rule, children }
     }
+
+    pub fn rule(&self) -> TacticRuleId<'ctx> {
+        self.rule
+    }
+
+    pub fn children(&self) -> &[TacticInstPart<'ctx>] {
+        &self.children
+    }
 }
 
 pub enum TacticInstPart<'ctx> {

@@ -1048,23 +1048,23 @@ fn elaborate_tactic<'ctx>(
             TacticPatPartCore::Name => {
                 let name = elaborate_name(child.as_node().unwrap(), ctx)?;
                 TacticInstPart::Name(name)
-            },
+            }
             TacticPatPartCore::Cat(_) => {
                 let inst = elaborate_tactic(child.as_node().unwrap(), ctx)?;
                 TacticInstPart::SubInst(inst)
-            },
+            }
             TacticPatPartCore::Frag(_) => {
                 let frag = UnresolvedFrag(child.as_node().unwrap());
                 TacticInstPart::Frag(frag)
-            },
+            }
             TacticPatPartCore::AnyFrag => {
                 let frag = UnresolvedAnyFrag(child.as_node().unwrap());
                 TacticInstPart::AnyFrag(frag)
-            },
+            }
             TacticPatPartCore::Fact => {
                 let fact = elaborate_fact(child.as_node().unwrap(), ctx)?;
                 TacticInstPart::Fact(fact)
-            },
+            }
         };
         tactic_children.push(t_child);
     }

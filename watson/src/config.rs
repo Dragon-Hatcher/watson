@@ -48,8 +48,7 @@ impl WatsonConfig {
 }
 
 #[derive(Debug, Deserialize)]
-struct WatsonConfigFile {
-}
+struct WatsonConfigFile {}
 
 impl WatsonConfigFile {
     /// Parse a watson.toml config file from the given path
@@ -68,4 +67,3 @@ pub enum ConfigError {
     ParseError(PathBuf, toml::de::Error),
     InvalidPath(PathBuf),
 }
-

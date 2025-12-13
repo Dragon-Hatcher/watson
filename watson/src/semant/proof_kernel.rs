@@ -3,17 +3,9 @@ use crate::{
     semant::{
         fragment::{Fact, FragHead, Fragment, FragmentId},
         proof_kernel::safe::{SafeFact, SafeFrag},
-        proof_status::ProofStatuses,
         theorems::TheoremId,
     },
 };
-
-pub fn check_proofs<'ctx>(
-    _theorems: &[TheoremId<'ctx>],
-    _ctx: &mut Ctx<'ctx>,
-) -> ProofStatuses<'ctx> {
-    ProofStatuses::new()
-}
 
 pub struct ProofCertificate<'ctx> {
     proof: ProofState<'ctx>,
@@ -41,11 +33,16 @@ impl<'ctx> ProofCertificate<'ctx> {
     pub fn theorem(&self) -> TheoremId<'ctx> {
         self.proof.proof_for
     }
+
+    pub fn theorems_used(&self) -> &im::HashSet<TheoremId<'ctx>> {
+        &self.proof.theorems_used
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProofState<'ctx> {
     proof_for: TheoremId<'ctx>,
+    theorems_used: im::HashSet<TheoremId<'ctx>>,
     knowns: im::HashSet<SafeFact<'ctx>>,
     /// Stack of assumptions and the set of known facts before the assumption.
     assumptions: im::Vector<(im::HashSet<SafeFact<'ctx>>, SafeFrag<'ctx>)>,
@@ -125,6 +122,7 @@ impl<'ctx> ProofState<'ctx> {
             assumptions: im::Vector::new(),
             knowns,
             proof_for: theorem,
+            theorems_used: im::HashSet::new(),
         })
     }
 
@@ -183,6 +181,7 @@ impl<'ctx> ProofState<'ctx> {
         let conclusion = SafeFrag::new(conclusion, ctx)?;
         let mut new = self.clone();
         new.knowns.insert(SafeFact::new_conclusion_safe(conclusion));
+        new.theorems_used.insert(theorem);
         Ok(new)
     }
 

@@ -23,11 +23,15 @@ use crate::{
         formal_syntax::FormalSyntaxCatId,
         notation::{NotationPattern, NotationPatternPart},
         scope::Scope,
-        theorems::{_debug_theorem, TheoremId},
+        tactic::unresolved_proof::UnresolvedProof,
+        theorems::TheoremId,
     },
 };
 
-pub fn parse<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> Vec<TheoremId<'ctx>> {
+pub fn parse<'ctx>(
+    root: SourceId,
+    ctx: &mut Ctx<'ctx>,
+) -> Vec<(TheoremId<'ctx>, UnresolvedProof<'ctx>)> {
     let mut sources_stack = Vec::new();
     let mut scope = Scope::new();
     sources_stack.push(root.start_loc());
@@ -45,7 +49,7 @@ fn parse_source<'ctx>(
     ctx: &mut Ctx<'ctx>,
     sources_stack: &mut Vec<Location>,
     scope: &mut Scope<'ctx>,
-    theorems: &mut Vec<TheoremId<'ctx>>,
+    theorems: &mut Vec<(TheoremId<'ctx>, UnresolvedProof<'ctx>)>,
 ) {
     let source = loc.source();
     let text = ctx.sources.get_text(source).as_str();
@@ -115,9 +119,8 @@ fn parse_source<'ctx>(
                 // old scope with the new one.
                 *scope = new_scope;
             }
-            ElaborateAction::NewTheorem(new_theorem, _proof) => {
-                println!("{}", _debug_theorem(new_theorem));
-                theorems.push(new_theorem);
+            ElaborateAction::NewTheorem(new_theorem, proof) => {
+                theorems.push((new_theorem, proof));
             }
             ElaborateAction::NewTacticCat(cat) => {
                 // The command created a new tactic category. We need to

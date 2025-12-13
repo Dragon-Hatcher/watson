@@ -1,5 +1,9 @@
 use crate::{
-    config::{WatsonConfig, find_config_file}, context::{Arenas, Ctx}, parse::{SourceCache, SourceId, parse, source_cache::SourceDecl}, report::{ProofReport, display_report}, semant::{check_circularity::find_circular_dependency_groups, proof_kernel::check_proofs}
+    config::{WatsonConfig, find_config_file},
+    context::{Arenas, Ctx},
+    parse::{SourceCache, SourceId, parse, source_cache::SourceDecl},
+    report::{ProofReport, display_report},
+    semant::{check_circularity::find_circular_dependency_groups, check_proofs::check_proofs},
 };
 use argh::FromArgs;
 use crossterm::{
@@ -8,11 +12,7 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 use notify::Watcher;
-use std::{
-    io,
-    path::{Path, PathBuf},
-    sync::mpsc,
-};
+use std::{io, path::PathBuf, sync::mpsc};
 use ustr::Ustr;
 
 mod config;

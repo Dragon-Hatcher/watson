@@ -55,7 +55,11 @@ pub struct TacticPat<'ctx> {
 }
 
 impl<'ctx> TacticPat<'ctx> {
-    pub fn new(parts: Vec<TacticPatPart<'ctx>>, precedence: Precedence, associativity: Associativity) -> Self {
+    pub fn new(
+        parts: Vec<TacticPatPart<'ctx>>,
+        precedence: Precedence,
+        associativity: Associativity,
+    ) -> Self {
         Self {
             parts,
             precedence,

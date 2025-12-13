@@ -37,12 +37,17 @@ impl<'ctx> ProofCertificate<'ctx> {
     pub fn theorems_used(&self) -> &im::HashSet<TheoremId<'ctx>> {
         &self.proof.theorems_used
     }
+
+    pub fn uses_todo(&self) -> bool {
+        self.proof.uses_todo
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProofState<'ctx> {
     proof_for: TheoremId<'ctx>,
     theorems_used: im::HashSet<TheoremId<'ctx>>,
+    uses_todo: bool,
     knowns: im::HashSet<SafeFact<'ctx>>,
     /// Stack of assumptions and the set of known facts before the assumption.
     assumptions: im::Vector<(im::HashSet<SafeFact<'ctx>>, SafeFrag<'ctx>)>,
@@ -123,6 +128,7 @@ impl<'ctx> ProofState<'ctx> {
             knowns,
             proof_for: theorem,
             theorems_used: im::HashSet::new(),
+            uses_todo: false,
         })
     }
 
@@ -182,6 +188,19 @@ impl<'ctx> ProofState<'ctx> {
         let mut new = self.clone();
         new.knowns.insert(SafeFact::new_conclusion_safe(conclusion));
         new.theorems_used.insert(theorem);
+        Ok(new)
+    }
+
+    pub fn apply_todo(
+        &self,
+        justifying: FragmentId<'ctx>,
+        ctx: &Ctx<'ctx>,
+    ) -> Result<Self, ProofError> {
+        let mut new = self.clone();
+        let new_fact = Fact::new(None, justifying);
+        let new_fact = SafeFact::new(new_fact, ctx)?;
+        new.knowns.insert(new_fact);
+        new.uses_todo = true;
         Ok(new)
     }
 

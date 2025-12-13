@@ -309,6 +309,13 @@ impl<'ctx> DiagManager<'ctx> {
         self.add_diag(diag);
         Err(())
     }
+
+    pub fn err_lua_load_error<T>(&mut self, error: mlua::Error) -> WResult<T> {
+        let diag = Diagnostic::new(&format!("Error while loading lua:\n {error}."));
+
+        self.add_diag(diag);
+        Err(())
+    }
 }
 
 // Below are errors relating specifically to proofs.

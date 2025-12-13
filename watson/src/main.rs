@@ -57,7 +57,7 @@ fn main() {
         for i in 1.. {
             let _ = rx.try_iter().count();
             let arenas = Arenas::new();
-            let (ctx, report) = run(&config, &arenas);
+            let (ctx, report) = run(config.clone(), &arenas);
 
             // Clear the screen to print the new info
             _ = execute!(io::stdout(), Clear(ClearType::Purge), MoveTo(0, 0));
@@ -77,7 +77,7 @@ fn main() {
         let config = WatsonConfig::from_file(&config_file_path).unwrap();
 
         let arenas = Arenas::new();
-        let (ctx, report) = run(&config, &arenas);
+        let (ctx, report) = run(config, &arenas);
 
         display_report(&report, ctx.diags.has_errors(), None);
 
@@ -88,9 +88,9 @@ fn main() {
     }
 }
 
-fn run<'ctx>(config: &WatsonConfig, arenas: &'ctx Arenas<'ctx>) -> (Ctx<'ctx>, ProofReport<'ctx>) {
-    let (source_cache, root_id) = make_source_cache(config);
-    let mut ctx = Ctx::new(source_cache, arenas);
+fn run<'ctx>(config: WatsonConfig, arenas: &'ctx Arenas<'ctx>) -> (Ctx<'ctx>, ProofReport<'ctx>) {
+    let (source_cache, root_id) = make_source_cache(&config);
+    let mut ctx = Ctx::new(source_cache, config, arenas);
     let report = compile(root_id, &mut ctx);
     (ctx, report)
 }

@@ -30,6 +30,7 @@ pub fn find_config_file() -> Result<PathBuf, ConfigError> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct WatsonConfig {
     project_dir: PathBuf,
 }

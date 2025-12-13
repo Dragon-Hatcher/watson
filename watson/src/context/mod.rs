@@ -1,6 +1,7 @@
 use rustc_hash::FxHashMap;
 
 use crate::{
+    config::WatsonConfig,
     context::arena::{InternedArena, NamedArena, PlainArena, ScopeArena},
     diagnostics::DiagManager,
     parse::{
@@ -35,6 +36,9 @@ pub struct Ctx<'ctx> {
     /// Source code cache for storing and retrieving the text of source files.
     pub sources: SourceCache,
 
+    /// Project configuration.
+    pub config: WatsonConfig,
+
     pub sentence_cat: FormalSyntaxCatId<'ctx>,
     pub tactic_cat: TacticCatId<'ctx>,
     pub builtin_cats: BuiltinCats<'ctx>,
@@ -43,7 +47,7 @@ pub struct Ctx<'ctx> {
 }
 
 impl<'ctx> Ctx<'ctx> {
-    pub fn new(sources: SourceCache, arenas: &'ctx Arenas<'ctx>) -> Self {
+    pub fn new(sources: SourceCache, config: WatsonConfig, arenas: &'ctx Arenas<'ctx>) -> Self {
         let mut parse_state = ParseState::new();
 
         let sentence_formal_cat = arenas
@@ -80,6 +84,7 @@ impl<'ctx> Ctx<'ctx> {
             parse_state,
             diags: DiagManager::new(),
             sources,
+            config,
             sentence_cat: sentence_formal_cat,
             tactic_cat: tactic_tactic_cat,
             builtin_cats,

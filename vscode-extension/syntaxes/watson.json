@@ -2,12 +2,11 @@
   "scopeName": "source.watson",
   "patterns": [
     { "include": "#keywords" },
-    { "include": "#macros" },
     { "include": "#operators" },
     { "include": "#comments" },
     { "include": "#strings" },
     {
-      "begin": "\\b(module|syntax_category|syntax|macro|theorem|axiom)\\b",
+      "begin": "^(module|syntax_category|syntax|tactic|tactic_category|notation|theorem|axiom)\\b",
       "beginCaptures": {
         "1": { "name": "keyword.other.watson" }
       },
@@ -34,6 +33,10 @@
     "keywords": {
       "patterns": [
         {
+          "match": "\\b(definition)\\b",
+          "name": "keyword.other.watson"
+        },
+        {
           "match": "\\b(end|qed|proof)\\b",
           "name": "keyword.other.watson"
         },
@@ -46,18 +49,10 @@
           "name": "invalid.illegal.watson"
         },
         {
-          "match": "(@kw|@template|@variable|@binding)\\b",
+          "match": "(@kw|@template|@variable|@binding|@fact|@fragment|@any_fragment|@name)\\b",
           "name": "keyword.other.watson"
         }
       ]
-    },
-    "macros": {
-        "patterns": [
-            {
-                "match": "\\$[\\w_'][\\w_'\\d\\.]*\\b",
-                "name": "constant.other.macro.watson"
-            }
-        ]
     },
     "comments": {
       "patterns": [

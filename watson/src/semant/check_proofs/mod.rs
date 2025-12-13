@@ -10,6 +10,7 @@ use crate::{
         tactic::unresolved_proof::{TacticInst, UnresolvedProof},
         theorems::TheoremId,
     },
+    util::ansi::{ANSI_GRAY, ANSI_RESET},
 };
 
 pub fn check_proofs<'ctx>(
@@ -34,17 +35,33 @@ pub fn check_proofs<'ctx>(
     statuses
 }
 
+/// Set to true to print logs from Lua scripts during theorem checking
+const PRINT_LOGS: bool = true;
+
 fn check_theorem<'ctx>(
     thm: TheoremId<'ctx>,
     proof: &TacticInst<'ctx>,
     lua: &LuaInfo,
     ctx: &mut Ctx<'ctx>,
 ) -> ProofStatus<'ctx> {
-    println!();
-    println!("Theorem {}", thm.name());
-
     let lua_tactic: mlua::Value = proof.into_lua(&lua.runtime).unwrap();
-    dbg!(lua_tactic);
+
+    // Call the tactic handler
+    let thm_name = lua.runtime.create_string(thm.name().as_str()).unwrap();
+    let _result: mlua::Value = lua.handle_tactic_fn.call((lua_tactic, thm_name)).unwrap();
+
+    // Print logs if enabled
+    if PRINT_LOGS {
+        let logs = lua.get_logs();
+        if !logs.is_empty() {
+            println!("Logs while checking theorem {}:", thm.name());
+            for log in logs {
+                println!("{ANSI_GRAY}{log}{ANSI_RESET}");
+            }
+        }
+    }
+
+    lua.clear_logs();
 
     todo!()
 }

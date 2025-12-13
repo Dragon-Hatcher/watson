@@ -4,7 +4,9 @@ use crate::{
     semant::check_proofs::lua_api::file_loader::LuaFileRequirer,
 };
 use mlua::{Lua, LuaOptions, StdLib};
+use std::cell::RefCell;
 use std::ops::Deref;
+use std::rc::Rc;
 
 mod file_loader;
 mod tactic_to_lua;
@@ -57,6 +59,17 @@ Instead it returned:
 pub struct LuaInfo<'ctx> {
     pub runtime: WLua<'ctx>,
     pub handle_tactic_fn: mlua::Function,
+    pub logs: Rc<RefCell<Vec<String>>>,
+}
+
+impl<'ctx> LuaInfo<'ctx> {
+    pub fn clear_logs(&self) {
+        self.logs.borrow_mut().clear();
+    }
+
+    pub fn get_logs(&self) -> Vec<String> {
+        self.logs.borrow().clone()
+    }
 }
 
 pub fn setup_lua<'ctx>(ctx: &mut Ctx<'ctx>) -> WResult<LuaInfo<'ctx>> {
@@ -66,6 +79,31 @@ pub fn setup_lua<'ctx>(ctx: &mut Ctx<'ctx>) -> WResult<LuaInfo<'ctx>> {
         LuaOptions::new(),
     )
     .or_else(|e| ctx.diags.err_lua_load_error(e))?;
+
+    // Set up log storage
+    let logs = Rc::new(RefCell::new(Vec::new()));
+
+    // Create custom log function
+    let logs_clone = Rc::clone(&logs);
+    let log_fn = lua
+        .create_function(move |_lua, args: mlua::Variadic<mlua::Value>| {
+            let mut log_parts = Vec::new();
+            for arg in args.iter() {
+                let formatted = match arg {
+                    mlua::Value::String(s) => match s.to_str() {
+                        Ok(string) => string.to_string(),
+                        Err(_) => "<invalid utf8>".to_string(),
+                    },
+                    _ => format!("{arg:#?}"),
+                };
+                log_parts.push(formatted);
+            }
+            logs_clone.borrow_mut().push(log_parts.join(" "));
+            Ok(())
+        })
+        .unwrap();
+
+    lua.globals().set("log", log_fn).unwrap();
 
     // Set up our custom require system.
     let src_folder = ctx.config.project_dir().join("src");
@@ -85,12 +123,13 @@ pub fn setup_lua<'ctx>(ctx: &mut Ctx<'ctx>) -> WResult<LuaInfo<'ctx>> {
         _arenas: ctx.arenas,
     };
 
-    read_main_module(wlua, result, ctx)
+    read_main_module(wlua, result, logs, ctx)
 }
 
 fn read_main_module<'ctx>(
     lua: WLua<'ctx>,
     module: mlua::Value,
+    logs: Rc<RefCell<Vec<String>>>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<LuaInfo<'ctx>> {
     let mut err_fn = || {
@@ -103,5 +142,6 @@ fn read_main_module<'ctx>(
     Ok(LuaInfo {
         runtime: lua,
         handle_tactic_fn,
+        logs,
     })
 }

@@ -1,78 +1,8 @@
+use mlua::{Lua, NavigateError, Require};
 use std::{
     collections::VecDeque,
-    env, fs,
     path::{Component, Path, PathBuf},
 };
-
-use mlua::{Lua, LuaOptions, NavigateError, Require, StdLib};
-
-use crate::{
-    context::Ctx,
-    diagnostics::WResult,
-    semant::{
-        proof_status::{ProofStatus, ProofStatuses},
-        tactic::unresolved_proof::{TacticInst, UnresolvedProof},
-        theorems::TheoremId,
-    },
-};
-
-pub fn check_proofs<'ctx>(
-    theorems: &[(TheoremId<'ctx>, UnresolvedProof<'ctx>)],
-    ctx: &mut Ctx<'ctx>,
-) -> ProofStatuses<'ctx> {
-    let mut statuses = ProofStatuses::new();
-
-    _ = match setup_lua(ctx) {
-        Ok(_) => {}
-        Err(_) => return statuses,
-    };
-
-    for (theorem, proof) in theorems {
-        let status = match proof {
-            UnresolvedProof::Axiom => ProofStatus::new_axiom(),
-            UnresolvedProof::Theorem(proof) => check_theorem(*theorem, proof, ctx),
-        };
-        statuses.add(*theorem, status);
-    }
-
-    statuses
-}
-
-fn check_theorem<'ctx>(
-    thm: TheoremId<'ctx>,
-    proof: &TacticInst<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> ProofStatus<'ctx> {
-    todo!()
-}
-
-fn setup_lua<'ctx>(ctx: &mut Ctx<'ctx>) -> WResult<()> {
-    // Initialize the Lua runtime.
-    let lua = Lua::new_with(
-        StdLib::TABLE | StdLib::STRING | StdLib::UTF8 | StdLib::BIT | StdLib::MATH,
-        LuaOptions::new(),
-    )
-    .or_else(|e| ctx.diags.err_lua_load_error(e))?;
-
-    // Set up our custom require system.
-    let src_folder = ctx.config.project_dir().join("src");
-    let require = LuaFileRequirer::new(src_folder.clone());
-    let require = lua.create_require_function(require).unwrap();
-    lua.globals().set("require", require).unwrap();
-
-    // Load the root file
-    let lua_root = src_folder.join("main.luau");
-    let chunk = lua.load(lua_root).set_name("@main");
-    let result: mlua::Value = chunk
-        .call(())
-        .or_else(|e| ctx.diags.err_lua_load_error(e))?;
-
-    let tactic_fn: mlua::Function = result.as_table().unwrap().get("handleTactic").unwrap();
-    let ret: mlua::Value = tactic_fn.call(()).unwrap();
-    dbg!(ret);
-
-    Ok(())
-}
 
 #[derive(Debug)]
 pub struct LuaFileRequirer {

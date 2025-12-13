@@ -35,7 +35,7 @@ impl<'ctx> DiagManager<'ctx> {
     }
 }
 
-struct Diagnostic<'ctx> {
+pub struct Diagnostic<'ctx> {
     title: &'static str,
     parts: Vec<DiagnosticPart>,
     in_proof: Option<InProof<'ctx>>,
@@ -55,7 +55,7 @@ pub struct InProof<'ctx> {
 //     }
 // }
 
-enum DiagnosticPart {
+pub enum DiagnosticPart {
     Error(&'static str, Span),
     Info(&'static str, Span),
 }
@@ -70,7 +70,7 @@ impl DiagnosticPart {
 }
 
 impl<'ctx> Diagnostic<'ctx> {
-    fn new(title: &str) -> Self {
+    pub fn new(title: &str) -> Self {
         let title = Ustr::from(title).as_str();
         Self {
             title,
@@ -79,24 +79,24 @@ impl<'ctx> Diagnostic<'ctx> {
         }
     }
 
-    fn in_proof(mut self, in_proof: InProof<'ctx>) -> Self {
+    pub fn in_proof(mut self, in_proof: InProof<'ctx>) -> Self {
         self.in_proof = Some(in_proof);
         self
     }
 
-    fn with_error(mut self, msg: &str, span: Span) -> Self {
+    pub fn with_error(mut self, msg: &str, span: Span) -> Self {
         let msg = Ustr::from(msg).as_str();
         self.parts.push(DiagnosticPart::Error(msg, span));
         self
     }
 
-    fn with_info(mut self, msg: &str, span: Span) -> Self {
+    pub fn with_info(mut self, msg: &str, span: Span) -> Self {
         let msg = Ustr::from(msg).as_str();
         self.parts.push(DiagnosticPart::Info(msg, span));
         self
     }
 
-    fn to_message<'a>(&self, sources: &'a SourceCache) -> Message<'a> {
+    pub fn to_message<'a>(&self, sources: &'a SourceCache) -> Message<'a> {
         let mut msg = Level::Error.title(self.title);
 
         for (source, parts) in &self.parts.iter().chunk_by(|p| p.span().map(|s| s.source())) {
@@ -161,7 +161,7 @@ impl<'ctx> Diagnostic<'ctx> {
 // }
 
 impl<'ctx> DiagManager<'ctx> {
-    fn add_diag(&mut self, diag: Diagnostic<'ctx>) {
+    pub fn add_diag(&mut self, diag: Diagnostic<'ctx>) {
         self.diags.push(diag);
     }
 }
@@ -310,12 +310,7 @@ impl<'ctx> DiagManager<'ctx> {
         Err(())
     }
 
-    pub fn err_lua_load_error<T>(&mut self, error: mlua::Error) -> WResult<T> {
-        let diag = Diagnostic::new(&format!("Error while loading lua:\n {error}."));
 
-        self.add_diag(diag);
-        Err(())
-    }
 }
 
 // Below are errors relating specifically to proofs.

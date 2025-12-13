@@ -1,0 +1,57 @@
+syntax implication
+    sentence (200) ::= sentence "→" sentence
+end
+
+syntax false
+    sentence (000) ::= "⊥"
+end
+
+axiom imp.intro [p q : sentence] : (assume p |- q)
+    |- p → q
+end
+
+axiom imp.elim [p q : sentence] : (p → q) (p)
+    |- q
+end
+
+notation parens
+    sentence ::= "(" sentence ")"
+end
+
+definition
+    (p) := p
+end
+
+tactic_category templates
+tactic_category template
+
+tactic templates.none
+    templates ::= 
+end
+
+tactic templates.some
+    templates ::= t:template rest:templates
+end
+
+tactic template
+    template ::= "[" f:@any_fragment "]"
+end
+
+tactic empty_tactic
+    tactic ::=
+end
+
+tactic by_tactic
+    tactic ::= @kw"by" thm:@name tmps:templates
+end
+
+tactic have_tactic
+    tactic ::= @kw"have" show:@fact t1:tactic ";" t2:tactic
+end
+
+theorem imp.refl [p : sentence] :
+    |- p → p
+proof
+    have assume p |- p;
+    by imp.intro [p] [p]
+qed

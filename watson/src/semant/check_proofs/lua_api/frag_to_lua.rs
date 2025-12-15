@@ -3,7 +3,7 @@ use crate::semant::{
     presentation::{Pres, PresFrag, PresId},
     theorems::PresFact,
 };
-use mlua::{FromLua, UserData};
+use mlua::{FromLua, MetaMethod, UserData};
 
 #[derive(Debug, Clone, Copy, FromLua)]
 pub struct LuaPresFrag {
@@ -26,7 +26,19 @@ impl LuaPresFrag {
     }
 }
 
-impl UserData for LuaPresFrag {}
+impl UserData for LuaPresFrag {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("formal", |_, this| {
+            Ok(LuaPresFrag::new(this.out().formal()))
+        });
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_meta_method(MetaMethod::ToString, |_, this, _args: ()| {
+            Ok(this.out().print())
+        });
+    }
+}
 
 #[derive(Debug, Clone, Copy, FromLua)]
 pub struct LuaPresFact {
@@ -52,6 +64,12 @@ impl UserData for LuaPresFact {
         fields.add_field_method_get("assumption", |_, this| Ok(this.assumption));
 
         fields.add_field_method_get("conclusion", |_, this| Ok(this.conclusion));
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_meta_method(MetaMethod::ToString, |_, this, _args: ()| {
+            Ok(this.out().print())
+        });
     }
 }
 

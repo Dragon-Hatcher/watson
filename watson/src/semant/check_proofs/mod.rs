@@ -46,8 +46,6 @@ fn check_theorem<'ctx>(
     lua: &LuaInfo,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<ProofStatus<'ctx>> {
-    println!("{}", _debug_theorem(thm));
-
     let proof_state =
         ProofState::new_from_theorem(thm, ctx).expect("theorem statement should be valid.");
 

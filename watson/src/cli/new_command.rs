@@ -101,18 +101,15 @@ declare class UnResAnyFrag
 end
 
 declare class UnResFact
+    assumption: UnResFrag?
+    conclusion: UnResFrag
 end
 
 declare class Frag
+    formal: Frag
 end
 
-declare class PresTree
-end
-
-declare class PresFrag
-end
-
-declare class PresFact
+declare class Fact
 end
 
 declare class Scope
@@ -120,8 +117,8 @@ end
 
 declare class Theorem
     name: string
-    hypotheses: {PresFact}
-    conclusion: PresFrag
+    hypotheses: {Fact}
+    conclusion: Frag
 end
 
 declare class ProofState

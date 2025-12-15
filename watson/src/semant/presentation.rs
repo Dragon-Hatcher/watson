@@ -76,13 +76,18 @@ impl<'ctx> Pres<'ctx> {
     pub fn print(&self) -> String {
         match self.head() {
             PresHead::FormalFrag(FragHead::Hole(idx)) => format!("_{idx}"),
-            PresHead::FormalFrag(FragHead::TemplateRef(idx)) => format!("#{idx}"),
+            PresHead::FormalFrag(FragHead::TemplateRef(idx)) => {
+                if !self.children().is_empty() {
+                    todo!()
+                }
+                format!("${idx}")
+            }
             PresHead::FormalFrag(FragHead::Variable(_, _)) => todo!(),
             PresHead::FormalFrag(FragHead::RuleApplication(rule_app)) => {
                 let mut out = String::new();
                 let mut children = self.children().iter();
 
-                for (i, part) in rule_app._rule().pattern().parts().iter().enumerate() {
+                for (i, part) in rule_app.rule().pattern().parts().iter().enumerate() {
                     use FormalSyntaxPatPart as P;
 
                     if i != 0 {

@@ -4,195 +4,151 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Watson is a proof assistant written in Rust that enables users to define formal languages, state theorems, and provide proofs. Users can define custom syntax for logical propositions, declare axioms and theorems, and write tactic-based proofs that reference previously proven results.
+Watson is a proof assistant written in Rust with an extensible syntax system and Lua-based tactics. The project consists of:
+- `watson/` - Core Rust implementation of the proof assistant
+- `lib/` - Watson source files (`.wats`) containing example proofs and logic definitions
+- `vscode-extension/` - VSCode language extension for Watson syntax
 
-## Build and Run Commands
+## Build and Development Commands
+
+### Building the Project
 
 ```bash
-# Build the project
-cargo build --manifest-path=watson/Cargo.toml
+# Build the Watson CLI
+cd watson && cargo build
 
-# Run Watson on a .wats file
-./watson/target/debug/watson lib/bool.wats
+# Build in release mode
+cd watson && cargo build --release
 
-# Or using cargo run
-cargo run --manifest-path=watson/Cargo.toml -- lib/bool.wats
-
-# Watch mode (recheck on file changes)
-cargo run --manifest-path=watson/Cargo.toml -- lib/bool.wats --watch
+# Run the Watson CLI directly
+cargo run --manifest-path watson/Cargo.toml -- <command>
 ```
 
-The main Cargo.toml is located at `watson/Cargo.toml`, not at the repository root.
+### Running Watson
 
-## High-Level Architecture
+```bash
+# Check proofs in a Watson project
+watson/target/debug/watson check
 
-Watson follows a pipeline: **Parse → Semantic Analysis → Proof Verification → Reporting**
+# Check proofs with watch mode (recheck on file changes)
+watson/target/debug/watson check -w
 
-### 1. Parse Phase (`watson/src/parse/`)
+# Check with specific config file
+watson/target/debug/watson check -c path/to/watson.toml
 
-Converts `.wats` source files into structured parse trees using an **Earley parser** with dynamic grammar.
-
-- **`earley.rs`**: Core Earley parsing algorithm with predict/scan/complete steps
-- **`grammar.rs`**: Manages grammar rules and converts high-level patterns to parse rules
-  - `add_parse_rules_for_notation()`: User-defined syntax becomes parse rules
-  - `add_parse_rules_for_tactic_rule()`: Tactic patterns become parse rules
-- **`parse_state.rs`**: Tracks which rules apply to which categories, computes grammar properties (nullable, first-sets)
-- **`elaborator.rs`**: Converts parse trees to semantic actions (`ElaborateAction` enum)
-
-**Key insight**: Grammar is extended dynamically during compilation. New `syntax` and `notation` commands add rules that affect subsequent parsing.
-
-### 2. Semantic Analysis (`watson/src/semant/`)
-
-Builds semantic representations and manages symbols.
-
-#### Core Data Structures
-
-- **`fragment.rs`**: `Fragment<'ctx>` is the semantic representation of formal syntax trees
-  - Contains: category, head (RuleApplication/Variable/TemplateRef/Hole), children
-  - Tracks: holes, template references, unclosed variable bindings
-  - `Fact<'ctx>`: Represents hypothetical judgments "assumption |- conclusion"
-
-- **`scope.rs`**: `Scope<'ctx>` is an immutable map from notation bindings to their definitions
-  - Functional/persistent: `scope.child_with()` creates new scope without mutating old
-  - Tracks `binding_depth` for de Bruijn index adjustment
-
-- **`theorems.rs`**: `TheoremStatement<'ctx>` contains templates, hypotheses, conclusion, and proof
-  - `Template<'ctx>`: Template parameters with holes for instantiation
-  - `PresFact<'ctx>`: Paired fragment and presentation for display
-
-- **`presentation.rs`**: `Pres<'ctx>` and `PresTree<'ctx>` handle display layer
-  - Separates semantic meaning from how it's displayed
-  - `PresFrag<'ctx>`: Paired (Fragment, PresTree)
-
-- **`parse_fragment.rs`**: Bridges parse trees to fragments
-  - `parse_fragment()`: Converts parsed notation to `PresFrag`
-  - Resolves notation bindings through scope
-  - Instantiates template parameters with holes
-
-#### de Bruijn Indices
-
-Variables use de Bruijn indexing for binding:
-- `FragHead::Variable(cat, db_idx)` where `db_idx=0` means bound by innermost binding
-- Adjusted during substitution to prevent variable capture
-- `unclosed_count` tracks open binding abstractions
-
-### 3. Proof Verification (`watson/src/semant/proof_kernel.rs`)
-
-**Currently mostly stubbed** - infrastructure exists but main logic not yet implemented.
-
-- `ProofState<'ctx>`: Current proof state with known facts and assumption stack
-- `SafeFrag`/`SafeFact`: Validated fragments (no holes, proper closedness, correct category)
-- Intended operations: `add_assumption()`, `apply_theorem()`, `complete()`
-- `instantiate_frag()`, `fill_holes()`: Template/hole substitution
-
-### 4. Context & Memory Management (`watson/src/context/`)
-
-- **`arena.rs`**: Typed arena allocation pattern
-  - `PlainArena`: Simple allocation
-  - `InternedArena`: Deduplicates equal values (structural sharing)
-  - `NamedArena`: Maps names to allocated items
-  - All use `'ctx` lifetime - memory freed when `Ctx` dropped
-
-- **`mod.rs`**: `Ctx<'ctx>` is global compilation context containing:
-  - `arenas`: All memory pools
-  - `parse_state`: Current grammar state
-  - `diags`: Error/warning manager
-  - `builtin_cats`, `builtin_rules`: Built-in syntax
-
-**Arena pattern benefit**: Zero-copy references with type safety, no GC needed.
-
-## Key Design Patterns
-
-### Tactic Pattern Syntax
-
-When working with tactic patterns (`TacticPatPartCore`), note the distinction:
-- `@fragment(category_name)`: Matches a fragment of specific formal category (e.g., `@fragment(sentence)`)
-- `@any_fragment`: Matches any fragment regardless of category
-- `@fact`: Matches a fact (hypothetical judgment)
-- `@name`: Matches a name identifier
-- `@kw"keyword"`: Matches a specific keyword
-
-These are defined in `watson/src/semant/tactic.rs` and parsed in `watson/src/parse/elaborator.rs`.
-
-### Elaboration Action Pattern
-
-Parse phase returns `ElaborateAction` enum rather than directly modifying state:
-- `NewSource(SourceId)`: Load new file
-- `NewFormalCat`, `NewFormalRule`: Grammar additions
-- `NewNotation`: User syntax
-- `NewDefinition`: Scope updates
-- `NewTheorem`: Collect for verification
-- `NewTacticCat`, `NewTacticRule`: Tactic system
-
-Main loop in `parse/mod.rs::parse()` applies actions, keeping parse logic side-effect-free.
-
-### Fragment + Presentation Duality
-
-Every semantic fragment has paired presentation:
-```rust
-PresFrag<'ctx> = (FragmentId<'ctx>, PresTreeId<'ctx>)
-```
-- Fragment: semantic meaning (for verification)
-- PresTree: display form (for pretty-printing)
-
-Allows multiple notations for same concept without changing semantics.
-
-## File Structure
-
-```
-watson/
-├── src/
-│   ├── main.rs              # Entry point, compilation pipeline
-│   ├── parse/               # Earley parsing, grammar, elaboration
-│   ├── semant/              # Fragments, theorems, proof kernel
-│   ├── context/             # Arena allocators, global state
-│   ├── diagnostics.rs       # Error reporting
-│   └── report.rs            # Final output formatting
-├── Cargo.toml
-lib/
-└── bool.wats               # Boolean logic axioms and theorems
+# Create a new Watson project
+watson/target/debug/watson new <project-name>
 ```
 
-## Common Development Patterns
+### VSCode Extension
 
-### Adding New String Constants
+```bash
+# Install dependencies
+cd vscode-extension && npm install
 
-String constants are in `watson/src/strings.rs` using the `str_const!` macro:
-```rust
-str_const! {
-    KEYWORD_NAME = "keyword_name";
-}
+# Compile TypeScript
+cd vscode-extension && npm run compile
+
+# Watch mode for development
+cd vscode-extension && npm run watch
+
+# Run linter
+cd vscode-extension && npm run lint
+
+# Run tests
+cd vscode-extension && npm test
 ```
 
-### Adding New Grammar Rules
+## Architecture
 
-1. Update grammar comment in `watson/src/parse/grammar.rs`
-2. Add to `builtin_cats!` macro if new category
-3. Add to `builtin_rules!` macro if new rule
-4. Add rule construction in `BuiltinRules` initialization
-5. Update elaborator in `watson/src/parse/elaborator.rs` to handle new parse tree shapes
+### Core Components
+
+**Parsing Pipeline** (`watson/src/parse/`)
+- **Earley parser** (`earley.rs`) - Generalized parsing algorithm
+- **Elaborator** (`elaborator.rs`) - Converts parse trees into semantic structures
+- **Grammar** (`grammar.rs`) - Dynamic grammar construction from syntax declarations
+- **Parse State** (`parse_state.rs`) - Tracks available syntax categories and rules during parsing
+- Watson has an extensible syntax system where `.wats` files can define new syntax categories and rules that immediately become available for parsing subsequent code
+
+**Semantic Analysis** (`watson/src/semant/`)
+- **Proof Kernel** (`proof_kernel.rs`) - Core proof checking with `ProofState` and `ProofCertificate`
+- **Formal Syntax** (`formal_syntax.rs`) - Formal language categories and rules
+- **Notation** (`notation.rs`) - User-defined notation patterns with precedence/associativity
+- **Fragments** (`fragment.rs`) - Syntax fragments representing terms and sentences
+- **Theorems** (`theorems.rs`) - Theorem statements and template handling
+- **Tactics** (`tactic/`) - Proof tactics implemented in Lua
+- **Check Proofs** (`check_proofs/`) - Lua integration for tactic execution
+
+**Context Management** (`watson/src/context/`)
+- **Ctx** - Central context object containing arenas, parse state, diagnostics, source cache, and config
+- **Arenas** - Memory arenas for efficient allocation of interned AST nodes and semantic objects
+
+**CLI** (`watson/src/cli/`)
+- `check_command.rs` - Implements proof checking with optional watch mode
+- `new_command.rs` - Creates new Watson projects
+
+### Key Architectural Patterns
+
+1. **Dynamic Syntax Extension**: Watson files can declare new syntax categories (e.g., `syntax_category term`) and syntax rules (e.g., `syntax syntax.equality`) that extend the parser's grammar during parsing. This allows domain-specific notation to be defined within Watson source files.
+
+2. **Arena Allocation**: Heavy use of typed arenas (`typed_arena` crate) for allocating AST nodes and semantic objects with stable references using lifetimes.
+
+3. **Proof Kernel Safety**: The proof kernel uses a `safe` inner module with `SafeFrag` and `SafeFact` types to ensure only well-formed, validated fragments can participate in proofs.
+
+4. **Lua-Rust Bridge**: Tactics are executed via Lua (using `mlua` crate with Luau). The Rust proof state is converted to Lua, tactics manipulate it, and results are converted back to Rust for verification.
+
+5. **Incremental Parsing**: The parser processes source files line-by-line, maintaining a stack of parsing locations and handling commands that can load new modules or extend the grammar.
+
+6. **Project Structure**: Watson projects have a `watson.toml` config file at the root and a `src/main.wats` entry point. The config file is found by searching up the directory tree from the current directory.
+
+## Watson Language Concepts
+
+### Commands
+Watson source files consist of commands that declare:
+- `module` - Import other Watson files
+- `syntax_category` - Declare new syntax categories
+- `syntax` - Define syntax rules for formal languages
+- `notation` - Define notation patterns (syntactic sugar)
+- `definition` - Define term-level macros
+- `axiom` - Declare axioms with proof obligations
+- `theorem` - State and prove theorems
+- `tactic_category` - Declare tactic syntax categories
+- `tactic` - Define new proof tactics
+
+### Syntax System
+- Categories have names and can be either formal language categories or tactic categories
+- Rules map patterns to categories with precedence and associativity
+- Patterns can include literals, keywords, names, variables, bindings, and templates
+- The parser is dynamically extended as syntax declarations are processed
+
+### Proof Checking
+- Theorems have hypotheses and a conclusion (separated by `|-`)
+- Proofs are written using tactics in `proof ... qed` blocks
+- The proof kernel maintains a `ProofState` with known facts and assumptions
+- Proofs must derive the theorem's conclusion from its hypotheses to succeed
+- Circular dependencies between theorems are detected and reported
+
+## Common Patterns
+
+### Adding New Builtin Syntax
+When adding builtin syntax rules, update both:
+1. `watson/src/parse/grammar.rs` - Add the rule in `add_builtin_rules()`
+2. `watson/src/context/mod.rs` - Add rule ID to `BuiltinRules` struct
 
 ### Working with Fragments
+Fragments represent syntax tree nodes. They have:
+- A category (e.g., `sentence_cat`, or user-defined categories)
+- A head (which notation pattern was used)
+- Children (bound sub-fragments)
+- Metadata (holes, unclosed bindings)
 
-Fragments are immutable and arena-allocated:
-```rust
-let frag = Fragment::new(cat, head, children, flags);
-let frag_id = ctx.arenas.fragments.intern(frag);
-```
+Use `SafeFrag::new()` to validate fragments before using them in proofs.
 
-Always use `FragmentId<'ctx>` handles, never store `Fragment` directly.
+### Error Reporting
+Use `ctx.diags` methods to report errors:
+- Errors are accumulated in `DiagManager` and printed at the end
+- Include source location spans for accurate error reporting
+- Check `ctx.diags.has_errors()` to determine if compilation succeeded
 
-## Testing
-
-Test with example files in `lib/`:
-```bash
-./watson/target/debug/watson lib/bool.wats
-```
-
-Expected output shows all theorems followed by verification status (currently all shown as checked since proof kernel is stubbed).
-
-## Current Limitations
-
-- Proof kernel (`check_proofs()`) returns empty statuses - verification infrastructure exists but core logic not implemented
-- Tactic execution not fully integrated with proof kernel
-- Type system is minimal (just category membership)
+### Working with Arenas
+Objects allocated in arenas return IDs (e.g., `TheoremId<'ctx>`, `FragmentId<'ctx>`). These IDs can be used to retrieve the object later via the arena and support efficient equality checks and hashing.

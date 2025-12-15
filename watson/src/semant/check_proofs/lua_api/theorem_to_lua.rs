@@ -38,7 +38,7 @@ impl UserData for LuaTheorem {
                 .out()
                 .hypotheses()
                 .iter()
-                .map(|pf| LuaPresFact::new(pf))
+                .map(|pf| LuaPresFact::new(*pf))
                 .collect_vec();
             Ok(vec)
         });

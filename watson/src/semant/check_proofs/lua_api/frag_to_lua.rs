@@ -1,11 +1,61 @@
 use crate::semant::{
     fragment::{Fragment, FragmentId},
-    presentation::{PresFrag, PresTree, PresTreeId},
+    presentation::{Pres, PresFrag, PresId},
     theorems::PresFact,
 };
-use mlua::{FromLua, MetaMethod, UserData};
+use mlua::{FromLua, UserData};
 
 #[derive(Debug, Clone, Copy, FromLua)]
+pub struct LuaPresFrag {
+    frag: LuaFrag,
+    pres: LuaPres,
+    formal: LuaPres,
+}
+
+impl LuaPresFrag {
+    pub fn new<'ctx>(frag: PresFrag<'ctx>) -> Self {
+        Self {
+            frag: LuaFrag::new(frag.frag()),
+            pres: LuaPres::new(frag.pres()),
+            formal: LuaPres::new(frag.formal_pres()),
+        }
+    }
+
+    pub fn out<'ctx>(&self) -> PresFrag<'ctx> {
+        PresFrag::new(self.frag.out(), self.pres.out(), self.formal.out())
+    }
+}
+
+impl UserData for LuaPresFrag {}
+
+#[derive(Debug, Clone, Copy, FromLua)]
+pub struct LuaPresFact {
+    assumption: Option<LuaPresFrag>,
+    conclusion: LuaPresFrag,
+}
+
+impl LuaPresFact {
+    pub fn new<'ctx>(fact: PresFact<'ctx>) -> Self {
+        Self {
+            assumption: fact.assumption().map(LuaPresFrag::new),
+            conclusion: LuaPresFrag::new(fact.conclusion()),
+        }
+    }
+
+    pub fn out<'ctx>(&self) -> PresFact<'ctx> {
+        PresFact::new(self.assumption.map(|f| f.out()), self.conclusion.out())
+    }
+}
+
+impl UserData for LuaPresFact {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("assumption", |_, this| Ok(this.assumption));
+
+        fields.add_field_method_get("conclusion", |_, this| Ok(this.conclusion));
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct LuaFrag {
     ptr: *const Fragment<'static>,
 }
@@ -29,84 +79,26 @@ impl LuaFrag {
     }
 }
 
-impl UserData for LuaFrag {}
-
-#[derive(Debug, Clone, Copy, FromLua)]
-pub struct LuaPresTree {
-    ptr: *const PresTree<'static>,
+#[derive(Debug, Clone, Copy)]
+pub struct LuaPres {
+    ptr: *const Pres<'static>,
 }
 
-impl LuaPresTree {
-    pub fn new<'ctx>(pres: PresTreeId<'ctx>) -> Self {
+impl LuaPres {
+    pub fn new<'ctx>(pres: PresId<'ctx>) -> Self {
         let ptr = std::ptr::from_ref(pres.0);
         // SAFETY: We don't use this ptr here so this isn't really unsafe. See
         // where we dereference for the actual safety details.
-        let ptr: *const PresTree<'static> = unsafe { std::mem::transmute(ptr) };
+        let ptr: *const Pres<'static> = unsafe { std::mem::transmute(ptr) };
 
         Self { ptr }
     }
 
-    pub fn out<'ctx>(&self) -> PresTreeId<'ctx> {
+    pub fn out<'ctx>(&self) -> PresId<'ctx> {
         // SAFETY: This isn't actually safe the way we have set this up. But!
         // as long as we only use these objects inside lua, since the lua
         // runtime doesn't live for as long as context, this is safe.
         let pres = unsafe { &*self.ptr };
-        PresTreeId(pres)
-    }
-}
-
-impl UserData for LuaPresTree {}
-
-#[derive(Debug, Clone, Copy, FromLua)]
-pub struct LuaPresFrag {
-    frag: LuaFrag,
-    pres: LuaPresTree,
-}
-
-impl LuaPresFrag {
-    pub fn new<'ctx>(pres_frag: PresFrag<'ctx>) -> Self {
-        Self {
-            frag: LuaFrag::new(pres_frag.frag()),
-            pres: LuaPresTree::new(pres_frag.pres()),
-        }
-    }
-
-    pub fn out<'ctx>(&self) -> PresFrag<'ctx> {
-        PresFrag(self.frag.out(), self.pres.out())
-    }
-}
-
-impl UserData for LuaPresFrag {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
-            Ok(this.out().pres().pres().print())
-        });
-    }
-}
-
-#[derive(Debug, Clone, Copy, FromLua)]
-pub struct LuaPresFact {
-    assumption: Option<LuaPresFrag>,
-    conclusion: LuaPresFrag,
-}
-
-impl LuaPresFact {
-    pub fn new<'ctx>(fact: &PresFact<'ctx>) -> Self {
-        Self {
-            assumption: fact.assumption().map(LuaPresFrag::new),
-            conclusion: LuaPresFrag::new(fact.conclusion()),
-        }
-    }
-
-    pub fn out<'ctx>(&self) -> PresFact<'ctx> {
-        PresFact::new(self.assumption.map(|a| a.out()), self.conclusion.out())
-    }
-}
-
-impl UserData for LuaPresFact {
-    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
-            Ok(this.out().print())
-        });
+        PresId(pres)
     }
 }

@@ -9,12 +9,12 @@ use crate::{
     },
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
-        fragment::{FragHead, FragRuleApplication, Fragment, FragmentId},
+        fragment::{FragHead, FragRuleApplication, Fragment, hole_frag},
         notation::{
             NotationBinding, NotationBindingId, NotationPattern, NotationPatternId,
             NotationPatternPart,
         },
-        presentation::{Pres, PresFrag, PresHead, PresTree, PresTreeId},
+        presentation::{Pres, PresFrag, PresHead},
         scope::ScopeEntry,
         tactic::syntax::{TacticPatPartCore, TacticRuleId},
     },
@@ -725,60 +725,33 @@ pub fn formal_rule_to_notation<'ctx>(
         ctx.arenas.notations.alloc(pattern)
     }
 
-    fn to_frag<'ctx>(rule: FormalSyntaxRuleId<'ctx>, ctx: &mut Ctx<'ctx>) -> FragmentId<'ctx> {
-        let mut frag_children = Vec::new();
+    fn to_frag<'ctx>(rule: FormalSyntaxRuleId<'ctx>, ctx: &Ctx<'ctx>) -> PresFrag<'ctx> {
+        let mut children = Vec::new();
         let mut bindings_added = 0;
         for formal_part in rule.pattern().parts() {
             match formal_part {
                 FormalSyntaxPatPart::Cat(cat) => {
-                    let frag = Fragment::new(*cat, FragHead::Hole(frag_children.len()), Vec::new());
-                    let frag = ctx.arenas.fragments.intern(frag);
-                    frag_children.push(frag);
+                    children.push(hole_frag(children.len(), *cat, ctx));
                 }
                 FormalSyntaxPatPart::Binding(_) => bindings_added += 1,
                 FormalSyntaxPatPart::Lit(_) => continue,
             };
         }
 
+        let frag_children = children.iter().map(|f| f.frag()).collect();
         let rule_app = FragRuleApplication::new(rule, bindings_added);
         let frag = Fragment::new(
             rule.cat(),
             FragHead::RuleApplication(rule_app),
             frag_children,
         );
-        ctx.arenas.fragments.intern(frag)
-    }
+        let frag = ctx.arenas.fragments.intern(frag);
 
-    fn to_pres<'ctx>(
-        rule: FormalSyntaxRuleId<'ctx>,
-        binding: NotationBindingId<'ctx>,
-        ctx: &mut Ctx<'ctx>,
-    ) -> PresTreeId<'ctx> {
-        let mut children = Vec::new();
-        let mut trees = Vec::new();
+        let pres = Pres::new(PresHead::FormalFrag(frag.head()), children);
+        let pres = ctx.arenas.presentations.intern(pres);
 
-        for formal_part in rule.pattern().parts() {
-            match formal_part {
-                FormalSyntaxPatPart::Cat(_) => {
-                    let pres = Pres::new(PresHead::Hole(children.len()), Vec::new());
-                    let pres = ctx.arenas.presentations.intern(pres);
-                    let tree = PresTree::new(pres, Vec::new());
-                    let tree = ctx.arenas.presentation_trees.intern(tree);
-
-                    children.push(pres);
-                    trees.push(tree);
-                }
-                FormalSyntaxPatPart::Binding(_) => {
-                    todo!("Handle bindings")
-                }
-                FormalSyntaxPatPart::Lit(_) => continue,
-            };
-        }
-
-        let parent_pres = Pres::new(PresHead::Notation(binding), children);
-        let parent_pres = ctx.arenas.presentations.intern(parent_pres);
-        let parent_tree = PresTree::new(parent_pres, trees);
-        ctx.arenas.presentation_trees.intern(parent_tree)
+        // This presentation is already formal so we don't need a formal reduction.
+        PresFrag::new(frag, pres, pres)
     }
 
     let pattern = to_notation(rule, ctx);
@@ -787,8 +760,7 @@ pub fn formal_rule_to_notation<'ctx>(
     let binding = ctx.arenas.notation_bindings.intern(binding);
 
     let frag = to_frag(rule, ctx);
-    let pres = to_pres(rule, binding, ctx);
-    let scope_entry = ScopeEntry::new(PresFrag(frag, pres));
+    let scope_entry = ScopeEntry::new(frag);
 
     (pattern, binding, scope_entry)
 }

@@ -3,12 +3,13 @@ use crate::{
     generate_arena_handle,
     semant::{
         formal_syntax::FormalSyntaxCatId,
-        fragment::{Fact, FragHead, Fragment, FragmentId},
+        fragment::{Fact, FragHead, Fragment, hole_frag},
         notation::{_debug_binding, NotationBindingId},
-        presentation::{Pres, PresFrag, PresHead, PresId, PresTree, PresTreeId},
+        presentation::{Pres, PresFrag, PresHead},
         scope::{Scope, ScopeEntry},
     },
 };
+use itertools::Itertools;
 use ustr::Ustr;
 
 generate_arena_handle!(TheoremId<'ctx> => TheoremStatement<'ctx>);
@@ -97,47 +98,29 @@ pub fn add_templates_to_scope<'ctx>(
     fn template_to_frag<'ctx>(
         template: &Template<'ctx>,
         idx: usize,
-        ctx: &mut Ctx<'ctx>,
-    ) -> FragmentId<'ctx> {
-        let args = template
-            .holes()
-            .iter()
-            .enumerate()
-            .map(|(i, (cat, _name))| {
-                let frag = Fragment::new(*cat, FragHead::Hole(i), Vec::new());
-                ctx.arenas.fragments.intern(frag)
-            })
-            .collect();
-        let frag = Fragment::new(template.cat(), FragHead::TemplateRef(idx), args);
-        ctx.arenas.fragments.intern(frag)
-    }
+        ctx: &Ctx<'ctx>,
+    ) -> PresFrag<'ctx> {
+        let holes = template.holes().iter().enumerate();
+        let hole_pres_frags = holes
+            .map(|(i, (cat, _name))| hole_frag(i, *cat, ctx))
+            .collect_vec();
+        let hole_frags = hole_pres_frags.iter().map(|f| f.frag()).collect();
 
-    fn template_to_pres<'ctx>(template: &Template<'ctx>, ctx: &mut Ctx<'ctx>) -> PresTreeId<'ctx> {
-        let (children, trees): (Vec<PresId>, Vec<PresTreeId>) = template
-            .holes()
-            .iter()
-            .enumerate()
-            .map(|(i, _)| {
-                let pres = Pres::new(PresHead::Hole(i), Vec::new());
-                let pres = ctx.arenas.presentations.intern(pres);
-                let tree = PresTree::new(pres, Vec::new());
-                let tree = ctx.arenas.presentation_trees.intern(tree);
-                (pres, tree)
-            })
-            .unzip();
+        let frag = Fragment::new(template.cat(), FragHead::TemplateRef(idx), hole_frags);
+        let frag = ctx.arenas.fragments.intern(frag);
+        let pres = Pres::new(PresHead::FormalFrag(frag.head()), hole_pres_frags);
+        let pres = ctx.arenas.presentations.intern(pres);
 
-        let parent_pres = Pres::new(PresHead::Notation(template.binding), children);
-        let parent_pres = ctx.arenas.presentations.intern(parent_pres);
-        let parent_tree = PresTree::new(parent_pres, trees);
-        ctx.arenas.presentation_trees.intern(parent_tree)
+        // The presentation is already formal so we can pass the pres as the
+        // formal pres.
+        PresFrag::new(frag, pres, pres)
     }
 
     let mut my_scope = parent_scope.clone();
 
     for (i, template) in templates.iter().enumerate() {
         let frag = template_to_frag(template, i, ctx);
-        let pres = template_to_pres(template, ctx);
-        let entry = ScopeEntry::new(PresFrag(frag, pres));
+        let entry = ScopeEntry::new(frag);
         my_scope = my_scope.child_with(template.binding(), entry)
     }
 

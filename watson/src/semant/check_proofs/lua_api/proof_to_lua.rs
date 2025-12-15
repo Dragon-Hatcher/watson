@@ -1,5 +1,7 @@
 use crate::semant::{
-    check_proofs::lua_api::{ctx_to_lua::LuaCtx, frag_to_lua::LuaFrag, theorem_to_lua::LuaTheorem},
+    check_proofs::lua_api::{
+        ctx_to_lua::LuaCtx, frag_to_lua::LuaPresFrag, theorem_to_lua::LuaTheorem,
+    },
     proof_kernel::ProofState,
 };
 use itertools::Itertools;
@@ -38,33 +40,33 @@ impl UserData for LuaProofState {
     }
 
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("addAssumption", |lua, this, assumption: LuaFrag| {
+        methods.add_method("addAssumption", |lua, this, assumption: LuaPresFrag| {
             let assumption = assumption.out();
             let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
 
             let new_state = this
                 .out_ref()
-                .add_assumption(assumption, ctx)
+                .add_assumption(assumption.frag(), ctx)
                 .expect("TODO");
             Ok(LuaProofState::new(new_state))
         });
 
-        methods.add_method("popAssumption", |lua, this, justifying: LuaFrag| {
+        methods.add_method("popAssumption", |lua, this, justifying: LuaPresFrag| {
             let justifying = justifying.out();
             let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
 
             let new_state = this
                 .out_ref()
-                .pop_assumption(justifying, ctx)
+                .pop_assumption(justifying.frag(), ctx)
                 .expect("TODO");
             Ok(LuaProofState::new(new_state))
         });
 
         methods.add_method(
             "applyTheorem",
-            |lua, this, (thm, templates): (LuaTheorem, Vec<LuaFrag>)| {
+            |lua, this, (thm, templates): (LuaTheorem, Vec<LuaPresFrag>)| {
                 let thm = thm.out();
-                let templates = templates.into_iter().map(|t| t.out()).collect_vec();
+                let templates = templates.into_iter().map(|t| t.out().frag()).collect_vec();
                 let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
 
                 let new_state = this
@@ -75,11 +77,14 @@ impl UserData for LuaProofState {
             },
         );
 
-        methods.add_method("applyTodo", |lua, this, justifying: LuaFrag| {
+        methods.add_method("applyTodo", |lua, this, justifying: LuaPresFrag| {
             let justifying = justifying.out();
             let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
 
-            let new_state = this.out_ref().apply_todo(justifying, ctx).expect("TODO");
+            let new_state = this
+                .out_ref()
+                .apply_todo(justifying.frag(), ctx)
+                .expect("TODO");
             Ok(LuaProofState::new(new_state))
         });
     }

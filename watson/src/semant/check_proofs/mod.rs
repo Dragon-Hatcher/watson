@@ -2,15 +2,12 @@ use crate::{
     context::Ctx,
     diagnostics::WResult,
     semant::{
-        check_proofs::lua_api::{
-            LuaInfo, proof_to_lua::LuaProofState, setup_lua, theorem_to_lua::LuaTheorem,
-        },
+        check_proofs::lua_api::{LuaInfo, proof_to_lua::LuaProofState, setup_lua},
         proof_kernel::ProofState,
         proof_status::{ProofStatus, ProofStatuses},
         tactic::unresolved_proof::{TacticInst, UnresolvedProof},
-        theorems::TheoremId,
+        theorems::{_debug_theorem, TheoremId},
     },
-    util::ansi::{ANSI_BOLD, ANSI_RESET},
 };
 use mlua::IntoLua;
 
@@ -49,6 +46,8 @@ fn check_theorem<'ctx>(
     lua: &LuaInfo,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<ProofStatus<'ctx>> {
+    println!("{}", _debug_theorem(thm));
+
     let proof_state =
         ProofState::new_from_theorem(thm, ctx).expect("theorem statement should be valid.");
 

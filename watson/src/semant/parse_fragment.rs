@@ -3,14 +3,13 @@ use crate::{
     diagnostics::WResult,
     parse::{elaborator::elaborate_name, parse_tree::ParseTreeId},
     semant::{
-        fragment::{FragHead, Fragment, FragmentId},
+        fragment::{FragHead, Fragment, FragmentId, hole_frag},
         notation::{NotationBinding, NotationPatternPart},
-        presentation::{
-            Pres, PresFrag, PresHead, PresTree, abstract_pres_tree_root, instantiate_pres_tree,
-        },
+        presentation::{Pres, PresFrag, PresHead, PresId},
         scope::{Scope, ScopeEntry, ScopeReplacement},
     },
 };
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnresolvedFrag<'ctx>(pub ParseTreeId<'ctx>);
@@ -68,7 +67,7 @@ fn parse_fragment_impl<'ctx>(
             continue;
         };
 
-        // Next we want to  create a scope we can parse our children with that
+        // Next we want to create a scope we can parse our children with that
         // contains the binders this notation introduced.
         let mut new_scope = scope.clone();
         let mut new_depth = binding_depth;
@@ -87,13 +86,11 @@ fn parse_fragment_impl<'ctx>(
                 let frag = Fragment::new(*cat, head, Vec::new());
                 let frag = ctx.arenas.fragments.intern(frag);
 
-                let pres = todo!();
-
                 // The entry contains the fragment we just created but also the
                 // binding depth which tells child nodes who read this binding
                 // how many intermediate bindings there are so that they can fix
                 // the node for their context.
-                let entry = ScopeEntry::new_with_depth(PresFrag(frag, pres), new_depth);
+                let entry = ScopeEntry::new_with_depth(todo!(), new_depth);
                 new_depth += 1;
 
                 // Finally we need the notation for a single name.
@@ -130,28 +127,19 @@ fn parse_fragment_impl<'ctx>(
         }
 
         // Now we perform the replacement using the children we have parsed.
-        let intermediates = binding_depth - replacement.binding_depth();
+        let _intermediates = binding_depth - replacement.binding_depth();
         let instantiated = match replacement.replacement() {
-            ScopeReplacement::Frag(PresFrag(frag, pres)) => {
-                let new_frag = instantiate_replacement(frag, 0, intermediates, &children, ctx);
-                let new_pres = instantiate_pres_tree(pres, &children, ctx);
-
-                let root_children = children.iter().map(|c| c.pres().pres()).collect();
-                let root_pres = Pres::new(PresHead::Notation(binding), root_children);
-                let root_pres = ctx.arenas.presentations.intern(root_pres);
-                let new_pres = abstract_pres_tree_root(new_pres, root_pres, ctx);
-
-                PresFrag(new_frag, new_pres)
+            ScopeReplacement::Frag(replacement) => {
+                let instantiated_replacement = instantiate_replacement(replacement, &children, ctx);
+                let my_pres = Pres::new(PresHead::Notation(binding, replacement), children);
+                let my_pres = ctx.arenas.presentations.intern(my_pres);
+                PresFrag::new(
+                    instantiated_replacement.frag(),
+                    my_pres,
+                    instantiated_replacement.formal_pres(),
+                )
             }
-            ScopeReplacement::Hole(cat, idx) => {
-                let new_frag = Fragment::new(cat, FragHead::Hole(idx), Vec::new());
-                let new_frag = ctx.arenas.fragments.intern(new_frag);
-                let new_pres = Pres::new(PresHead::Hole(idx), Vec::new());
-                let new_pres = ctx.arenas.presentations.intern(new_pres);
-                let new_pres = PresTree::new(new_pres, Vec::new());
-                let new_pres = ctx.arenas.presentation_trees.intern(new_pres);
-                PresFrag(new_frag, new_pres)
-            }
+            ScopeReplacement::Hole(cat, idx) => hole_frag(idx, cat, ctx),
         };
 
         if let Ok(_alternate) = solution {
@@ -165,50 +153,94 @@ fn parse_fragment_impl<'ctx>(
 }
 
 fn instantiate_replacement<'ctx>(
-    frag: FragmentId<'ctx>,
-    // The depth within the replacement fragment.
-    frag_depth: usize,
-    // The n umber of bindings between where the replacement fragment was bound
-    // and the location it is being substituted into.
-    intermediates: usize,
+    frag: PresFrag<'ctx>,
     children: &[PresFrag<'ctx>],
-    ctx: &mut Ctx<'ctx>,
-) -> FragmentId<'ctx> {
-    if !frag.has_hole() && frag.unclosed_count() == 0 {
-        // There is nothing to replace so we just return the same fragment.
-        return frag;
-    }
+    ctx: &Ctx<'ctx>,
+) -> PresFrag<'ctx> {
+    fn instantiate_frag<'ctx>(
+        frag: FragmentId<'ctx>,
+        children: &[PresFrag<'ctx>],
+        ctx: &Ctx<'ctx>,
+        frag_cache: &mut FxHashMap<FragmentId<'ctx>, FragmentId<'ctx>>,
+    ) -> FragmentId<'ctx> {
+        if !frag.has_hole() {
+            return frag;
+        }
 
-    match frag.head() {
-        FragHead::Hole(idx) => children[idx].frag(),
-        FragHead::Variable(var_cat, db_idx) => {
-            // We want to check if this variable is bound inside or outside of
-            // the replacement fragment. If it is inside it doesn't need to be
-            // modified. But if it is outside we need to adjust the deBruijn
-            // index.
-            if db_idx < frag_depth {
-                // The binding was inside the fragment
-                frag
-            } else {
-                let new_head = FragHead::Variable(var_cat, db_idx + intermediates);
-                let frag = Fragment::new(frag.cat(), new_head, Vec::new());
+        if let Some(cached) = frag_cache.get(&frag) {
+            return *cached;
+        }
+
+        let new_frag = match frag.head() {
+            FragHead::RuleApplication(_) | FragHead::TemplateRef(_) => {
+                let new_children = frag
+                    .children()
+                    .iter()
+                    .map(|&child| instantiate_frag(child, children, ctx, frag_cache))
+                    .collect();
+                let frag = Fragment::new(frag.cat(), frag.head(), new_children);
                 ctx.arenas.fragments.intern(frag)
             }
-        }
-        FragHead::RuleApplication(_) | FragHead::TemplateRef(_) => {
-            let new_depth = match frag.head() {
-                FragHead::RuleApplication(rule_app) => frag_depth + rule_app.bindings_added(),
-                _ => frag_depth,
-            };
-            let new_children = frag
-                .children()
-                .iter()
-                .map(|&child| {
-                    instantiate_replacement(child, new_depth, intermediates, children, ctx)
-                })
-                .collect();
-            let new_frag = Fragment::new(frag.cat(), frag.head(), new_children);
-            ctx.arenas.fragments.intern(new_frag)
-        }
+            FragHead::Variable(_var, _) => todo!(),
+            FragHead::Hole(idx) => children[idx].frag(),
+        };
+        frag_cache.insert(frag, new_frag);
+        new_frag
     }
+
+    fn instantiate_pres<'ctx>(
+        pres: PresId<'ctx>,
+        children: &[PresFrag<'ctx>],
+        ctx: &Ctx<'ctx>,
+        frag_cache: &mut FxHashMap<FragmentId<'ctx>, FragmentId<'ctx>>,
+        pres_cache: &mut FxHashMap<PresId<'ctx>, PresId<'ctx>>,
+    ) -> PresId<'ctx> {
+        if let Some(cached) = pres_cache.get(&pres) {
+            return *cached;
+        }
+
+        let new_pres = match pres.head() {
+            PresHead::FormalFrag(FragHead::Hole(idx)) => children[idx].pres(),
+            PresHead::FormalFrag(FragHead::Variable(_, _)) => todo!(),
+            _ => {
+                let new_children = pres
+                    .children()
+                    .iter()
+                    .map(|&child| inner(child, children, ctx, frag_cache, pres_cache))
+                    .collect();
+                let pres = Pres::new(pres.head(), new_children);
+                ctx.arenas.presentations.intern(pres)
+            }
+        };
+        pres_cache.insert(pres, new_pres);
+        new_pres
+    }
+
+    fn inner<'ctx>(
+        pres_frag: PresFrag<'ctx>,
+        children: &[PresFrag<'ctx>],
+        ctx: &Ctx<'ctx>,
+        frag_cache: &mut FxHashMap<FragmentId<'ctx>, FragmentId<'ctx>>,
+        pres_cache: &mut FxHashMap<PresId<'ctx>, PresId<'ctx>>,
+    ) -> PresFrag<'ctx> {
+        PresFrag::new(
+            instantiate_frag(pres_frag.frag(), children, ctx, frag_cache),
+            instantiate_pres(pres_frag.pres(), children, ctx, frag_cache, pres_cache),
+            instantiate_pres(
+                pres_frag.formal_pres(),
+                children,
+                ctx,
+                frag_cache,
+                pres_cache,
+            ),
+        )
+    }
+
+    inner(
+        frag,
+        children,
+        ctx,
+        &mut FxHashMap::default(),
+        &mut FxHashMap::default(),
+    )
 }

@@ -77,12 +77,8 @@ impl LuaUnresolvedFact {
 
 impl UserData for LuaUnresolvedFact {
     fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("assumption", |_, this| {
-            Ok(this.assumption)
-        });
+        fields.add_field_method_get("assumption", |_, this| Ok(this.assumption));
 
-        fields.add_field_method_get("conclusion", |_, this| {
-            Ok(this.conclusion)
-        });
+        fields.add_field_method_get("conclusion", |_, this| Ok(this.conclusion));
     }
 }

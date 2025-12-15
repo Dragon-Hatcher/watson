@@ -1,7 +1,9 @@
 use crate::{
+    context::Ctx,
     generate_arena_handle,
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
+        presentation::{Pres, PresFrag, PresHead},
         theorems::PresFact,
     },
 };
@@ -136,6 +138,21 @@ impl<'ctx> Fact<'ctx> {
     pub fn conclusion(&self) -> FragmentId<'ctx> {
         self.conclusion
     }
+}
+
+pub fn hole_frag<'ctx>(
+    idx: usize,
+    cat: FormalSyntaxCatId<'ctx>,
+    ctx: &Ctx<'ctx>,
+) -> PresFrag<'ctx> {
+    let frag = Fragment::new(cat, FragHead::Hole(idx), Vec::new());
+    let frag = ctx.arenas.fragments.intern(frag);
+    let pres = Pres::new(PresHead::FormalFrag(frag.head()), Vec::new());
+    let pres = ctx.arenas.presentations.intern(pres);
+
+    // The presentation is already formal so we can pass the pres as the
+    // formal pres.
+    PresFrag::new(frag, pres, pres)
 }
 
 pub fn _debug_fact<'ctx>(fact: &PresFact<'ctx>) -> String {

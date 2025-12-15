@@ -15,7 +15,7 @@ pub fn run_new(cmd: NewCommand) {
     match run(cmd) {
         Ok(_) => {}
         Err(err) => {
-            eprintln!("{ANSI_RED}{ANSI_BOLD}Error:{ANSI_RESET} {err}");
+            eprintln!("{ANSI_RED}{ANSI_BOLD}error:{ANSI_RESET} {err}");
             std::process::exit(1);
         }
     }
@@ -27,7 +27,7 @@ fn run(cmd: NewCommand) -> Result<(), std::io::Error> {
     // Create project directory
     if project_path.exists() {
         eprintln!(
-            "{ANSI_RED}{ANSI_BOLD}Error:{ANSI_RESET} directory '{}' already exists",
+            "{ANSI_RED}{ANSI_BOLD}error:{ANSI_RESET} directory '{}' already exists",
             cmd.name
         );
         std::process::exit(1);
@@ -35,7 +35,7 @@ fn run(cmd: NewCommand) -> Result<(), std::io::Error> {
 
     fs::create_dir(&project_path).unwrap_or_else(|e| {
         eprintln!(
-            "{ANSI_RED}{ANSI_BOLD}Error{ANSI_RESET} creating directory '{}': {}",
+            "{ANSI_RED}{ANSI_BOLD}error{ANSI_RESET} creating directory '{}': {}",
             cmd.name, e
         );
         std::process::exit(1);
@@ -53,8 +53,9 @@ fn run(cmd: NewCommand) -> Result<(), std::io::Error> {
     let main_luau_path = src_path.join("main.luau");
     let main_luau_content = r#"local M = {}
     
-function M.handleTactic(tactic: Tactic, theorem)
-    log("Hello, world!")
+function M.handleTactic(tactic: Tactic, proofState: ProofState)
+    local thm = proofState.theorem
+    return proofState:applyTodo(thm.conclusion)
 end
 
 return M
@@ -76,8 +77,10 @@ return M
     "luau-lsp.platform.type": "standard",
     "luau-lsp.sourcemap.enabled": false,
     "luau-lsp.types.definitionFiles": {
-        "watson": "build/definitions.d.luau"
+        "watson": "build/luau/definitions.d.luau"
     },
+    "luau-lsp.fflags.enableNewSolver": true,
+    "luau-lsp.server.baseLuaurc": "build/luau/.luaurc"
 }
 "#;
     fs::write(&vscode_settings_path, settings_content)?;
@@ -85,12 +88,58 @@ return M
     let build_path = project_path.join("build");
     fs::create_dir(&build_path)?;
 
-    let definitions_path = build_path.join("definitions.d.luau");
+    let luau_path = build_path.join("luau");
+    fs::create_dir(&luau_path)?;
+
+    let definitions_path = luau_path.join("definitions.d.luau");
     let definitions_content = r#"declare function log(...: any): number
 
-export type Tactic = never
+declare class UnResFrag
+end
+
+declare class UnResAnyFra
+end
+
+declare class UnResFact
+end
+
+declare class Frag
+end
+
+declare class PresTree
+end
+
+declare class PresFrag
+end
+
+declare class PresFact
+end
+
+declare class Scope
+end
+
+declare class Theorem
+    name: string
+    hypotheses: {PresFact}
+    conclusion: PresFrag
+end
+
+declare class ProofState
+    theorem: Theorem
+    function addAssumption(self, assumption: Frag): ProofState
+    function popAssumption(self, justifying: Frag): ProofState
+    function applyTheorem(self, thm: Theorem, templates: {Frag}): ProofState
+    function applyTodo(self, justifying: Frag): ProofState
+end
 "#;
     fs::write(&definitions_path, definitions_content)?;
+
+    let luau_rc_path = luau_path.join(".luaurc");
+    let luau_rc_content = r#"{
+    "languageMode": "strict"
+}
+"#;
+    fs::write(&luau_rc_path, luau_rc_content)?;
 
     let gitignore_path = project_path.join(".gitignore");
     let gitignore_content = "build/\n";

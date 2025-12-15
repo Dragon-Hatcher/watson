@@ -25,11 +25,11 @@ impl<'ctx> IntoLua for &TacticInst<'ctx> {
         // 2. Are not NoInstantiation
         for (pattern_part, child) in pattern_parts.iter().zip(children.iter()) {
             // Skip if no label or if it's a NoInstantiation
-            if let Some(label) = pattern_part.label() {
-                if !matches!(child, TacticInstPart::NoInstantiation) {
-                    let value = child.into_lua(lua)?;
-                    table.set(label.as_str(), value)?;
-                }
+            if let Some(label) = pattern_part.label()
+                && !matches!(child, TacticInstPart::NoInstantiation)
+            {
+                let value = child.into_lua(lua)?;
+                table.set(label.as_str(), value)?;
             }
         }
 

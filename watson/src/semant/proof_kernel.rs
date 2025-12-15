@@ -13,7 +13,7 @@ pub struct ProofCertificate<'ctx> {
 
 impl<'ctx> ProofCertificate<'ctx> {
     fn new(proof: ProofState<'ctx>, ctx: &Ctx<'ctx>) -> Result<Self, ProofError> {
-        let conclusion = proof.proof_for.conclusion();
+        let conclusion = proof.theorem.conclusion();
         let conclusion = SafeFrag::new(conclusion.frag(), ctx)?;
 
         if !proof
@@ -31,7 +31,7 @@ impl<'ctx> ProofCertificate<'ctx> {
     }
 
     pub fn theorem(&self) -> TheoremId<'ctx> {
-        self.proof.proof_for
+        self.proof.theorem
     }
 
     pub fn theorems_used(&self) -> &im::HashSet<TheoremId<'ctx>> {
@@ -45,7 +45,7 @@ impl<'ctx> ProofCertificate<'ctx> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProofState<'ctx> {
-    proof_for: TheoremId<'ctx>,
+    theorem: TheoremId<'ctx>,
     theorems_used: im::HashSet<TheoremId<'ctx>>,
     uses_todo: bool,
     knowns: im::HashSet<SafeFact<'ctx>>,
@@ -53,6 +53,7 @@ pub struct ProofState<'ctx> {
     assumptions: im::Vector<(im::HashSet<SafeFact<'ctx>>, SafeFrag<'ctx>)>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProofError {
     FragNotSentence,
     FragHasHoles,
@@ -126,7 +127,7 @@ impl<'ctx> ProofState<'ctx> {
         Ok(Self {
             assumptions: im::Vector::new(),
             knowns,
-            proof_for: theorem,
+            theorem,
             theorems_used: im::HashSet::new(),
             uses_todo: false,
         })
@@ -206,6 +207,12 @@ impl<'ctx> ProofState<'ctx> {
 
     pub fn complete(&self, ctx: &Ctx<'ctx>) -> Result<ProofCertificate<'ctx>, ProofError> {
         ProofCertificate::new(self.clone(), ctx)
+    }
+}
+
+impl<'ctx> ProofState<'ctx> {
+    pub fn theorem(&self) -> TheoremId<'ctx> {
+        self.theorem
     }
 }
 

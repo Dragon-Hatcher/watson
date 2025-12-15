@@ -1,16 +1,19 @@
 use crate::{
     context::{Arenas, Ctx},
     diagnostics::{DiagManager, Diagnostic, WResult},
-    semant::check_proofs::lua_api::file_loader::LuaFileRequirer,
+    semant::check_proofs::lua_api::{ctx_to_lua::LuaCtx, file_loader::LuaFileRequirer},
 };
 use mlua::{Lua, LuaOptions, StdLib};
-use std::cell::RefCell;
 use std::ops::Deref;
-use std::rc::Rc;
 
+pub mod ctx_to_lua;
 mod file_loader;
-mod tactic_to_lua;
-mod unresolved_to_lua;
+pub mod frag_to_lua;
+pub mod proof_to_lua;
+pub mod scope_to_lua;
+pub mod tactic_to_lua;
+pub mod theorem_to_lua;
+pub mod unresolved_to_lua;
 
 pub struct WLua<'ctx> {
     lua: Lua,
@@ -53,23 +56,19 @@ Instead it returned:
         self.add_diag(diag);
         Err(())
     }
+
+    pub fn err_lua_execution_error<T>(&mut self, lua_ctx: &str, error: mlua::Error) -> WResult<T> {
+        let diag = Diagnostic::new(&format!("lua error executing {lua_ctx}:\n{error}"));
+
+        self.add_diag(diag);
+        Err(())
+    }
 }
 
 #[derive(Debug)]
 pub struct LuaInfo<'ctx> {
     pub runtime: WLua<'ctx>,
     pub handle_tactic_fn: mlua::Function,
-    pub logs: Rc<RefCell<Vec<String>>>,
-}
-
-impl<'ctx> LuaInfo<'ctx> {
-    pub fn clear_logs(&self) {
-        self.logs.borrow_mut().clear();
-    }
-
-    pub fn get_logs(&self) -> Vec<String> {
-        self.logs.borrow().clone()
-    }
 }
 
 pub fn setup_lua<'ctx>(ctx: &mut Ctx<'ctx>) -> WResult<LuaInfo<'ctx>> {
@@ -80,11 +79,11 @@ pub fn setup_lua<'ctx>(ctx: &mut Ctx<'ctx>) -> WResult<LuaInfo<'ctx>> {
     )
     .or_else(|e| ctx.diags.err_lua_load_error(e))?;
 
-    // Set up log storage
-    let logs = Rc::new(RefCell::new(Vec::new()));
+    // Add the ctx as app data.
+    let lua_ctx = LuaCtx::new(ctx);
+    lua.set_app_data(lua_ctx);
 
     // Create custom log function
-    let logs_clone = Rc::clone(&logs);
     let log_fn = lua
         .create_function(move |_lua, args: mlua::Variadic<mlua::Value>| {
             let mut log_parts = Vec::new();
@@ -98,7 +97,8 @@ pub fn setup_lua<'ctx>(ctx: &mut Ctx<'ctx>) -> WResult<LuaInfo<'ctx>> {
                 };
                 log_parts.push(formatted);
             }
-            logs_clone.borrow_mut().push(log_parts.join(" "));
+            let str = log_parts.join(" ");
+            eprintln!("{str}");
             Ok(())
         })
         .unwrap();
@@ -123,13 +123,12 @@ pub fn setup_lua<'ctx>(ctx: &mut Ctx<'ctx>) -> WResult<LuaInfo<'ctx>> {
         _arenas: ctx.arenas,
     };
 
-    read_main_module(wlua, result, logs, ctx)
+    read_main_module(wlua, result, ctx)
 }
 
 fn read_main_module<'ctx>(
     lua: WLua<'ctx>,
     module: mlua::Value,
-    logs: Rc<RefCell<Vec<String>>>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<LuaInfo<'ctx>> {
     let mut err_fn = || {
@@ -142,6 +141,5 @@ fn read_main_module<'ctx>(
     Ok(LuaInfo {
         runtime: lua,
         handle_tactic_fn,
-        logs,
     })
 }

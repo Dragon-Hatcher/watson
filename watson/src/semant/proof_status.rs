@@ -2,7 +2,7 @@ use std::ops::Index;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::semant::theorems::TheoremId;
+use crate::semant::{proof_kernel::ProofCertificate, theorems::TheoremId};
 
 #[derive(Debug)]
 pub struct ProofStatuses<'ctx> {
@@ -80,23 +80,19 @@ pub struct ProofStatus<'ctx> {
 impl<'ctx> ProofStatus<'ctx> {
     pub fn new_axiom() -> Self {
         Self {
+            is_axiom: true,
             correct: true,
             todo_used: false,
-            is_axiom: true,
             theorems_used: FxHashSet::default(),
         }
     }
 
-    pub fn new_theorem(
-        correct: bool,
-        todo_used: bool,
-        theorems_used: FxHashSet<TheoremId<'ctx>>,
-    ) -> Self {
+    pub fn from_cert(cert: ProofCertificate<'ctx>) -> Self {
         Self {
-            correct,
-            todo_used,
             is_axiom: false,
-            theorems_used,
+            correct: true,
+            todo_used: cert.uses_todo(),
+            theorems_used: cert.theorems_used().iter().copied().collect(),
         }
     }
 

@@ -1,17 +1,20 @@
-mod lua_api;
-
-use mlua::IntoLua;
-
 use crate::{
     context::Ctx,
+    diagnostics::WResult,
     semant::{
-        check_proofs::lua_api::{LuaInfo, setup_lua},
+        check_proofs::lua_api::{
+            LuaInfo, proof_to_lua::LuaProofState, setup_lua, theorem_to_lua::LuaTheorem,
+        },
+        proof_kernel::ProofState,
         proof_status::{ProofStatus, ProofStatuses},
         tactic::unresolved_proof::{TacticInst, UnresolvedProof},
         theorems::TheoremId,
     },
-    util::ansi::{ANSI_GRAY, ANSI_RESET},
+    util::ansi::{ANSI_BOLD, ANSI_RESET},
 };
+use mlua::IntoLua;
+
+mod lua_api;
 
 pub fn check_proofs<'ctx>(
     theorems: &[(TheoremId<'ctx>, UnresolvedProof<'ctx>)],
@@ -27,7 +30,12 @@ pub fn check_proofs<'ctx>(
     for (theorem, proof) in theorems {
         let status = match proof {
             UnresolvedProof::Axiom => ProofStatus::new_axiom(),
-            UnresolvedProof::Theorem(proof) => check_theorem(*theorem, proof, &info, ctx),
+            UnresolvedProof::Theorem(proof) => {
+                let Ok(status) = check_theorem(*theorem, proof, &info, ctx) else {
+                    continue;
+                };
+                status
+            }
         };
         statuses.add(*theorem, status);
     }
@@ -35,33 +43,29 @@ pub fn check_proofs<'ctx>(
     statuses
 }
 
-/// Set to true to print logs from Lua scripts during theorem checking
-const PRINT_LOGS: bool = true;
-
 fn check_theorem<'ctx>(
     thm: TheoremId<'ctx>,
-    proof: &TacticInst<'ctx>,
+    tactic: &TacticInst<'ctx>,
     lua: &LuaInfo,
     ctx: &mut Ctx<'ctx>,
-) -> ProofStatus<'ctx> {
-    let lua_tactic: mlua::Value = proof.into_lua(&lua.runtime).unwrap();
+) -> WResult<ProofStatus<'ctx>> {
+    let proof_state =
+        ProofState::new_from_theorem(thm, ctx).expect("theorem statement should be valid.");
+
+    let lua_tactic: mlua::Value = tactic
+        .into_lua(&lua.runtime)
+        .or_else(|e| ctx.diags.err_lua_execution_error("tactic", e))?;
+    let lua_proof_state: mlua::Value = LuaProofState::new(proof_state)
+        .into_lua(&lua.runtime)
+        .or_else(|e| ctx.diags.err_lua_execution_error("tactic", e))?;
 
     // Call the tactic handler
-    let thm_name = lua.runtime.create_string(thm.name().as_str()).unwrap();
-    let _result: mlua::Value = lua.handle_tactic_fn.call((lua_tactic, thm_name)).unwrap();
+    let proof = lua
+        .handle_tactic_fn
+        .call::<LuaProofState>((lua_tactic, lua_proof_state))
+        .or_else(|e| ctx.diags.err_lua_execution_error("tactic", e))?;
+    let proof = proof.out::<'ctx>();
+    let cert = proof.complete(ctx).expect("TODO");
 
-    // Print logs if enabled
-    if PRINT_LOGS {
-        let logs = lua.get_logs();
-        if !logs.is_empty() {
-            println!("Logs while checking theorem {}:", thm.name());
-            for log in logs {
-                println!("{ANSI_GRAY}{log}{ANSI_RESET}");
-            }
-        }
-    }
-
-    lua.clear_logs();
-
-    todo!()
+    Ok(ProofStatus::from_cert(cert))
 }

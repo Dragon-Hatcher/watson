@@ -97,7 +97,7 @@ return M
 declare class UnResFrag
 end
 
-declare class UnResAnyFra
+declare class UnResAnyFrag
 end
 
 declare class UnResFact

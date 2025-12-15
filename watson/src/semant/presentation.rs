@@ -87,12 +87,8 @@ impl<'ctx> Pres<'ctx> {
                 let mut out = String::new();
                 let mut children = self.children().iter();
 
-                for (i, part) in rule_app.rule().pattern().parts().iter().enumerate() {
+                for part in rule_app.rule().pattern().parts() {
                     use FormalSyntaxPatPart as P;
-
-                    if i != 0 {
-                        out.push(' ');
-                    }
 
                     match part {
                         P::Lit(lit) => out.push_str(lit),
@@ -108,12 +104,8 @@ impl<'ctx> Pres<'ctx> {
                 let mut children = self.children().iter();
                 let mut name_instantiations = binding.name_instantiations().iter();
 
-                for (i, part) in binding.pattern().parts().iter().enumerate() {
+                for part in binding.pattern().parts() {
                     use NotationPatternPart as P;
-
-                    if i != 0 {
-                        out.push(' ');
-                    }
 
                     match part {
                         P::Lit(lit) => out.push_str(lit),

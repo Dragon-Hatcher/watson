@@ -772,7 +772,11 @@ fn fragment_parse_rule_for_notation<'ctx>(
     let mut parts = Vec::new();
     for &notation_part in notation.0.parts() {
         let part = match notation_part {
-            NotationPatternPart::Lit(lit_str) => lit(lit_str),
+            NotationPatternPart::Lit(lit_str) => {
+                // Trim whitespace from literals for parsing, but preserve in presentation
+                let trimmed = Ustr::from(lit_str.trim());
+                lit(trimmed)
+            }
             NotationPatternPart::Kw(kw_str) => kw(kw_str),
             NotationPatternPart::Name => cat(ctx.builtin_cats.name),
             NotationPatternPart::Cat(formal_cat) => {
@@ -803,7 +807,11 @@ fn binding_parse_rule_for_notation<'ctx>(
     let mut parts = Vec::new();
     for notation_part in notation.0.parts() {
         let part = match notation_part {
-            NotationPatternPart::Lit(lit_str) => lit(*lit_str),
+            NotationPatternPart::Lit(lit_str) => {
+                // Trim whitespace from literals for parsing, but preserve in presentation
+                let trimmed = Ustr::from(lit_str.trim());
+                lit(trimmed)
+            }
             NotationPatternPart::Kw(kw_str) => kw(*kw_str),
             NotationPatternPart::Name
             | NotationPatternPart::Cat(_)
@@ -839,7 +847,11 @@ fn tactic_rule_to_parse_rule<'ctx>(
     let mut parts = Vec::new();
     for tactic_part in tactic_rule.pattern().parts() {
         let part = match tactic_part.part() {
-            TacticPatPartCore::Lit(lit_str) => lit(*lit_str),
+            TacticPatPartCore::Lit(lit_str) => {
+                // Trim whitespace from literals for parsing, but preserve in presentation
+                let trimmed = Ustr::from(lit_str.trim());
+                lit(trimmed)
+            }
             TacticPatPartCore::Kw(kw_str) => kw(*kw_str),
             TacticPatPartCore::Name => cat(ctx.builtin_cats.name),
             TacticPatPartCore::Cat(tactic_cat) => {

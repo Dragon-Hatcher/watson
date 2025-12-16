@@ -54,7 +54,7 @@ macro_rules! failed_to_match_builtin {
 macro_rules! match_rule {
     (($ctx:expr, $tree_id:expr) => $($rule:ident ::= [$($child:ident),*] => $body:expr),+ $(,)?) => {{
         let tree = $tree_id;
-        let children = expect_unambiguous(tree, $ctx)?;
+        let children = expect_unambiguous(tree)?;
         $(
             if children.rule() == $ctx.builtin_rules.$rule {
                 let [$($child),*] = children.children() else {
@@ -1061,7 +1061,7 @@ fn elaborate_tactic<'ctx>(
     tactic: ParseTreeId<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, TacticInst<'ctx>> {
-    let children = expect_unambiguous(tactic, ctx)?;
+    let children = expect_unambiguous(tactic)?;
     let rule = children.rule();
     let tactic_rule = rule.source().get_tactic_rule();
 
@@ -1119,10 +1119,7 @@ pub fn elaborate_str_lit<'ctx>(str_lit: ParseTreeId<'ctx>, ctx: &Ctx<'ctx>) -> W
     }
 }
 
-fn expect_unambiguous<'ctx>(
-    id: ParseTreeId<'ctx>,
-    ctx: &Ctx<'ctx>,
-) -> WResult<'ctx, &'ctx ParseTreeChildren<'ctx>> {
+fn expect_unambiguous<'ctx>(id: ParseTreeId<'ctx>) -> WResult<'ctx, &'ctx ParseTreeChildren<'ctx>> {
     match id.0.possibilities() {
         [] => unreachable!("No possibilities in parse tree."),
         [possibility] => Ok(possibility),

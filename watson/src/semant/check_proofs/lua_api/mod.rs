@@ -1,6 +1,6 @@
 use crate::{
     context::{Arenas, Ctx},
-    diagnostics::{DiagManager, Diagnostic, WResult},
+    diagnostics::{Diagnostic, WResult},
     semant::check_proofs::lua_api::{
         ctx_to_lua::LuaCtx, file_loader::LuaFileRequirer, tactic_to_lua::generate_luau_tactic_types,
     },

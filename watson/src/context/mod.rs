@@ -46,7 +46,6 @@ pub struct Ctx<'ctx> {
     pub config: WatsonConfig,
 
     pub sentence_cat: FormalSyntaxCatId<'ctx>,
-    pub tactic_cat: TacticCatId<'ctx>,
     pub builtin_cats: BuiltinCats<'ctx>,
     pub builtin_rules: BuiltinRules<'ctx>,
     pub single_name_notations: FxHashMap<FormalSyntaxCatId<'ctx>, NotationPatternId<'ctx>>,
@@ -95,7 +94,6 @@ impl<'ctx> Ctx<'ctx> {
             sources,
             config,
             sentence_cat: sentence_formal_cat,
-            tactic_cat: tactic_tactic_cat,
             builtin_cats,
             builtin_rules,
             single_name_notations: FxHashMap::default(),

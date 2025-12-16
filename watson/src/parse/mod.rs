@@ -80,7 +80,7 @@ fn parse_source<'ctx>(
         sources_stack.push(after_command);
 
         // Now let's elaborate the command.
-        let action = match elaborator::elaborate_command(tree, &scope, ctx) {
+        let action = match elaborator::elaborate_command(tree, scope, ctx) {
             Ok(action) => action,
             Err(diags) => {
                 // There was an error elaborating the command. Add the diagnostics

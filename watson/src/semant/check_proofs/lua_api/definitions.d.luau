@@ -21,6 +21,8 @@ declare class Frag
 end
 
 declare class Fact
+    assumption: Frag?
+    conclusion: Frag
 end
 
 declare class Scope

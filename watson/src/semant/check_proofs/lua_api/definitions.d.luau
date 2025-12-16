@@ -37,7 +37,15 @@ export type FragMap<T> = {
 declare class Fact
     assumption: Frag?
     conclusion: Frag
+    formal: Fact
 end
+
+declare class FactMeta
+    function new(self, assumption: Frag?, conclusion: Frag): Fact
+    function newC(self, conclusion: Frag): Fact
+end
+
+declare Fact: FactMeta
 
 declare FactMap : {
     new: <S>(self: any) -> FactMap<S>
@@ -47,7 +55,6 @@ export type FactMap<T> = {
     set: (any, f: Fact, val: T) -> T?,
     get: (any, f: Fact) -> T?
 }
-
 
 declare class Scope
 end

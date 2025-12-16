@@ -156,6 +156,13 @@ impl<'ctx> PresFact<'ctx> {
         self.conclusion
     }
 
+    pub fn formal(&self) -> PresFact<'ctx> {
+        Self::new(
+            self.assumption().map(|a| a.formal()),
+            self.conclusion().formal(),
+        )
+    }
+
     pub fn print(&self) -> String {
         match self.assumption() {
             Some(assumption) => format!("{} |- {}", assumption.print(), self.conclusion().print()),

@@ -8,6 +8,7 @@ use crate::{
             diag_to_lua::LuaDiagnosticMeta,
             file_loader::LuaFileRequirer,
             frag_map_to_lua::{LuaFactMapMeta, LuaFragMapMeta},
+            frag_to_lua::LuaPresFactMeta,
             tactic_to_lua::generate_luau_tactic_types,
         },
     },
@@ -101,6 +102,7 @@ pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
 
     // Set up metatables.
     lua.globals().set("Diagnostic", LuaDiagnosticMeta).unwrap();
+    lua.globals().set("Fact", LuaPresFactMeta).unwrap();
     lua.globals().set("FragMap", LuaFragMapMeta).unwrap();
     lua.globals().set("FactMap", LuaFactMapMeta).unwrap();
 

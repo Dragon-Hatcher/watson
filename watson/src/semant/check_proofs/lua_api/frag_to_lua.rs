@@ -64,11 +64,34 @@ impl UserData for LuaPresFact {
         fields.add_field_method_get("assumption", |_, this| Ok(this.assumption));
 
         fields.add_field_method_get("conclusion", |_, this| Ok(this.conclusion));
+
+        fields.add_field_method_get("formal", |_, this| Ok(Self::new(this.out().formal())));
     }
 
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_meta_method(MetaMethod::ToString, |_, this, _args: ()| {
             Ok(this.out().print())
+        });
+    }
+}
+
+pub struct LuaPresFactMeta;
+
+impl UserData for LuaPresFactMeta {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method(
+            "new",
+            |_, _, (assumption, conclusion): (Option<LuaPresFrag>, LuaPresFrag)| {
+                let assumption = assumption.map(|a| a.out());
+                let conclusion = conclusion.out();
+                let fact = PresFact::new(assumption, conclusion);
+                Ok(LuaPresFact::new(fact))
+            },
+        );
+
+        methods.add_method("newC", |_, _, conclusion: LuaPresFrag| {
+            let fact = PresFact::new(None, conclusion.out());
+            Ok(LuaPresFact::new(fact))
         });
     }
 }

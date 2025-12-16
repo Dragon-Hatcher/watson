@@ -2,17 +2,20 @@ use crate::{
     context::{Arenas, Ctx},
     diagnostics::{Diagnostic, WResult},
     semant::check_proofs::lua_api::{
-        ctx_to_lua::LuaCtx, file_loader::LuaFileRequirer, tactic_to_lua::generate_luau_tactic_types,
+        ctx_to_lua::LuaCtx, diag_to_lua::LuaDiagnosticMeta, file_loader::LuaFileRequirer,
+        tactic_to_lua::generate_luau_tactic_types,
     },
 };
 use mlua::{Lua, LuaOptions, StdLib};
 use std::{fs, ops::Deref};
 
 pub mod ctx_to_lua;
+pub mod diag_to_lua;
 mod file_loader;
 pub mod frag_to_lua;
 pub mod proof_to_lua;
 pub mod scope_to_lua;
+pub mod span_to_lua;
 pub mod tactic_to_lua;
 pub mod theorem_to_lua;
 pub mod unresolved_to_lua;
@@ -105,7 +108,11 @@ pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
         })
         .unwrap();
 
+    // Set up global functions
     lua.globals().set("log", log_fn).unwrap();
+
+    // Set up metatables.
+    lua.globals().set("Diagnostic", LuaDiagnosticMeta).unwrap();
 
     // Set up our custom require system.
     let src_folder = ctx.config.project_dir().join("src");
@@ -141,7 +148,7 @@ fn read_main_module<'ctx>(lua: WLua<'ctx>, module: mlua::Value) -> WResult<'ctx,
 }
 
 fn write_luau_types<'ctx>(ctx: &Ctx<'ctx>) {
-    let definitions_file = include_str!("../../../static/definitions.d.luau");
+    let definitions_file = include_str!("./definitions.d.luau");
     let types_content = generate_luau_tactic_types(&ctx.tactic_manager);
     let types_path = ctx
         .config

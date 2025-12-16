@@ -1,9 +1,14 @@
 declare function log(...: any): number
 
+declare class Span
+end
+
 declare class UnResFrag
+    span: Span
 end
 
 declare class UnResAnyFrag
+    span: Span
 end
 
 declare class UnResFact
@@ -35,3 +40,14 @@ declare class ProofState
     function applyTodo(self, justifying: Frag): ProofState
     function applyError(self, justifying: Frag): ProofState
 end
+
+declare class Diagnostic
+    function withError(self, msg: string, span: Span): Diagnostic
+    function withInfo(self, msg: string, span: Span): Diagnostic
+end
+
+declare class DiagnosticMeta
+    function new(self, title: string): Diagnostic
+end
+
+declare Diagnostic: DiagnosticMeta

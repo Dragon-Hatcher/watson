@@ -35,6 +35,7 @@ use ustr::Ustr;
 
 // Reserved Luau type names that cannot be used as tactic category names
 const RESERVED_LUAU_TYPES: &[&str] = &[
+    "Span",
     "UnResFrag",
     "UnResAnyFrag",
     "UnResFact",
@@ -43,6 +44,8 @@ const RESERVED_LUAU_TYPES: &[&str] = &[
     "Scope",
     "Theorem",
     "ProofState",
+    "Diagnostic",
+    "DiagnosticMeta",
 ];
 
 macro_rules! failed_to_match_builtin {

@@ -33,14 +33,14 @@ impl<'ctx> DiagManager<'ctx> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Diagnostic<'ctx> {
     title: &'static str,
     parts: Vec<DiagnosticPart>,
     p: PhantomData<&'ctx ()>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DiagnosticPart {
     Error(&'static str, Span),
     Info(&'static str, Span),

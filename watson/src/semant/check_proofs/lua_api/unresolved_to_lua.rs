@@ -1,6 +1,9 @@
 use crate::{
     parse::parse_tree::{ParseTree, ParseTreeId},
-    semant::parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag},
+    semant::{
+        check_proofs::lua_api::span_to_lua::LuaSpan,
+        parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag},
+    },
 };
 use mlua::{FromLua, UserData};
 
@@ -29,7 +32,14 @@ impl LuaUnresolvedFrag {
     }
 }
 
-impl UserData for LuaUnresolvedFrag {}
+impl UserData for LuaUnresolvedFrag {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("span", |_, this| {
+            let span = this.out().0.span();
+            Ok(LuaSpan::new(span))
+        });
+    }
+}
 
 #[derive(Debug, Clone, Copy, FromLua)]
 pub struct LuaUnresolvedAnyFrag {
@@ -51,7 +61,14 @@ impl LuaUnresolvedAnyFrag {
     }
 }
 
-impl UserData for LuaUnresolvedAnyFrag {}
+impl UserData for LuaUnresolvedAnyFrag {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("span", |_, this| {
+            let span = this.out().0.span();
+            Ok(LuaSpan::new(span))
+        });
+    }
+}
 
 #[derive(Debug, Clone, Copy, FromLua)]
 pub struct LuaUnresolvedFact {

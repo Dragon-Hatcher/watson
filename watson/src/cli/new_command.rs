@@ -92,7 +92,7 @@ return M
     fs::create_dir(&luau_path)?;
 
     let definitions_path = luau_path.join("definitions.d.luau");
-    let definitions_content = include_str!("../static/definitions.d.luau");
+    let definitions_content = include_str!("../semant/check_proofs/lua_api/definitions.d.luau");
     fs::write(&definitions_path, definitions_content)?;
 
     let luau_rc_path = luau_path.join(".luaurc");

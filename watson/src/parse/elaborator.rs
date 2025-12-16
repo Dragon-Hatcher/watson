@@ -1,6 +1,6 @@
 use crate::{
     context::Ctx,
-    diagnostics::WResult,
+    diagnostics::{Diagnostic, WResult},
     parse::{
         SourceId,
         parse_state::{Associativity, ParseRuleSource, Precedence, SyntaxCategorySource},
@@ -87,7 +87,7 @@ pub fn elaborate_command<'ctx>(
     command: ParseTreeId<'ctx>,
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<ElaborateAction<'ctx>> {
+) -> WResult<'ctx, ElaborateAction<'ctx>> {
     // command ::= (module_command)          module_command
     //           | (syntax_cat_command)       syntax_cat_command
     //           | (syntax_command)           syntax_command
@@ -138,7 +138,7 @@ pub fn elaborate_command<'ctx>(
     }
 }
 
-fn elaborate_module<'ctx>(module: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WResult<SourceId> {
+fn elaborate_module<'ctx>(module: ParseTreeId<'ctx>, ctx: &Ctx<'ctx>) -> WResult<'ctx, SourceId> {
     // module_command ::= (module) kw"module" name
 
     match_rule! { (ctx, module) =>
@@ -148,7 +148,7 @@ fn elaborate_module<'ctx>(module: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WRe
             let source_id = SourceId::new(source_id_str);
 
             if ctx.sources.has_source(source_id) {
-                return ctx.diags.err_module_redeclaration(
+                return Diagnostic::err_module_redeclaration(
                     source_id,
                     source_id_name.span(),
                     ctx.sources.get_decl(source_id),
@@ -157,9 +157,7 @@ fn elaborate_module<'ctx>(module: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WRe
 
             let path = source_id_to_path(source_id, ctx.sources.root_dir());
             let Ok(text) = std::fs::read_to_string(&path) else {
-                return ctx
-                    .diags
-                    .err_non_existent_file(&path, source_id_name.span());
+                return Diagnostic::err_non_existent_file(&path, source_id_name.span());
             };
 
             ctx.sources
@@ -173,8 +171,8 @@ fn elaborate_module<'ctx>(module: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WRe
 
 fn elaborate_syntax_cat<'ctx>(
     cat: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<FormalSyntaxCatId<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, FormalSyntaxCatId<'ctx>> {
     // syntax_cat_command ::= (syntax_cat) kw"syntax_cat" name
 
     match_rule! { (ctx, cat) =>
@@ -183,7 +181,7 @@ fn elaborate_syntax_cat<'ctx>(
             let cat_name = elaborate_name(cat_name.as_node().unwrap(), ctx)?;
 
             if ctx.arenas.formal_cats.get(cat_name).is_some() {
-                return ctx.diags.err_duplicate_formal_syntax_cat();
+                return Diagnostic::err_duplicate_formal_syntax_cat();
             }
 
             let formal_cat = FormalSyntaxCat::new(cat_name);
@@ -195,8 +193,8 @@ fn elaborate_syntax_cat<'ctx>(
 
 fn elaborate_syntax<'ctx>(
     syntax: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<FormalSyntaxRuleId<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, FormalSyntaxRuleId<'ctx>> {
     // syntax_command ::= (syntax) kw"syntax" name name prec_assoc "::=" syntax_pat_list kw"end"
 
     match_rule! { (ctx, syntax) =>
@@ -213,11 +211,11 @@ fn elaborate_syntax<'ctx>(
             pat.set_assoc(assoc);
 
             let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat.span());
+                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat.span());
             };
 
             if ctx.arenas.formal_rules.get(rule_name).is_some() {
-                return ctx.diags.err_duplicate_formal_syntax_rule();
+                return Diagnostic::err_duplicate_formal_syntax_rule();
             }
 
             let rule = FormalSyntaxRule::new(rule_name, cat, pat);
@@ -230,8 +228,8 @@ fn elaborate_syntax<'ctx>(
 
 fn elaborate_prec_assoc<'ctx>(
     prec_assoc: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<(Precedence, Associativity)> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, (Precedence, Associativity)> {
     // prec_assoc ::= (prec_assoc_none)
     //              | (prec_assoc_some) "(" maybe_prec maybe_assoc ")"
 
@@ -251,8 +249,8 @@ fn elaborate_prec_assoc<'ctx>(
 
 fn elaborate_maybe_prec<'ctx>(
     maybe_prec: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Precedence> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Precedence> {
     // maybe_prec ::= (prec_none)
     //              | (prec_some) number
 
@@ -267,8 +265,8 @@ fn elaborate_maybe_prec<'ctx>(
 
 fn elaborate_maybe_assoc<'ctx>(
     maybe_assoc: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Associativity> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Associativity> {
     // maybe_assoc ::= (assoc_none)
     //               | (assoc_left)  "<"
     //               | (assoc_right) ">"
@@ -282,8 +280,8 @@ fn elaborate_maybe_assoc<'ctx>(
 
 fn elaborate_syntax_pat<'ctx>(
     mut pat_list: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<FormalSyntaxPat<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, FormalSyntaxPat<'ctx>> {
     // syntax_pat ::= (syntax_pat_one)  syntax_pat_part
     //              | (syntax_pat_many) syntax_pat_part syntax_pat
 
@@ -310,8 +308,8 @@ fn elaborate_syntax_pat<'ctx>(
 
 fn elaborate_syntax_pat_part<'ctx>(
     pat: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<FormalSyntaxPatPart<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, FormalSyntaxPatPart<'ctx>> {
     // syntax_pat_part ::= (syntax_pat_cat)     name
     //                   | (syntax_pat_binding) "@" kw"binding" "(" name ")"
     //                   | (syntax_pat_lit)     str
@@ -321,7 +319,7 @@ fn elaborate_syntax_pat_part<'ctx>(
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
 
             let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
+                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
             Ok(FormalSyntaxPatPart::Cat(cat))
@@ -334,7 +332,7 @@ fn elaborate_syntax_pat_part<'ctx>(
 
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
             let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
+                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
             Ok(FormalSyntaxPatPart::Binding(cat))
@@ -348,8 +346,8 @@ fn elaborate_syntax_pat_part<'ctx>(
 
 fn elaborate_notation<'ctx>(
     notation: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<NotationPatternId<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, NotationPatternId<'ctx>> {
     // notation_command ::= (notation) kw"notation" name name prec_assoc "::=" notation_pat kw"end"
 
     match_rule! { (ctx, notation) =>
@@ -364,7 +362,7 @@ fn elaborate_notation<'ctx>(
             let pat = elaborate_notation_pat(pat_list.as_node().unwrap(), ctx)?;
 
             let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat.span());
+                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat.span());
             };
 
             let pat = NotationPattern::new(rule_name, cat, pat, prec, assoc);
@@ -375,8 +373,8 @@ fn elaborate_notation<'ctx>(
 
 fn elaborate_notation_pat<'ctx>(
     mut pat_list: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Vec<NotationPatternPart<'ctx>>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Vec<NotationPatternPart<'ctx>>> {
     // notation_pat ::= (notation_pat_one)  notation_pat_part
     //                | (notation_pat_many) notation_pat_part notation_pat
 
@@ -402,8 +400,8 @@ fn elaborate_notation_pat<'ctx>(
 
 fn elaborate_notation_pat_part<'ctx>(
     pat: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<NotationPatternPart<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, NotationPatternPart<'ctx>> {
     // notation_pat ::= (notation_pat_lit)     str
     //                | (notation_pat_kw)      "@" kw"kw" str
     //                | (notation_pat_name)    "@" kw"name"
@@ -432,7 +430,7 @@ fn elaborate_notation_pat_part<'ctx>(
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
 
             let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
+                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
             Ok(NotationPatternPart::Cat(cat))
@@ -445,7 +443,7 @@ fn elaborate_notation_pat_part<'ctx>(
 
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
             let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
+                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
             Ok(NotationPatternPart::Binding(cat))
@@ -455,8 +453,8 @@ fn elaborate_notation_pat_part<'ctx>(
 
 fn elaborate_tactic_category<'ctx>(
     cat: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<TacticCatId<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, TacticCatId<'ctx>> {
     // tactic_category_command ::= (tactic_category) kw"tactic_category" name
 
     match_rule! { (ctx, cat) =>
@@ -466,14 +464,14 @@ fn elaborate_tactic_category<'ctx>(
             let cat_name = elaborate_name(cat_name_node, ctx)?;
 
             if ctx.arenas.tactic_cats.get(cat_name).is_some() {
-                return ctx.diags.err_duplicate_tactic_cat();
+                return Diagnostic::err_duplicate_tactic_cat();
             }
 
             // Check if the category name conflicts with reserved Luau types
             // (tactic names are converted to PascalCase for Lua)
             let lua_name = crate::util::name_to_lua(cat_name.as_str());
             if RESERVED_LUAU_TYPES.contains(&lua_name.as_str()) {
-                return ctx.diags.err_reserved_tactic_cat_name(cat_name, cat_name_node.span());
+                return Diagnostic::err_reserved_tactic_cat_name(cat_name, cat_name_node.span());
             }
 
             let tactic_cat = TacticCat::new(cat_name);
@@ -485,8 +483,8 @@ fn elaborate_tactic_category<'ctx>(
 
 fn elaborate_tactic_def<'ctx>(
     tactic: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<TacticRuleId<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, TacticRuleId<'ctx>> {
     // tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" tactic_pat kw"end"
 
     match_rule! { (ctx, tactic) =>
@@ -501,11 +499,11 @@ fn elaborate_tactic_def<'ctx>(
             let pat = elaborate_tactic_pat(pat_list.as_node().unwrap(), prec, assoc, ctx)?;
 
             let Some(cat) = ctx.arenas.tactic_cats.get(cat_name) else {
-                return ctx.diags.err_unknown_tactic_cat(cat_name, cat.span());
+                return Diagnostic::err_unknown_tactic_cat(cat_name, cat.span());
             };
 
             if ctx.arenas.tactic_rules.get(rule_name).is_some() {
-                return ctx.diags.err_duplicate_tactic_rule();
+                return Diagnostic::err_duplicate_tactic_rule();
             }
 
             let rule = TacticRule::new(rule_name, cat, pat);
@@ -520,8 +518,8 @@ fn elaborate_tactic_pat<'ctx>(
     mut pat_list: ParseTreeId<'ctx>,
     prec: Precedence,
     assoc: Associativity,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<TacticPat<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, TacticPat<'ctx>> {
     // tactic_pat ::= (tactic_pat_none)
     //              | (tactic_pat_many) tactic_pat_part tactic_pat
 
@@ -545,8 +543,8 @@ fn elaborate_tactic_pat<'ctx>(
 
 fn elaborate_tactic_pat_part<'ctx>(
     pat: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<TacticPatPart<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, TacticPatPart<'ctx>> {
     // tactic_pat_part ::= (tactic_pat_part) maybe_label tactic_pat_part_core
 
     match_rule! { (ctx, pat) =>
@@ -560,8 +558,8 @@ fn elaborate_tactic_pat_part<'ctx>(
 
 fn elaborate_maybe_label<'ctx>(
     maybe_label: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Option<Ustr>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Option<Ustr>> {
     // maybe_label ::= (label_none)
     //               | (label_some) name ":"
 
@@ -573,7 +571,7 @@ fn elaborate_maybe_label<'ctx>(
 
             // Check for reserved label names
             if label == *strings::RESERVED_RULE {
-                _ = ctx.diags.err_reserved_tactic_label::<()>(label, label_node.span());
+                _ = Diagnostic::err_reserved_tactic_label::<()>(label, label_node.span());
                 return Ok(None);
             }
 
@@ -584,8 +582,8 @@ fn elaborate_maybe_label<'ctx>(
 
 fn elaborate_tactic_pat_part_core<'ctx>(
     core: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<TacticPatPartCore<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, TacticPatPartCore<'ctx>> {
     // tactic_pat_part_core ::= (core_lit)          str
     //                        | (core_kw)           "@" kw"kw" str
     //                        | (core_name)         "@" kw"name"
@@ -616,7 +614,7 @@ fn elaborate_tactic_pat_part_core<'ctx>(
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
 
             let Some(cat) = ctx.arenas.tactic_cats.get(cat_name) else {
-                return ctx.diags.err_unknown_tactic_cat(cat_name, cat_name_node.span());
+                return Diagnostic::err_unknown_tactic_cat(cat_name, cat_name_node.span());
             };
 
             Ok(TacticPatPartCore::Cat(cat))
@@ -630,7 +628,7 @@ fn elaborate_tactic_pat_part_core<'ctx>(
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
 
             let Some(cat) = ctx.arenas.parse_cats.get(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
+                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
             Ok(TacticPatPartCore::Frag(cat))
@@ -653,8 +651,8 @@ fn elaborate_tactic_pat_part_core<'ctx>(
 fn elaborate_definition<'ctx>(
     definition: ParseTreeId<'ctx>,
     scope: &Scope<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Scope<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Scope<'ctx>> {
     // definition_command ::= (definition) kw"definition" notation_binding ":=" fragment kw"end"
 
     match_rule! { (ctx, definition) =>
@@ -718,8 +716,9 @@ fn elaborate_any_fragment<'ctx>(
 
 fn elaborate_notation_binding<'ctx>(
     notation_binding: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
+    ctx: &Ctx<'ctx>,
 ) -> WResult<
+    'ctx,
     CatMap<
         'ctx,
         (
@@ -731,7 +730,7 @@ fn elaborate_notation_binding<'ctx>(
     fn children_to_binding<'ctx>(
         children: &ParseTreeChildren<'ctx>,
         pattern: NotationPatternId<'ctx>,
-        ctx: &mut Ctx<'ctx>,
+        ctx: &Ctx<'ctx>,
     ) -> (
         NotationBindingId<'ctx>,
         Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
@@ -774,11 +773,14 @@ fn elaborate_notation_binding<'ctx>(
 fn elaborate_notation_binding_with_cat<'ctx>(
     notation_binding: ParseTreeId<'ctx>,
     cat: FormalSyntaxCatId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<(
-    NotationBindingId<'ctx>,
-    Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
-)> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<
+    'ctx,
+    (
+        NotationBindingId<'ctx>,
+        Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
+    ),
+> {
     let by_cat = elaborate_notation_binding(notation_binding, ctx)?;
     let solutions = by_cat.get(cat);
 
@@ -797,8 +799,8 @@ fn parse_hypotheses_and_conclusion<'ctx>(
     un_hypotheses: Vec<UnresolvedFact<'ctx>>,
     un_conclusion: UnresolvedFrag<'ctx>,
     scope: &Scope<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<(Vec<PresFact<'ctx>>, PresFrag<'ctx>)> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, (Vec<PresFact<'ctx>>, PresFrag<'ctx>)> {
     let mut hypotheses = Vec::new();
     for un_hypothesis in un_hypotheses {
         let assumption = match un_hypothesis.assumption {
@@ -827,7 +829,7 @@ fn elaborate_axiom<'ctx>(
     axiom: ParseTreeId<'ctx>,
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<(TheoremId<'ctx>, UnresolvedProof<'ctx>)> {
+) -> WResult<'ctx, (TheoremId<'ctx>, UnresolvedProof<'ctx>)> {
     // axiom_command ::= (axiom) kw"axiom" name templates ":" hypotheses "|-" sentence kw"end"
 
     match_rule! { (ctx, axiom) =>
@@ -861,7 +863,7 @@ fn elaborate_theorem<'ctx>(
     theorem: ParseTreeId<'ctx>,
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<(TheoremId<'ctx>, UnresolvedProof<'ctx>)> {
+) -> WResult<'ctx, (TheoremId<'ctx>, UnresolvedProof<'ctx>)> {
     // theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactic kw"qed"
 
     match_rule! { (ctx, theorem) =>
@@ -897,8 +899,8 @@ fn elaborate_theorem<'ctx>(
 
 fn elaborate_templates<'ctx>(
     mut templates: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Vec<Template<'ctx>>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Vec<Template<'ctx>>> {
     // templates ::= (template_none)
     //             | (template_many) template templates
 
@@ -930,8 +932,8 @@ fn elaborate_templates<'ctx>(
 
 fn elaborate_template<'ctx>(
     template: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Vec<Template<'ctx>>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Vec<Template<'ctx>>> {
     // template ::= (template) "[" template_bindings ":" name "]"
 
     match_rule! { (ctx, template) =>
@@ -942,7 +944,7 @@ fn elaborate_template<'ctx>(
 
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
             let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
-                return ctx.diags.err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
+                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
             let bindings = elaborate_template_bindings(names.as_node().unwrap(), cat, ctx)?;
@@ -955,8 +957,8 @@ fn elaborate_template<'ctx>(
 fn elaborate_template_bindings<'ctx>(
     mut bindings: ParseTreeId<'ctx>,
     cat: FormalSyntaxCatId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Vec<Template<'ctx>>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Vec<Template<'ctx>>> {
     // template_bindings ::= (template_bindings_none)
     //                     | (template_bindings_many) notation_binding template_bindings
 
@@ -981,8 +983,8 @@ fn elaborate_template_bindings<'ctx>(
 
 fn elaborate_hypotheses<'ctx>(
     hypotheses: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Vec<UnresolvedFact<'ctx>>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Vec<UnresolvedFact<'ctx>>> {
     // hypotheses ::= (hypotheses_none)
     //              | (hypotheses_many) hypothesis hypotheses
 
@@ -1009,8 +1011,8 @@ fn elaborate_hypotheses<'ctx>(
 
 fn elaborate_hypothesis<'ctx>(
     hypothesis: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<UnresolvedFact<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, UnresolvedFact<'ctx>> {
     // hypothesis ::= (hypothesis) "(" fact ")"
 
     match_rule! { (ctx, hypothesis) =>
@@ -1028,8 +1030,8 @@ fn elaborate_hypothesis<'ctx>(
 
 fn elaborate_fact<'ctx>(
     fact: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<UnresolvedFact<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, UnresolvedFact<'ctx>> {
     // fact ::= (fact_assumption) kw"assume" sentence "|-" sentence
     //        | (fact_sentence)   sentence
 
@@ -1057,8 +1059,8 @@ fn elaborate_fact<'ctx>(
 
 fn elaborate_tactic<'ctx>(
     tactic: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<TacticInst<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, TacticInst<'ctx>> {
     let children = expect_unambiguous(tactic, ctx)?;
     let rule = children.rule();
     let tactic_rule = rule.source().get_tactic_rule();
@@ -1099,7 +1101,7 @@ fn elaborate_tactic<'ctx>(
     Ok(TacticInst::new(tactic_rule, tactic_children))
 }
 
-pub fn elaborate_name<'ctx>(name: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WResult<Ustr> {
+pub fn elaborate_name<'ctx>(name: ParseTreeId<'ctx>, ctx: &Ctx<'ctx>) -> WResult<'ctx, Ustr> {
     match_rule! { (ctx, name) =>
         name ::= [name_atom] => {
             let name = name_atom.as_name().unwrap();
@@ -1108,7 +1110,7 @@ pub fn elaborate_name<'ctx>(name: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WRe
     }
 }
 
-pub fn elaborate_str_lit<'ctx>(str_lit: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) -> WResult<Ustr> {
+pub fn elaborate_str_lit<'ctx>(str_lit: ParseTreeId<'ctx>, ctx: &Ctx<'ctx>) -> WResult<'ctx, Ustr> {
     match_rule! { (ctx, str_lit) =>
         str ::= [str_atom] => {
             let str_lit = str_atom.as_str_lit().unwrap();
@@ -1119,11 +1121,11 @@ pub fn elaborate_str_lit<'ctx>(str_lit: ParseTreeId<'ctx>, ctx: &mut Ctx<'ctx>) 
 
 fn expect_unambiguous<'ctx>(
     id: ParseTreeId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<&'ctx ParseTreeChildren<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, &'ctx ParseTreeChildren<'ctx>> {
     match id.0.possibilities() {
         [] => unreachable!("No possibilities in parse tree."),
         [possibility] => Ok(possibility),
-        _ => ctx.diags.err_ambiguous_parse(id.span()),
+        _ => Diagnostic::err_ambiguous_parse(id.span()),
     }
 }

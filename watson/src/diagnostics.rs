@@ -2,15 +2,13 @@ use crate::context::Ctx;
 use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
-use crate::semant::formal_syntax::FormalSyntaxCatId;
-use crate::semant::theorems::TheoremId;
-use crate::util::plural;
 use annotate_snippets::{Level, Message, Renderer, Snippet};
 use itertools::Itertools;
+use std::marker::PhantomData;
 use std::path::Path;
 use ustr::Ustr;
 
-pub type WResult<T> = Result<T, ()>;
+pub type WResult<'ctx, T> = Result<T, Vec<Diagnostic<'ctx>>>;
 
 pub struct DiagManager<'ctx> {
     diags: Vec<Diagnostic<'ctx>>,
@@ -35,26 +33,14 @@ impl<'ctx> DiagManager<'ctx> {
     }
 }
 
+#[derive(Debug)]
 pub struct Diagnostic<'ctx> {
     title: &'static str,
     parts: Vec<DiagnosticPart>,
-    in_proof: Option<InProof<'ctx>>,
+    p: PhantomData<&'ctx ()>,
 }
 
-pub struct InProof<'ctx> {
-    theorem: TheoremId<'ctx>,
-    // proof_state: ProofStateKey<'ctx>,
-}
-
-// impl<'ctx> From<(TheoremId<'ctx>, ProofStateKey<'ctx>)> for InProof<'ctx> {
-//     fn from(value: (TheoremId<'ctx>, ProofStateKey<'ctx>)) -> Self {
-//         Self {
-//             theorem: value.0,
-//             proof_state: value.1,
-//         }
-//     }
-// }
-
+#[derive(Debug)]
 pub enum DiagnosticPart {
     Error(&'static str, Span),
     Info(&'static str, Span),
@@ -75,13 +61,8 @@ impl<'ctx> Diagnostic<'ctx> {
         Self {
             title,
             parts: Vec::new(),
-            in_proof: None,
+            p: PhantomData,
         }
-    }
-
-    pub fn in_proof(mut self, in_proof: InProof<'ctx>) -> Self {
-        self.in_proof = Some(in_proof);
-        self
     }
 
     pub fn with_error(mut self, msg: &str, span: Span) -> Self {
@@ -118,61 +99,26 @@ impl<'ctx> Diagnostic<'ctx> {
             msg = msg.snippet(snippet);
         }
 
-        // if let Some(in_proof) = &self.in_proof {
-        //     let title = format!("While checking theorem `{}`", in_proof.theorem.name());
-        //     let title = Ustr::from(&title);
-        //     msg = msg.footer(Level::Help.title(title.as_str()));
-
-        //     let title = render_proof_state(in_proof.proof_state);
-        //     let title = Ustr::from(&title);
-        //     msg = msg.footer(Level::Help.title(title.as_str()));
-        // }
-
         msg
     }
 }
 
-// fn render_proof_state<'ctx>(_state: ProofStateKey<'ctx>) -> String {
-//     let mut res = String::new();
-
-//     res += "Proof state:\n";
-
-// for &step in state.reasoning_chain() {
-//     res += "  ";
-
-//     match step {
-//         ReasoningStep::Hypothesis((_, pres)) => res += &pres.render_str(),
-//         ReasoningStep::Deduce((_, pres)) => res += &pres.render_str(),
-//         ReasoningStep::Assume((_, pres)) => res += &pres.render_str(),
-//         ReasoningStep::_Shorthand(name, (_, pres)) => {
-//             res += &name;
-//             res += " := ";
-//             res += &pres.render_str();
-//         }
-//     }
-
-//     res += "\n";
-// }
-
-// res += "⊢ ";
-// res += &state.goal().1.render_str();
-
-//     res
-// }
-
 impl<'ctx> DiagManager<'ctx> {
-    pub fn add_diag(&mut self, diag: Diagnostic<'ctx>) {
+    pub fn _add_diag(&mut self, diag: Diagnostic<'ctx>) {
         self.diags.push(diag);
+    }
+
+    pub fn add_diags(&mut self, diags: Vec<Diagnostic<'ctx>>) {
+        self.diags.extend(diags);
     }
 }
 
-impl<'ctx> DiagManager<'ctx> {
+impl<'ctx> Diagnostic<'ctx> {
     pub fn err_module_redeclaration<T>(
-        &mut self,
         source_id: SourceId,
         decl: Span,
         previous_decl: SourceDecl,
-    ) -> WResult<T> {
+    ) -> WResult<'ctx, T> {
         let mut diag = Diagnostic::new(&format!("redeclaration of module `{}`", source_id.name()))
             .with_error("", decl);
 
@@ -180,30 +126,26 @@ impl<'ctx> DiagManager<'ctx> {
             diag = diag.with_info("previous declaration", prev_span);
         }
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn err_non_existent_file<T>(&mut self, path: &Path, decl: Span) -> WResult<T> {
+    pub fn err_non_existent_file<T>(path: &Path, decl: Span) -> WResult<'ctx, T> {
         let diag = Diagnostic::new(&format!("source file `{}` does not exist", path.display()))
             .with_error("", decl);
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn _err_elaboration_infinite_recursion<T>(&mut self, span: Span) -> WResult<T> {
+    pub fn _err_elaboration_infinite_recursion<T>(span: Span) -> WResult<'ctx, T> {
         let diag = Diagnostic::new("infinite recursion while expanding").with_error("", span);
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
     pub fn err_parse_failure<T>(
-        &mut self,
         location: Location,
         possible_atoms: &[ParseAtomPattern],
-    ) -> WResult<T> {
+    ) -> WResult<'ctx, T> {
         fn format_atom(atom: &ParseAtomPattern) -> String {
             match atom {
                 ParseAtomPattern::Lit(lit) => format!("\"{lit}\""),
@@ -234,205 +176,68 @@ impl<'ctx> DiagManager<'ctx> {
         let span = Span::new(location, location);
         let diag = Diagnostic::new("error while parsing command").with_error(&expected, span);
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn err_duplicate_formal_syntax_cat<T>(&mut self) -> WResult<T> {
+    pub fn err_duplicate_formal_syntax_cat<T>() -> WResult<'ctx, T> {
         let diag = Diagnostic::new("err_duplicate_formal_syntax_cat");
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn err_duplicate_formal_syntax_rule<T>(&mut self) -> WResult<T> {
+    pub fn err_duplicate_formal_syntax_rule<T>() -> WResult<'ctx, T> {
         let diag = Diagnostic::new("err_duplicate_formal_syntax_rule");
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn err_duplicate_template_name<T>(
-        &mut self,
-        name: Ustr,
-        _old: Span,
-        new: Span,
-    ) -> WResult<T> {
-        let diag = Diagnostic::new(&format!("redeclaration of template name `{name}`"))
-            .with_error("redeclared here", new);
-
-        self.add_diag(diag);
-        Err(())
-    }
-
-    pub fn err_duplicate_theorem<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
-        let diag = Diagnostic::new("err_duplicate_theorem")
-            .with_error(&format!("theorem `{name}` declared again here"), span);
-
-        self.add_diag(diag);
-        Err(())
-    }
-
-    pub fn err_unknown_formal_syntax_cat<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
+    pub fn err_unknown_formal_syntax_cat<T>(name: Ustr, span: Span) -> WResult<'ctx, T> {
         let diag = Diagnostic::new(&format!("unknown formal syntax category `{name}`"))
             .with_error("", span);
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn err_duplicate_tactic_cat<T>(&mut self) -> WResult<T> {
+    pub fn err_duplicate_tactic_cat<T>() -> WResult<'ctx, T> {
         let diag = Diagnostic::new("err_duplicate_tactic_cat");
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn err_reserved_tactic_cat_name<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
+    pub fn err_reserved_tactic_cat_name<T>(name: Ustr, span: Span) -> WResult<'ctx, T> {
         let diag = Diagnostic::new(&format!(
             "tactic category name `{name}` is reserved (it conflicts with a built-in Luau type)"
         ))
         .with_error("reserved name used here", span);
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn err_duplicate_tactic_rule<T>(&mut self) -> WResult<T> {
+    pub fn err_duplicate_tactic_rule<T>() -> WResult<'ctx, T> {
         let diag = Diagnostic::new("err_duplicate_tactic_rule");
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn err_unknown_tactic_cat<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
+    pub fn err_unknown_tactic_cat<T>(name: Ustr, span: Span) -> WResult<'ctx, T> {
         let diag =
             Diagnostic::new(&format!("unknown tactic category `{name}`")).with_error("", span);
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn err_reserved_tactic_label<T>(&mut self, label: Ustr, span: Span) -> WResult<T> {
+    pub fn err_reserved_tactic_label<T>(label: Ustr, span: Span) -> WResult<'ctx, T> {
         let diag = Diagnostic::new(&format!(
             "tactic label `{label}` is reserved (the label `_rule` is reserved for the tactic rule name)"
         ))
         .with_error("reserved label used here", span);
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn err_ambiguous_parse<T>(&mut self, span: Span) -> WResult<T> {
+    pub fn err_ambiguous_parse<T>(span: Span) -> WResult<'ctx, T> {
         let diag = Diagnostic::new("ambiguous parse").with_error("", span);
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
-}
-
-// Below are errors relating specifically to proofs.
-
-impl<'ctx> DiagManager<'ctx> {
-    pub fn err_failed_to_parse_fragment(
-        &mut self,
-        in_proof: impl Into<InProof<'ctx>>,
-        span: Span,
-        cat: FormalSyntaxCatId<'ctx>,
-    ) {
-        let in_proof = in_proof.into();
-
-        let diag = Diagnostic::new(&format!("failed to parse {}", cat.name()))
-            .with_error("", span)
-            .in_proof(in_proof);
-
-        self.add_diag(diag);
-    }
-
-    pub fn err_failed_to_parse_fragment_in_stmt(
-        &mut self,
-        _theorem_name: Ustr,
-        span: Span,
-        cat: FormalSyntaxCatId<'ctx>,
-    ) {
-        let diag = Diagnostic::new(&format!("failed to parse {}", cat.name())).with_error("", span);
-
-        self.add_diag(diag);
-    }
-
-    pub fn err_non_existent_theorem(&mut self, name: Ustr, span: Span) {
-        let diag = Diagnostic::new(&format!("unknown theorem `{name}`")).with_error("", span);
-
-        self.add_diag(diag);
-    }
-
-    pub fn err_missing_tactic_templates(&mut self, last_template: Span, missing: usize) {
-        let diag = Diagnostic::new(&format!(
-            "missing {missing} tactic template{}",
-            plural(missing)
-        ))
-        .with_error(
-            &format!("expected {missing} more tactic template{}", plural(missing)),
-            last_template,
-        );
-
-        self.add_diag(diag);
-    }
-
-    pub fn err_extra_tactic_templates(&mut self, extra_template: Span, extra: usize) {
-        let diag = Diagnostic::new(&format!("extra tactic template{}", plural(extra))).with_error(
-            &format!("found {extra} extra tactic template{}", plural(extra)),
-            extra_template,
-        );
-
-        self.add_diag(diag);
-    }
-
-    pub fn err_missing_goal(&mut self, in_proof: impl Into<InProof<'ctx>>, at: Span) {
-        let in_proof = in_proof.into();
-        // let goal_txt = in_proof.proof_state.goal().1.render_str();
-        let goal_txt = "TODO";
-
-        let diag = Diagnostic::new(&format!("missing goal `{goal_txt}`"))
-            .with_error("goal unproved at end of proof", at)
-            .in_proof(in_proof);
-
-        self.add_diag(diag);
-    }
-
-    // pub fn err_goal_conclusion_mismatch(
-    //     &mut self,
-    //     in_proof: impl Into<InProof<'ctx>>,
-    //     at: Span,
-    //     conclusion: PresentationTreeId<'ctx>,
-    // ) {
-    //     let in_proof = in_proof.into();
-    //     // let goal_txt = in_proof.proof_state.goal().1.render_str();
-    //     let goal_txt = "TODO";
-    //     let conclusion_txt = conclusion.render_str();
-
-    //     let diag = Diagnostic::new(&format!(
-    //         "mismatch between goal `{goal_txt}` and conclusion `{conclusion_txt}`"
-    //     ))
-    //     .with_error("", at)
-    //     .in_proof(in_proof);
-
-    //     self.add_diag(diag);
-    // }
-
-    // pub fn err_missing_hypothesis(
-    //     &mut self,
-    //     in_proof: impl Into<InProof<'ctx>>,
-    //     at: Span,
-    //     hyp: FactPresentation<'ctx>,
-    // ) {
-    //     let in_proof = in_proof.into();
-    //     let hyp_txt = hyp.render_str();
-
-    //     let diag = Diagnostic::new(&format!("missing hypothesis `{hyp_txt}`"))
-    //         .with_error("", at)
-    //         .in_proof(in_proof);
-
-    //     self.add_diag(diag);
-    // }
 }

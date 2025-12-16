@@ -63,11 +63,15 @@ fn parse_source<'ctx>(
     if can_start_command(text, loc, ctx) {
         // The current line could start a command so we will assume it does.
 
-        let Ok(tree) = earley::parse(loc, ctx.builtin_cats.command, ctx) else {
-            // We weren't able to parse a command. The parse error has already
-            // been reported so we will simply move onto the next line.
-            sources_stack.push(next_line(text, loc));
-            return;
+        let tree = match earley::parse(loc, ctx.builtin_cats.command, ctx) {
+            Ok(tree) => tree,
+            Err(diags) => {
+                // We weren't able to parse a command. Add the diagnostics and
+                // move onto the next line.
+                ctx.diags.add_diags(diags);
+                sources_stack.push(next_line(text, loc));
+                return;
+            }
         };
 
         // Push the location after this command onto the stack so we can
@@ -76,10 +80,14 @@ fn parse_source<'ctx>(
         sources_stack.push(after_command);
 
         // Now let's elaborate the command.
-        let Ok(action) = elaborator::elaborate_command(tree, &scope, ctx) else {
-            // There was an error elaborating the command. We don't need to do
-            // anything more here as the error has already been reported.
-            return;
+        let action = match elaborator::elaborate_command(tree, &scope, ctx) {
+            Ok(action) => action,
+            Err(diags) => {
+                // There was an error elaborating the command. Add the diagnostics
+                // and continue.
+                ctx.diags.add_diags(diags);
+                return;
+            }
         };
 
         match action {

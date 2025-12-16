@@ -694,7 +694,7 @@ pub fn add_parse_rules_for_formal_cat<'ctx>(
 
 pub fn formal_rule_to_notation<'ctx>(
     rule: FormalSyntaxRuleId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
+    ctx: &Ctx<'ctx>,
 ) -> (
     NotationPatternId<'ctx>,
     NotationBindingId<'ctx>,
@@ -702,7 +702,7 @@ pub fn formal_rule_to_notation<'ctx>(
 ) {
     fn to_notation<'ctx>(
         rule: FormalSyntaxRuleId<'ctx>,
-        ctx: &mut Ctx<'ctx>,
+        ctx: &Ctx<'ctx>,
     ) -> NotationPatternId<'ctx> {
         let mut parts = Vec::new();
 
@@ -767,7 +767,7 @@ pub fn formal_rule_to_notation<'ctx>(
 
 fn fragment_parse_rule_for_notation<'ctx>(
     notation: NotationPatternId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
+    ctx: &Ctx<'ctx>,
 ) -> RuleId<'ctx> {
     let mut parts = Vec::new();
     for &notation_part in notation.0.parts() {
@@ -802,7 +802,7 @@ fn fragment_parse_rule_for_notation<'ctx>(
 
 fn binding_parse_rule_for_notation<'ctx>(
     notation: NotationPatternId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
+    ctx: &Ctx<'ctx>,
 ) -> RuleId<'ctx> {
     let mut parts = Vec::new();
     for notation_part in notation.0.parts() {
@@ -842,7 +842,7 @@ pub fn add_parse_rules_for_notation<'ctx>(notation: NotationPatternId<'ctx>, ctx
 
 fn tactic_rule_to_parse_rule<'ctx>(
     tactic_rule: TacticRuleId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
+    ctx: &Ctx<'ctx>,
 ) -> RuleId<'ctx> {
     let mut parts = Vec::new();
     for tactic_part in tactic_rule.pattern().parts() {

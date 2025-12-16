@@ -1,6 +1,6 @@
 use crate::{
     context::Ctx,
-    diagnostics::WResult,
+    diagnostics::{Diagnostic, WResult},
     parse::{
         Location, SourceId, Span,
         location::SourceOffset,
@@ -16,8 +16,8 @@ use std::{char, cmp::Reverse, collections::VecDeque};
 pub fn parse<'ctx>(
     start: Location,
     category: CategoryId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<ParseTreeId<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, ParseTreeId<'ctx>> {
     let chart = build_chart(start, category, ctx);
     let trimmed = trim_chart(&chart);
 
@@ -28,11 +28,7 @@ pub fn parse<'ctx>(
     read_chart(start, category, &trimmed, ctx)
 }
 
-fn build_chart<'ctx>(
-    start: Location,
-    category: CategoryId<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> Chart<'ctx> {
+fn build_chart<'ctx>(start: Location, category: CategoryId<'ctx>, ctx: &Ctx<'ctx>) -> Chart<'ctx> {
     let text = ctx.sources.get_text(start.source()).as_str();
     let mut chart = Chart::new(start.offset());
 
@@ -230,7 +226,7 @@ impl<'ctx> Chart<'ctx> {
     }
 }
 
-fn make_parse_error<'ctx, T>(chart: &Chart, source: SourceId, ctx: &mut Ctx<'ctx>) -> WResult<T> {
+fn make_parse_error<'ctx, T>(chart: &Chart, source: SourceId, ctx: &Ctx<'ctx>) -> WResult<'ctx, T> {
     let latest_pos = chart.start_offset.forward(chart.items_at_offset.len() - 1);
     let latest_items = chart.items_at_offset.last().unwrap();
 
@@ -250,7 +246,7 @@ fn make_parse_error<'ctx, T>(chart: &Chart, source: SourceId, ctx: &mut Ctx<'ctx
     let mut possible_atoms = possible_next_atoms.into_iter().collect::<Vec<_>>();
     possible_atoms.sort();
 
-    ctx.diags.err_parse_failure(
+    Diagnostic::err_parse_failure(
         Location::new(location.source(), latest_pos),
         &possible_atoms,
     )
@@ -260,8 +256,8 @@ fn read_chart<'ctx>(
     start: Location,
     cat: CategoryId<'ctx>,
     chart: &TrimmedChart<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<ParseTreeId<'ctx>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, ParseTreeId<'ctx>> {
     // First we are going to find the length of the longest parse. Our recursive
     // function needs to know the full span so we assume the longest span is the
     // correct one.
@@ -277,8 +273,8 @@ fn read_chart<'ctx>(
         span: Span,
         cat: CategoryId<'ctx>,
         chart: &TrimmedChart<'ctx>,
-        ctx: &mut Ctx<'ctx>,
-    ) -> WResult<ParseTreeId<'ctx>> {
+        ctx: &Ctx<'ctx>,
+    ) -> WResult<'ctx, ParseTreeId<'ctx>> {
         let text = ctx.sources.get_text(span.source()).as_str();
 
         // The idea here is to check which rules we have for the given span and
@@ -316,7 +312,7 @@ fn read_chart<'ctx>(
                 }
                 // We don't allow any ambiguity within a single rule, only between
                 // rules. So this is an immediate error.
-                Err(SplitError::Ambiguous) => return ctx.diags.err_ambiguous_parse(span),
+                Err(SplitError::Ambiguous) => return Diagnostic::err_ambiguous_parse(span),
                 // The chart guaranteed that there is at least one match so
                 // this should never happen.
                 Err(SplitError::NoMatch) => unreachable!(),
@@ -332,8 +328,8 @@ fn read_chart<'ctx>(
         offsets: &[SourceOffset],
         start: Location,
         chart: &TrimmedChart<'ctx>,
-        ctx: &mut Ctx<'ctx>,
-    ) -> WResult<Vec<ParseTreePart<'ctx>>> {
+        ctx: &Ctx<'ctx>,
+    ) -> WResult<'ctx, Vec<ParseTreePart<'ctx>>> {
         debug_assert_eq!(pattern.len(), offsets.len());
 
         let text = ctx.sources.get_text(start.source()).as_str();

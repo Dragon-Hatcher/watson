@@ -26,8 +26,8 @@ pub struct UnresolvedFact<'ctx> {
 pub fn parse_fragment<'ctx>(
     frag: UnresolvedFrag<'ctx>,
     scope: &Scope<'ctx>,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Result<PresFrag<'ctx>, ParseResultErr>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Result<PresFrag<'ctx>, ParseResultErr>> {
     parse_fragment_impl(frag.0, scope, 0, ctx)
 }
 
@@ -41,8 +41,8 @@ fn parse_fragment_impl<'ctx>(
     frag: ParseTreeId<'ctx>,
     scope: &Scope<'ctx>,
     binding_depth: usize,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<Result<PresFrag<'ctx>, ParseResultErr>> {
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Result<PresFrag<'ctx>, ParseResultErr>> {
     let mut solution = Err(ParseResultErr::NoSolutions);
 
     'possibility: for possibility in frag.possibilities() {

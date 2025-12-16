@@ -39,31 +39,28 @@ impl<'ctx> Deref for WLua<'ctx> {
     }
 }
 
-impl<'ctx> DiagManager<'ctx> {
-    pub fn err_lua_load_error<T>(&mut self, error: mlua::Error) -> WResult<T> {
+impl<'ctx> Diagnostic<'ctx> {
+    pub fn err_lua_load_error<T>(error: mlua::Error) -> WResult<'ctx, T> {
         let diag = Diagnostic::new(&format!("lua error while loading:\n {error}."));
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn err_bad_module_ret<T>(&mut self, got: &mlua::Value) -> WResult<T> {
+    pub fn err_bad_module_ret<T>(got: &mlua::Value) -> WResult<'ctx, T> {
         let diag = Diagnostic::new(&format!(
             "bad return value from main lua module.
 Expected main module to return a lua table with field `handleTactic`.
-Instead it returned: 
+Instead it returned:
 {got:#?}"
         ));
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 
-    pub fn err_lua_execution_error<T>(&mut self, lua_ctx: &str, error: mlua::Error) -> WResult<T> {
+    pub fn err_lua_execution_error<T>(lua_ctx: &str, error: mlua::Error) -> WResult<'ctx, T> {
         let diag = Diagnostic::new(&format!("lua error executing {lua_ctx}:\n{error}"));
 
-        self.add_diag(diag);
-        Err(())
+        Err(vec![diag])
     }
 }
 
@@ -73,7 +70,7 @@ pub struct LuaInfo<'ctx> {
     pub handle_tactic_fn: mlua::Function,
 }
 
-pub fn setup_lua<'ctx>(ctx: &mut Ctx<'ctx>) -> WResult<LuaInfo<'ctx>> {
+pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
     // Write out types
     write_luau_types(ctx);
 
@@ -82,7 +79,7 @@ pub fn setup_lua<'ctx>(ctx: &mut Ctx<'ctx>) -> WResult<LuaInfo<'ctx>> {
         StdLib::TABLE | StdLib::STRING | StdLib::UTF8 | StdLib::BIT | StdLib::MATH,
         LuaOptions::new(),
     )
-    .or_else(|e| ctx.diags.err_lua_load_error(e))?;
+    .or_else(Diagnostic::err_lua_load_error)?;
 
     // Add the ctx as app data.
     let lua_ctx = LuaCtx::new(ctx);
@@ -119,29 +116,23 @@ pub fn setup_lua<'ctx>(ctx: &mut Ctx<'ctx>) -> WResult<LuaInfo<'ctx>> {
     // Load the root file
     let lua_root = src_folder.join("main.luau");
     let chunk = lua.load(lua_root).set_name("@main");
-    let result = chunk
-        .call(())
-        .or_else(|e| ctx.diags.err_lua_load_error(e))?;
+    let result = chunk.call(()).or_else(Diagnostic::err_lua_load_error)?;
 
     let wlua = WLua {
         lua,
         _arenas: ctx.arenas,
     };
 
-    read_main_module(wlua, result, ctx)
+    read_main_module(wlua, result)
 }
 
-fn read_main_module<'ctx>(
-    lua: WLua<'ctx>,
-    module: mlua::Value,
-    ctx: &mut Ctx<'ctx>,
-) -> WResult<LuaInfo<'ctx>> {
-    let mut err_fn = || {
-        _ = ctx.diags.err_bad_module_ret::<()>(&module);
-    };
-
-    let table = module.as_table().ok_or_else(|| err_fn())?;
-    let handle_tactic_fn: mlua::Function = table.get("handleTactic").map_err(|_| err_fn())?;
+fn read_main_module<'ctx>(lua: WLua<'ctx>, module: mlua::Value) -> WResult<'ctx, LuaInfo<'ctx>> {
+    let table = module
+        .as_table()
+        .ok_or_else(|| Diagnostic::err_bad_module_ret::<()>(&module).unwrap_err())?;
+    let handle_tactic_fn: mlua::Function = table
+        .get("handleTactic")
+        .map_err(|_| Diagnostic::err_bad_module_ret::<()>(&module).unwrap_err())?;
 
     Ok(LuaInfo {
         runtime: lua,

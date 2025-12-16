@@ -33,6 +33,18 @@ use crate::{
 use rustc_hash::FxHashSet;
 use ustr::Ustr;
 
+// Reserved Luau type names that cannot be used as tactic category names
+const RESERVED_LUAU_TYPES: &[&str] = &[
+    "UnResFrag",
+    "UnResAnyFrag",
+    "UnResFact",
+    "Frag",
+    "Fact",
+    "Scope",
+    "Theorem",
+    "ProofState",
+];
+
 macro_rules! failed_to_match_builtin {
     ($rule:expr, $ctx:expr) => {
         panic!("Failed to match builtin parse tree: {}", $rule.name());
@@ -450,10 +462,18 @@ fn elaborate_tactic_category<'ctx>(
     match_rule! { (ctx, cat) =>
         tactic_category ::= [tactic_category_kw, cat_name] => {
             debug_assert!(tactic_category_kw.is_kw(*strings::TACTIC_CATEGORY));
-            let cat_name = elaborate_name(cat_name.as_node().unwrap(), ctx)?;
+            let cat_name_node = cat_name.as_node().unwrap();
+            let cat_name = elaborate_name(cat_name_node, ctx)?;
 
             if ctx.arenas.tactic_cats.get(cat_name).is_some() {
                 return ctx.diags.err_duplicate_tactic_cat();
+            }
+
+            // Check if the category name conflicts with reserved Luau types
+            // (tactic names are converted to PascalCase for Lua)
+            let lua_name = crate::util::name_to_lua(cat_name.as_str());
+            if RESERVED_LUAU_TYPES.contains(&lua_name.as_str()) {
+                return ctx.diags.err_reserved_tactic_cat_name(cat_name, cat_name_node.span());
             }
 
             let tactic_cat = TacticCat::new(cat_name);

@@ -288,6 +288,16 @@ impl<'ctx> DiagManager<'ctx> {
         Err(())
     }
 
+    pub fn err_reserved_tactic_cat_name<T>(&mut self, name: Ustr, span: Span) -> WResult<T> {
+        let diag = Diagnostic::new(&format!(
+            "tactic category name `{name}` is reserved (it conflicts with a built-in Luau type)"
+        ))
+        .with_error("reserved name used here", span);
+
+        self.add_diag(diag);
+        Err(())
+    }
+
     pub fn err_duplicate_tactic_rule<T>(&mut self) -> WResult<T> {
         let diag = Diagnostic::new("err_duplicate_tactic_rule");
 

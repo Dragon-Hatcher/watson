@@ -5,7 +5,7 @@ use crate::semant::{
 };
 use mlua::{FromLua, MetaMethod, UserData};
 
-#[derive(Debug, Clone, Copy, FromLua)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromLua)]
 pub struct LuaPresFrag {
     frag: LuaFrag,
     pres: LuaPres,
@@ -40,7 +40,7 @@ impl UserData for LuaPresFrag {
     }
 }
 
-#[derive(Debug, Clone, Copy, FromLua)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromLua)]
 pub struct LuaPresFact {
     assumption: Option<LuaPresFrag>,
     conclusion: LuaPresFrag,
@@ -73,7 +73,7 @@ impl UserData for LuaPresFact {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub struct LuaFrag {
     ptr: *const Fragment<'static>,
 }
@@ -97,7 +97,7 @@ impl LuaFrag {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LuaPres {
     ptr: *const Pres<'static>,
 }

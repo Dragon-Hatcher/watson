@@ -25,10 +25,29 @@ declare class Frag
     formal: Frag
 end
 
+declare FragMap : {
+    new: <S>(self: any) -> FragMap<S>
+}
+
+export type FragMap<T> = {
+    set: (any, f: Frag, val: T) -> T?,
+    get: (any, f: Frag) -> T?
+}
+
 declare class Fact
     assumption: Frag?
     conclusion: Frag
 end
+
+declare FactMap : {
+    new: <S>(self: any) -> FactMap<S>
+}
+
+export type FactMap<T> = {
+    set: (any, f: Fact, val: T) -> T?,
+    get: (any, f: Fact) -> T?
+}
+
 
 declare class Scope
 end

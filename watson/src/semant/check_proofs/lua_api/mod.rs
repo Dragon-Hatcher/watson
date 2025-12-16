@@ -4,7 +4,10 @@ use crate::{
     semant::check_proofs::{
         LuaTheoremInfo,
         lua_api::{
-            ctx_to_lua::LuaCtx, diag_to_lua::LuaDiagnosticMeta, file_loader::LuaFileRequirer,
+            ctx_to_lua::LuaCtx,
+            diag_to_lua::LuaDiagnosticMeta,
+            file_loader::LuaFileRequirer,
+            frag_map_to_lua::{LuaFactMapMeta, LuaFragMapMeta},
             tactic_to_lua::generate_luau_tactic_types,
         },
     },
@@ -16,6 +19,7 @@ use std::{fs, ops::Deref};
 pub mod ctx_to_lua;
 pub mod diag_to_lua;
 mod file_loader;
+pub mod frag_map_to_lua;
 pub mod frag_to_lua;
 pub mod proof_to_lua;
 pub mod scope_to_lua;
@@ -97,6 +101,8 @@ pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
 
     // Set up metatables.
     lua.globals().set("Diagnostic", LuaDiagnosticMeta).unwrap();
+    lua.globals().set("FragMap", LuaFragMapMeta).unwrap();
+    lua.globals().set("FactMap", LuaFactMapMeta).unwrap();
 
     // Set up our custom require system.
     let src_folder = ctx.config.project_dir().join("src");
@@ -181,7 +187,6 @@ fn write_luau_types<'ctx>(ctx: &Ctx<'ctx>) {
 
     // Only write if it has actually changed as it confused the LSP.
     if current_def_file != new_def_file {
-        println!("writing!");
         fs::write(types_path, new_def_file).expect("TODO");
     }
 }

@@ -1,5 +1,11 @@
+use convert_case::ccase;
+
 pub fn plural(n: usize) -> &'static str {
     if n == 1 { "" } else { "s" }
+}
+
+pub fn name_to_lua(name: &str) -> String {
+    ccase!(snake -> pascal, name.replace('.', "_"))
 }
 
 pub mod ansi {

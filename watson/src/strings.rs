@@ -44,9 +44,13 @@ str_const! {
     RIGHT_ARROW = ">";
 }
 
-// Reserved names:
+// Lua names:
 str_const! {
     RESERVED_RULE = "_rule";
+    STRING = "string";
+    UN_FRAG = "UnResFrag";
+    UN_ANY_FRAG = "UnResAnyFrag";
+    UN_FACT = "UnResFact";
 }
 
 str_const! {

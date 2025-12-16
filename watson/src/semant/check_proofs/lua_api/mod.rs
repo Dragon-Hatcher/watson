@@ -1,10 +1,12 @@
 use crate::{
     context::{Arenas, Ctx},
     diagnostics::{DiagManager, Diagnostic, WResult},
-    semant::check_proofs::lua_api::{ctx_to_lua::LuaCtx, file_loader::LuaFileRequirer},
+    semant::check_proofs::lua_api::{
+        ctx_to_lua::LuaCtx, file_loader::LuaFileRequirer, tactic_to_lua::generate_luau_tactic_types,
+    },
 };
 use mlua::{Lua, LuaOptions, StdLib};
-use std::ops::Deref;
+use std::{fs, ops::Deref};
 
 pub mod ctx_to_lua;
 mod file_loader;
@@ -72,6 +74,9 @@ pub struct LuaInfo<'ctx> {
 }
 
 pub fn setup_lua<'ctx>(ctx: &mut Ctx<'ctx>) -> WResult<LuaInfo<'ctx>> {
+    // Write out types
+    write_luau_types(ctx);
+
     // Initialize the Lua runtime.
     let lua = Lua::new_with(
         StdLib::TABLE | StdLib::STRING | StdLib::UTF8 | StdLib::BIT | StdLib::MATH,
@@ -142,4 +147,23 @@ fn read_main_module<'ctx>(
         runtime: lua,
         handle_tactic_fn,
     })
+}
+
+fn write_luau_types<'ctx>(ctx: &Ctx<'ctx>) {
+    let definitions_file = include_str!("../../../static/definitions.d.luau");
+    let types_content = generate_luau_tactic_types(&ctx.tactic_manager);
+    let types_path = ctx
+        .config
+        .build_dir()
+        .join("luau")
+        .join("definitions.d.luau");
+
+    let current_def_file = fs::read_to_string(&types_path).unwrap_or_default();
+    let new_def_file = format!("{definitions_file}\n{types_content}");
+
+    // Only write if it has actually changed as it confused the LSP.
+    if current_def_file != new_def_file {
+        println!("writing!");
+        fs::write(types_path, new_def_file).expect("TODO");
+    }
 }

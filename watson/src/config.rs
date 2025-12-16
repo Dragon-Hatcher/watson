@@ -33,18 +33,27 @@ pub fn find_config_file() -> Result<PathBuf, ConfigError> {
 #[derive(Debug, Clone)]
 pub struct WatsonConfig {
     project_dir: PathBuf,
+    build_dir: PathBuf,
 }
 
 impl WatsonConfig {
     pub fn from_file(path: &Path) -> Result<Self, ConfigError> {
         let _ = WatsonConfigFile::from_file(path)?;
         let project_dir = path.parent().unwrap().canonicalize().unwrap();
+        let build_dir = project_dir.join("build");
 
-        Ok(Self { project_dir })
+        Ok(Self {
+            project_dir,
+            build_dir,
+        })
     }
 
     pub fn project_dir(&self) -> &Path {
         &self.project_dir
+    }
+
+    pub fn build_dir(&self) -> &Path {
+        &self.build_dir
     }
 }
 

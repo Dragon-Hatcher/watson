@@ -15,7 +15,10 @@ use crate::{
         fragment::{Fragment, FragmentId},
         notation::{NotationBinding, NotationBindingId, NotationPattern, NotationPatternId},
         presentation::{Pres, PresId},
-        tactic::syntax::{TacticCat, TacticCatId, TacticRule, TacticRuleId},
+        tactic::{
+            syntax::{TacticCat, TacticCatId, TacticRule, TacticRuleId},
+            tactic_manager::TacticManager,
+        },
         theorems::{TheoremId, TheoremStatement},
     },
     strings,
@@ -29,6 +32,9 @@ pub struct Ctx<'ctx> {
 
     /// Information about how we should currently be parsing syntax.
     pub parse_state: ParseState<'ctx>,
+
+    /// Records information about tactics.
+    pub tactic_manager: TacticManager<'ctx>,
 
     /// Diagnostics manager for reporting errors and warnings.
     pub diags: DiagManager<'ctx>,
@@ -49,6 +55,7 @@ pub struct Ctx<'ctx> {
 impl<'ctx> Ctx<'ctx> {
     pub fn new(sources: SourceCache, config: WatsonConfig, arenas: &'ctx Arenas<'ctx>) -> Self {
         let mut parse_state = ParseState::new();
+        let mut tactic_manager = TacticManager::new();
 
         let sentence_formal_cat = arenas
             .formal_cats
@@ -57,6 +64,7 @@ impl<'ctx> Ctx<'ctx> {
         let tactic_tactic_cat = arenas
             .tactic_cats
             .alloc(*strings::TACTIC, TacticCat::new(*strings::TACTIC));
+        tactic_manager.use_tactic_cat(tactic_tactic_cat);
 
         // Create the tactic parse category before calling add_builtin_rules
         let tactic_parse_cat = crate::parse::parse_state::Category::new(
@@ -82,6 +90,7 @@ impl<'ctx> Ctx<'ctx> {
             arenas,
             scopes: ScopeArena::new(),
             parse_state,
+            tactic_manager,
             diags: DiagManager::new(),
             sources,
             config,

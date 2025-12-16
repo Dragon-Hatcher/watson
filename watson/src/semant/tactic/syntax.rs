@@ -1,6 +1,7 @@
 use crate::{
     generate_arena_handle,
     parse::parse_state::{Associativity, CategoryId, Precedence},
+    util::name_to_lua,
 };
 use ustr::Ustr;
 
@@ -10,15 +11,23 @@ generate_arena_handle!(TacticRuleId<'ctx> => TacticRule<'ctx>);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TacticCat {
     name: Ustr,
+    lua_name: Ustr,
 }
 
 impl TacticCat {
     pub fn new(name: Ustr) -> Self {
-        Self { name }
+        Self {
+            name,
+            lua_name: Ustr::from(&name_to_lua(&name)),
+        }
     }
 
     pub fn name(&self) -> Ustr {
         self.name
+    }
+
+    pub fn lua_name(&self) -> Ustr {
+        self.lua_name
     }
 }
 

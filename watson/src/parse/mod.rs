@@ -129,12 +129,16 @@ fn parse_source<'ctx>(
                 let parse_cat = ctx.arenas.parse_cats.alloc(cat.name(), parse_cat);
                 ctx.parse_state.use_cat(parse_cat);
                 ctx.parse_state.recompute_initial_atoms();
+
+                ctx.tactic_manager.use_tactic_cat(cat);
             }
             ElaborateAction::NewTacticRule(rule) => {
                 // The command created a new tactic rule. We need to
                 // update the state of the parser to include this rule.
                 grammar::add_parse_rules_for_tactic_rule(rule, ctx);
                 ctx.parse_state.recompute_initial_atoms();
+
+                ctx.tactic_manager.use_tactic_rule(rule);
             }
         }
     } else {

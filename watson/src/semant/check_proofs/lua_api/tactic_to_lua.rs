@@ -1,8 +1,15 @@
-use crate::semant::{
-    check_proofs::lua_api::unresolved_to_lua::{
-        LuaUnresolvedAnyFrag, LuaUnresolvedFact, LuaUnresolvedFrag,
+use crate::{
+    semant::{
+        check_proofs::lua_api::unresolved_to_lua::{
+            LuaUnresolvedAnyFrag, LuaUnresolvedFact, LuaUnresolvedFrag,
+        },
+        tactic::{
+            syntax::TacticPatPartCore,
+            tactic_manager::TacticManager,
+            unresolved_proof::{TacticInst, TacticInstPart},
+        },
     },
-    tactic::unresolved_proof::{TacticInst, TacticInstPart},
+    strings,
 };
 use mlua::{IntoLua, Lua, Value};
 
@@ -66,4 +73,48 @@ impl<'ctx> IntoLua for &TacticInstPart<'ctx> {
             }
         }
     }
+}
+
+pub fn generate_luau_tactic_types<'ctx>(tactics: &TacticManager<'ctx>) -> String {
+    let mut out = String::new();
+
+    for &cat in tactics.cats() {
+        let name = cat.lua_name();
+        let rules = tactics.rules_for_cat(cat);
+
+        if rules.is_empty() {
+            out.push_str(&format!("export type {name} = never\n\n"));
+            continue;
+        }
+
+        out.push_str(&format!("export type {name} =\n"));
+        for rule in rules {
+            let rule_name = rule.name();
+            out.push_str(&format!("  | {{ _rule: \"{rule_name}\""));
+
+            for part in rule.pattern().parts() {
+                use TacticPatPartCore as C;
+
+                let Some(label) = part.label() else {
+                    continue;
+                };
+
+                let luau_type = match part.part() {
+                    C::Lit(_) | C::Kw(_) => continue,
+                    C::Name => *strings::STRING,
+                    C::Cat(cat) => cat.lua_name(),
+                    C::Frag(_) => *strings::UN_FRAG,
+                    C::AnyFrag => *strings::UN_ANY_FRAG,
+                    C::Fact => *strings::UN_FACT,
+                };
+
+                out.push_str(&format!(", {label}: {luau_type}"));
+            }
+
+            out.push_str(" }\n");
+        }
+        out.push('\n');
+    }
+
+    out
 }

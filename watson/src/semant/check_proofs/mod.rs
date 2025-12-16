@@ -6,7 +6,7 @@ use crate::{
         proof_kernel::ProofState,
         proof_status::{ProofStatus, ProofStatuses},
         tactic::unresolved_proof::{TacticInst, UnresolvedProof},
-        theorems::{_debug_theorem, TheoremId},
+        theorems::TheoremId,
     },
 };
 use mlua::IntoLua;

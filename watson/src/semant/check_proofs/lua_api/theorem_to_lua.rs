@@ -1,5 +1,9 @@
 use crate::semant::{
-    check_proofs::lua_api::frag_to_lua::{LuaPresFact, LuaPresFrag},
+    check_proofs::lua_api::{
+        ctx_to_lua::LuaCtx,
+        frag_to_lua::{LuaPresFact, LuaPresFrag},
+        scope_to_lua::LuaScope,
+    },
     theorems::{TheoremId, TheoremStatement},
 };
 use itertools::Itertools;
@@ -45,6 +49,12 @@ impl UserData for LuaTheorem {
 
         fields.add_field_method_get("conclusion", |_, this| {
             Ok(LuaPresFrag::new(this.out().conclusion()))
+        });
+
+        fields.add_field_method_get("scope", |lua, this| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let scope = ctx.scopes._get(this.out().scope());
+            Ok(LuaScope::new(scope))
         });
     }
 }

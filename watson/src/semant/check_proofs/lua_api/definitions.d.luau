@@ -10,6 +10,7 @@ end
 
 declare class UnResFrag
     span: Span
+    function resolve(self, scope: Scope): (Frag?, Diagnostic?)
 end
 
 declare class UnResAnyFrag
@@ -19,6 +20,7 @@ end
 declare class UnResFact
     assumption: UnResFrag?
     conclusion: UnResFrag
+    function resolve(self, scope: Scope): (Fact?, Diagnostic?, Diagnostic?)
 end
 
 declare class Frag
@@ -63,6 +65,7 @@ declare class Theorem
     name: string
     hypotheses: {Fact}
     conclusion: Frag
+    scope: Scope
 end
 
 declare class ProofState

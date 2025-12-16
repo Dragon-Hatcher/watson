@@ -1,8 +1,16 @@
 use crate::{
+    diagnostics::Diagnostic,
     parse::parse_tree::{ParseTree, ParseTreeId},
     semant::{
-        check_proofs::lua_api::span_to_lua::LuaSpan,
-        parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag},
+        check_proofs::lua_api::{
+            ctx_to_lua::LuaCtx,
+            diag_to_lua::LuaDiagnostic,
+            frag_to_lua::{LuaPresFact, LuaPresFrag},
+            scope_to_lua::LuaScope,
+            span_to_lua::LuaSpan,
+        },
+        parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag, parse_fragment},
+        theorems::PresFact,
     },
 };
 use mlua::{FromLua, UserData};
@@ -37,6 +45,24 @@ impl UserData for LuaUnresolvedFrag {
         fields.add_field_method_get("span", |_, this| {
             let span = this.out().0.span();
             Ok(LuaSpan::new(span))
+        });
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("resolve", |lua, this, scope: LuaScope| {
+            let un_frag = this.out();
+            let scope = scope.out_ref();
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let frag = parse_fragment(un_frag, scope, ctx).expect("TODO");
+
+            let res = match frag {
+                Ok(frag) => (Some(LuaPresFrag::new(frag)), None),
+                Err(err) => {
+                    let diag = Diagnostic::err_frag_parse_failure(un_frag.0.span(), err);
+                    (None, Some(LuaDiagnostic::new(diag)))
+                }
+            };
+            Ok(res)
         });
     }
 }
@@ -97,5 +123,42 @@ impl UserData for LuaUnresolvedFact {
         fields.add_field_method_get("assumption", |_, this| Ok(this.assumption));
 
         fields.add_field_method_get("conclusion", |_, this| Ok(this.conclusion));
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("resolve", |lua, this, scope: LuaScope| {
+            let scope = scope.out_ref();
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+
+            let un_conclusion = this.out().conclusion;
+            let conclusion = parse_fragment(un_conclusion, scope, ctx).expect("TODO");
+            let (conclusion, conclusion_diag) = match conclusion {
+                Ok(frag) => (Some(frag), None),
+                Err(err) => {
+                    let diag = Diagnostic::err_frag_parse_failure(un_conclusion.0.span(), err);
+                    (None, Some(LuaDiagnostic::new(diag)))
+                }
+            };
+
+            let un_assumption = this.out().assumption;
+            let assumption = un_assumption.map(|a| parse_fragment(a, scope, ctx).expect("TODO"));
+            let (assumption, assumption_diag) = match assumption {
+                None => (Some(None), None),
+                Some(Ok(frag)) => (Some(Some(frag)), None),
+                Some(Err(err)) => {
+                    let diag = Diagnostic::err_frag_parse_failure(un_conclusion.0.span(), err);
+                    (None, Some(LuaDiagnostic::new(diag)))
+                }
+            };
+
+            let res = match (assumption, conclusion) {
+                (Some(assumption), Some(conclusion)) => {
+                    let fact = PresFact::new(assumption, conclusion);
+                    Some(LuaPresFact::new(fact))
+                }
+                _ => None,
+            };
+            Ok((res, assumption_diag, conclusion_diag))
+        });
     }
 }

@@ -19,6 +19,11 @@ impl LuaScope {
         // SAFETY: see above.
         unsafe { std::mem::transmute(self.scope) }
     }
+
+    pub fn out_ref<'ctx>(&self) -> &Scope<'ctx> {
+        // SAFETY: see above.
+        unsafe { std::mem::transmute(&self.scope) }
+    }
 }
 
 impl UserData for LuaScope {}

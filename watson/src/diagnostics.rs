@@ -2,10 +2,12 @@ use crate::context::Ctx;
 use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
+use crate::semant::parse_fragment;
 use annotate_snippets::{Level, Message, Renderer, Snippet};
 use itertools::Itertools;
 use std::marker::PhantomData;
 use std::path::Path;
+use std::vec;
 use ustr::Ustr;
 
 pub type WResult<'ctx, T> = Result<T, Vec<Diagnostic<'ctx>>>;
@@ -237,5 +239,12 @@ impl<'ctx> Diagnostic<'ctx> {
         let diag = Diagnostic::new("ambiguous parse").with_error("", span);
 
         Err(vec![diag])
+    }
+
+    pub fn err_frag_parse_failure(span: Span, err: parse_fragment::ParseResultErr) -> Self {
+        let diag = Diagnostic::new(&format!("failed to parse fragment because {err:?}"))
+            .with_error("", span);
+
+        diag
     }
 }

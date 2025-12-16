@@ -55,6 +55,10 @@ impl<'ctx> TheoremStatement<'ctx> {
     pub fn conclusion(&self) -> PresFrag<'ctx> {
         self.conclusion
     }
+
+    pub fn scope(&self) -> ScopeId {
+        self.scope
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

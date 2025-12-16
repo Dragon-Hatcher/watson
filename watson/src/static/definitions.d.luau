@@ -33,4 +33,5 @@ declare class ProofState
     function popAssumption(self, justifying: Frag): ProofState
     function applyTheorem(self, thm: Theorem, templates: {Frag}): ProofState
     function applyTodo(self, justifying: Frag): ProofState
+    function applyError(self, justifying: Frag): ProofState
 end

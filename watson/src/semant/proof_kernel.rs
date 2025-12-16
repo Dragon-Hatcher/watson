@@ -41,16 +41,25 @@ impl<'ctx> ProofCertificate<'ctx> {
     pub fn uses_todo(&self) -> bool {
         self.proof.uses_todo
     }
+
+    pub fn uses_error(&self) -> bool {
+        self.proof.uses_error
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProofState<'ctx> {
+    /// The theorem this is a proof of.
     theorem: TheoremId<'ctx>,
+    /// Theorems that were invoked to create the proof
     theorems_used: im::HashSet<TheoremId<'ctx>>,
-    uses_todo: bool,
+    /// Facts that are known given all the assumptions
     knowns: im::HashSet<SafeFact<'ctx>>,
     /// Stack of assumptions and the set of known facts before the assumption.
     assumptions: im::Vector<(im::HashSet<SafeFact<'ctx>>, SafeFrag<'ctx>)>,
+
+    uses_todo: bool,
+    uses_error: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -130,6 +139,7 @@ impl<'ctx> ProofState<'ctx> {
             theorem,
             theorems_used: im::HashSet::new(),
             uses_todo: false,
+            uses_error: false,
         })
     }
 
@@ -202,6 +212,19 @@ impl<'ctx> ProofState<'ctx> {
         let new_fact = SafeFact::new(new_fact, ctx)?;
         new.knowns.insert(new_fact);
         new.uses_todo = true;
+        Ok(new)
+    }
+
+    pub fn apply_error(
+        &self,
+        justifying: FragmentId<'ctx>,
+        ctx: &Ctx<'ctx>,
+    ) -> Result<Self, ProofError> {
+        let mut new = self.clone();
+        let new_fact = Fact::new(None, justifying);
+        let new_fact = SafeFact::new(new_fact, ctx)?;
+        new.knowns.insert(new_fact);
+        new.uses_error = true;
         Ok(new)
     }
 

@@ -90,7 +90,7 @@ impl<'ctx> ProofStatus<'ctx> {
     pub fn from_cert(cert: ProofCertificate<'ctx>) -> Self {
         Self {
             is_axiom: false,
-            correct: true,
+            correct: !cert.uses_error(),
             todo_used: cert.uses_todo(),
             theorems_used: cert.theorems_used().iter().copied().collect(),
         }

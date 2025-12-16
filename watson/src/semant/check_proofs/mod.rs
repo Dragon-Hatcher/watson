@@ -1,8 +1,13 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
     context::Ctx,
     diagnostics::{Diagnostic, WResult},
     semant::{
-        check_proofs::lua_api::{LuaInfo, proof_to_lua::LuaProofState, setup_lua},
+        check_proofs::lua_api::{
+            LuaInfo, diag_to_lua::LuaDiagnostic, proof_to_lua::LuaProofState, setup_lua,
+            theorem_to_lua::LuaTheorem,
+        },
         proof_kernel::ProofState,
         proof_status::{ProofStatus, ProofStatuses},
         tactic::unresolved_proof::{TacticInst, UnresolvedProof},
@@ -48,11 +53,18 @@ pub fn check_proofs<'ctx>(
     statuses
 }
 
+struct LuaTheoremInfoInner {
+    thm: LuaTheorem,
+    has_logs: bool,
+    diags: Vec<LuaDiagnostic>,
+}
+type LuaTheoremInfo = Rc<RefCell<LuaTheoremInfoInner>>;
+
 fn check_theorem<'ctx>(
     thm: TheoremId<'ctx>,
     tactic: &TacticInst<'ctx>,
     lua: &LuaInfo,
-    ctx: &Ctx<'ctx>,
+    ctx: &mut Ctx<'ctx>,
 ) -> WResult<'ctx, ProofStatus<'ctx>> {
     let proof_state =
         ProofState::new_from_theorem(thm, ctx).expect("theorem statement should be valid.");
@@ -64,6 +76,14 @@ fn check_theorem<'ctx>(
         .into_lua(&lua.runtime)
         .or_else(|e| Diagnostic::err_lua_execution_error("tactic", e))?;
 
+    let theorem_info = LuaTheoremInfoInner {
+        thm: LuaTheorem::new(thm),
+        has_logs: false,
+        diags: Vec::new(),
+    };
+    let theorem_info = Rc::new(RefCell::new(theorem_info));
+    lua.runtime.set_app_data(theorem_info.clone());
+
     // Call the tactic handler
     let proof = lua
         .handle_tactic_fn
@@ -71,6 +91,16 @@ fn check_theorem<'ctx>(
         .or_else(|e| Diagnostic::err_lua_execution_error("tactic", e))?;
     let proof = proof.out::<'ctx>();
     let cert = proof.complete(ctx).expect("TODO");
+
+    // Add diagnostics reported by the tactic.
+    for diag in theorem_info.borrow_mut().diags.drain(..) {
+        ctx.diags.add_diag(diag.out());
+    }
+
+    // Add blank space after logs.
+    if theorem_info.borrow().has_logs {
+        eprintln!();
+    }
 
     Ok(ProofStatus::from_cert(cert))
 }

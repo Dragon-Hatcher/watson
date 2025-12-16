@@ -1,7 +1,11 @@
-use crate::semant::{
-    parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag},
-    tactic::syntax::TacticRuleId,
+use crate::{
+    parse::Span,
+    semant::{
+        parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag},
+        tactic::syntax::TacticRuleId,
+    },
 };
+use mlua::FromLua;
 use ustr::Ustr;
 
 pub enum UnresolvedProof<'ctx> {
@@ -11,16 +15,25 @@ pub enum UnresolvedProof<'ctx> {
 
 pub struct TacticInst<'ctx> {
     rule: TacticRuleId<'ctx>,
+    span: Span,
     children: Vec<TacticInstPart<'ctx>>,
 }
 
 impl<'ctx> TacticInst<'ctx> {
-    pub fn new(rule: TacticRuleId<'ctx>, children: Vec<TacticInstPart<'ctx>>) -> Self {
-        Self { rule, children }
+    pub fn new(rule: TacticRuleId<'ctx>, span: Span, children: Vec<TacticInstPart<'ctx>>) -> Self {
+        Self {
+            rule,
+            span,
+            children,
+        }
     }
 
     pub fn rule(&self) -> TacticRuleId<'ctx> {
         self.rule
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
     }
 
     pub fn children(&self) -> &[TacticInstPart<'ctx>] {
@@ -28,9 +41,30 @@ impl<'ctx> TacticInst<'ctx> {
     }
 }
 
+#[derive(Debug, Clone, Copy, FromLua)]
+pub struct SpannedStr {
+    str: Ustr,
+    span: Span,
+}
+
+impl SpannedStr {
+    pub fn new(str: Ustr, span: Span) -> Self {
+        Self { str, span }
+    }
+
+    pub fn str(&self) -> Ustr {
+        self.str
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+}
+
 pub enum TacticInstPart<'ctx> {
-    NoInstantiation,
-    Name(Ustr),
+    Kw(SpannedStr),
+    Lit(SpannedStr),
+    Name(SpannedStr),
     SubInst(TacticInst<'ctx>),
     Frag(UnresolvedFrag<'ctx>),
     AnyFrag(UnresolvedAnyFrag<'ctx>),

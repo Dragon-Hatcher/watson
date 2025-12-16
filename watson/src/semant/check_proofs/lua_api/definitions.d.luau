@@ -3,6 +3,11 @@ declare function log(...: any): number
 declare class Span
 end
 
+declare class SpannedString
+    span: Span
+    str: string
+end
+
 declare class UnResFrag
     span: Span
 end
@@ -46,6 +51,7 @@ end
 declare class Diagnostic
     function withError(self, msg: string, span: Span): Diagnostic
     function withInfo(self, msg: string, span: Span): Diagnostic
+    function report(self)
 end
 
 declare class DiagnosticMeta

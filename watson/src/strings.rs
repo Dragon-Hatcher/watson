@@ -47,7 +47,8 @@ str_const! {
 // Lua names:
 str_const! {
     RESERVED_RULE = "_rule";
-    STRING = "string";
+    RESERVED_SPAN = "_span";
+    SPANNED_STRING = "SpannedString";
     UN_FRAG = "UnResFrag";
     UN_ANY_FRAG = "UnResAnyFrag";
     UN_FACT = "UnResFact";

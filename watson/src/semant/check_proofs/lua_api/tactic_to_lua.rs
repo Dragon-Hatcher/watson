@@ -1,25 +1,27 @@
 use crate::{
+    parse::Span,
     semant::{
-        check_proofs::lua_api::unresolved_to_lua::{
-            LuaUnresolvedAnyFrag, LuaUnresolvedFact, LuaUnresolvedFrag,
+        check_proofs::lua_api::{
+            span_to_lua::LuaSpan,
+            unresolved_to_lua::{LuaUnresolvedAnyFrag, LuaUnresolvedFact, LuaUnresolvedFrag},
         },
         tactic::{
             syntax::TacticPatPartCore,
             tactic_manager::TacticManager,
-            unresolved_proof::{TacticInst, TacticInstPart},
+            unresolved_proof::{SpannedStr, TacticInst, TacticInstPart},
         },
     },
     strings,
 };
-use mlua::{IntoLua, Lua, Value};
+use mlua::{IntoLua, Lua, UserData, Value};
 
 impl<'ctx> IntoLua for &TacticInst<'ctx> {
     fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
         let table = lua.create_table()?;
 
-        // Add the rule name under _rule (reserved key)
         let rule = self.rule();
         table.set("_rule", rule.name().as_str())?;
+        table.set("_span", LuaSpan::new(self.span()))?;
 
         // Get the pattern parts from the rule
         let pattern = rule.pattern();
@@ -32,9 +34,7 @@ impl<'ctx> IntoLua for &TacticInst<'ctx> {
         // 2. Are not NoInstantiation
         for (pattern_part, child) in pattern_parts.iter().zip(children.iter()) {
             // Skip if no label or if it's a NoInstantiation
-            if let Some(label) = pattern_part.label()
-                && !matches!(child, TacticInstPart::NoInstantiation)
-            {
+            if let Some(label) = pattern_part.label() {
                 let value = child.into_lua(lua)?;
                 table.set(label.as_str(), value)?;
             }
@@ -47,13 +47,8 @@ impl<'ctx> IntoLua for &TacticInst<'ctx> {
 impl<'ctx> IntoLua for &TacticInstPart<'ctx> {
     fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
         match self {
-            TacticInstPart::NoInstantiation => {
-                // This shouldn't be converted, but return nil if it happens
-                Ok(Value::Nil)
-            }
-            TacticInstPart::Name(name) => {
-                // Names are converted to Lua strings
-                name.as_str().into_lua(lua)
+            TacticInstPart::Kw(s) | TacticInstPart::Lit(s) | TacticInstPart::Name(s) => {
+                s.into_lua(lua)
             }
             TacticInstPart::SubInst(sub_tactic) => {
                 // Recursively convert sub-tactics to tables
@@ -75,6 +70,14 @@ impl<'ctx> IntoLua for &TacticInstPart<'ctx> {
     }
 }
 
+impl UserData for SpannedStr {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("str", |_, this| Ok(this.str().to_string()));
+
+        fields.add_field_method_get("span", |_, this| Ok(LuaSpan::new(this.span())));
+    }
+}
+
 pub fn generate_luau_tactic_types<'ctx>(tactics: &TacticManager<'ctx>) -> String {
     let mut out = String::new();
 
@@ -90,7 +93,7 @@ pub fn generate_luau_tactic_types<'ctx>(tactics: &TacticManager<'ctx>) -> String
         out.push_str(&format!("export type {name} =\n"));
         for rule in rules {
             let rule_name = rule.name();
-            out.push_str(&format!("  | {{ _rule: \"{rule_name}\""));
+            out.push_str(&format!("  | {{ _rule: \"{rule_name}\", _span: Span"));
 
             for part in rule.pattern().parts() {
                 use TacticPatPartCore as C;
@@ -100,8 +103,7 @@ pub fn generate_luau_tactic_types<'ctx>(tactics: &TacticManager<'ctx>) -> String
                 };
 
                 let luau_type = match part.part() {
-                    C::Lit(_) | C::Kw(_) => continue,
-                    C::Name => *strings::STRING,
+                    C::Lit(_) | C::Kw(_) | C::Name => *strings::SPANNED_STRING,
                     C::Cat(cat) => cat.lua_name(),
                     C::Frag(_) => *strings::UN_FRAG,
                     C::AnyFrag => *strings::UN_ANY_FRAG,

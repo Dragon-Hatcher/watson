@@ -104,7 +104,7 @@ impl<'ctx> Diagnostic<'ctx> {
 }
 
 impl<'ctx> DiagManager<'ctx> {
-    pub fn _add_diag(&mut self, diag: Diagnostic<'ctx>) {
+    pub fn add_diag(&mut self, diag: Diagnostic<'ctx>) {
         self.diags.push(diag);
     }
 
@@ -227,10 +227,8 @@ impl<'ctx> Diagnostic<'ctx> {
     }
 
     pub fn err_reserved_tactic_label<T>(label: Ustr, span: Span) -> WResult<'ctx, T> {
-        let diag = Diagnostic::new(&format!(
-            "tactic label `{label}` is reserved (the label `_rule` is reserved for the tactic rule name)"
-        ))
-        .with_error("reserved label used here", span);
+        let diag = Diagnostic::new(&format!("tactic label `{label}` is reserved"))
+            .with_error("reserved label used here", span);
 
         Err(vec![diag])
     }

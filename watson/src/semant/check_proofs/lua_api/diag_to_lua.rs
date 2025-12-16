@@ -1,6 +1,8 @@
-use crate::{diagnostics::Diagnostic, semant::check_proofs::lua_api::span_to_lua::LuaSpan};
+use crate::{
+    diagnostics::Diagnostic,
+    semant::check_proofs::{LuaTheoremInfo, lua_api::span_to_lua::LuaSpan},
+};
 use mlua::{FromLua, UserData};
-use ustr::Ustr;
 
 #[derive(Debug, Clone, FromLua)]
 pub struct LuaDiagnostic {
@@ -32,6 +34,12 @@ impl UserData for LuaDiagnostic {
         methods.add_method("withInfo", |_, this, (msg, span): (String, LuaSpan)| {
             let new_diag = this.clone().out().with_info(&msg, span.out());
             Ok(LuaDiagnostic::new(new_diag))
+        });
+
+        methods.add_method("report", |lua, this, _: ()| {
+            let info = lua.app_data_ref::<LuaTheoremInfo>().unwrap();
+            info.borrow_mut().diags.push(this.clone());
+            Ok(())
         });
     }
 }

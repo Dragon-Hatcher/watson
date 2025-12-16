@@ -24,7 +24,7 @@ use crate::{
                 TacticCat, TacticCatId, TacticPat, TacticPatPart, TacticPatPartCore, TacticRule,
                 TacticRuleId,
             },
-            unresolved_proof::{TacticInst, TacticInstPart, UnresolvedProof},
+            unresolved_proof::{SpannedStr, TacticInst, TacticInstPart, UnresolvedProof},
         },
         theorems::{PresFact, Template, TheoremId, TheoremStatement, add_templates_to_scope},
     },
@@ -36,6 +36,7 @@ use ustr::Ustr;
 // Reserved Luau type names that cannot be used as tactic category names
 const RESERVED_LUAU_TYPES: &[&str] = &[
     "Span",
+    "SpannedString",
     "UnResFrag",
     "UnResAnyFrag",
     "UnResFact",
@@ -573,7 +574,7 @@ fn elaborate_maybe_label<'ctx>(
             let label = elaborate_name(label_node.as_node().unwrap(), ctx)?;
 
             // Check for reserved label names
-            if label == *strings::RESERVED_RULE {
+            if label == *strings::RESERVED_RULE || label == *strings::RESERVED_SPAN {
                 _ = Diagnostic::err_reserved_tactic_label::<()>(label, label_node.span());
                 return Ok(None);
             }
@@ -1076,10 +1077,18 @@ fn elaborate_tactic<'ctx>(
         .zip(children.children().iter())
     {
         let t_child = match part.part() {
-            TacticPatPartCore::Lit(_) | TacticPatPartCore::Kw(_) => TacticInstPart::NoInstantiation,
+            TacticPatPartCore::Kw(str) => {
+                let spanned_str = SpannedStr::new(*str, child.span());
+                TacticInstPart::Kw(spanned_str)
+            }
+            TacticPatPartCore::Lit(str) => {
+                let spanned_str = SpannedStr::new(*str, child.span());
+                TacticInstPart::Lit(spanned_str)
+            }
             TacticPatPartCore::Name => {
                 let name = elaborate_name(child.as_node().unwrap(), ctx)?;
-                TacticInstPart::Name(name)
+                let spanned_str = SpannedStr::new(name, child.span());
+                TacticInstPart::Name(spanned_str)
             }
             TacticPatPartCore::Cat(_) => {
                 let inst = elaborate_tactic(child.as_node().unwrap(), ctx)?;
@@ -1101,7 +1110,7 @@ fn elaborate_tactic<'ctx>(
         tactic_children.push(t_child);
     }
 
-    Ok(TacticInst::new(tactic_rule, tactic_children))
+    Ok(TacticInst::new(tactic_rule, tactic.span(), tactic_children))
 }
 
 pub fn elaborate_name<'ctx>(name: ParseTreeId<'ctx>, ctx: &Ctx<'ctx>) -> WResult<'ctx, Ustr> {

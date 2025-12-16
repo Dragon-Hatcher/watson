@@ -1,10 +1,14 @@
 use crate::{
     context::{Arenas, Ctx},
     diagnostics::{Diagnostic, WResult},
-    semant::check_proofs::lua_api::{
-        ctx_to_lua::LuaCtx, diag_to_lua::LuaDiagnosticMeta, file_loader::LuaFileRequirer,
-        tactic_to_lua::generate_luau_tactic_types,
+    semant::check_proofs::{
+        LuaTheoremInfo,
+        lua_api::{
+            ctx_to_lua::LuaCtx, diag_to_lua::LuaDiagnosticMeta, file_loader::LuaFileRequirer,
+            tactic_to_lua::generate_luau_tactic_types,
+        },
     },
+    util::ansi::{ANSI_BOLD, ANSI_RESET, ANSI_YELLOW},
 };
 use mlua::{Lua, LuaOptions, StdLib};
 use std::{fs, ops::Deref};
@@ -88,28 +92,8 @@ pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
     let lua_ctx = LuaCtx::new(ctx);
     lua.set_app_data(lua_ctx);
 
-    // Create custom log function
-    let log_fn = lua
-        .create_function(move |_lua, args: mlua::Variadic<mlua::Value>| {
-            let mut log_parts = Vec::new();
-            for arg in args.iter() {
-                let formatted = match arg {
-                    mlua::Value::String(s) => match s.to_str() {
-                        Ok(string) => string.to_string(),
-                        Err(_) => "<invalid utf8>".to_string(),
-                    },
-                    _ => format!("{arg:#?}"),
-                };
-                log_parts.push(formatted);
-            }
-            let str = log_parts.join(" ");
-            eprintln!("{str}");
-            Ok(())
-        })
-        .unwrap();
-
-    // Set up global functions
-    lua.globals().set("log", log_fn).unwrap();
+    // Set up the custom log function
+    add_log_fn(&lua);
 
     // Set up metatables.
     lua.globals().set("Diagnostic", LuaDiagnosticMeta).unwrap();
@@ -131,6 +115,42 @@ pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
     };
 
     read_main_module(wlua, result)
+}
+
+fn add_log_fn(lua: &Lua) {
+    // Create custom log function
+    let log_fn = lua
+        .create_function(move |lua, args: mlua::Variadic<mlua::Value>| {
+            let info = lua.app_data_ref::<LuaTheoremInfo>().unwrap();
+            let mut info = info.borrow_mut();
+            if !info.has_logs {
+                eprintln!(
+                    "{ANSI_BOLD}{ANSI_YELLOW}logs for {}{ANSI_RESET}",
+                    info.thm.out().name()
+                );
+                info.has_logs = true;
+            }
+            drop(info);
+
+            let mut log_parts = Vec::new();
+            for arg in args.iter() {
+                let formatted = match arg {
+                    mlua::Value::String(s) => match s.to_str() {
+                        Ok(string) => string.to_string(),
+                        Err(_) => "<invalid utf8>".to_string(),
+                    },
+                    _ => format!("{arg:#?}"),
+                };
+                log_parts.push(formatted);
+            }
+            let str = log_parts.join(" ");
+            eprintln!("{str}");
+            Ok(())
+        })
+        .unwrap();
+
+    // Set up global functions
+    lua.globals().set("log", log_fn).unwrap();
 }
 
 fn read_main_module<'ctx>(lua: WLua<'ctx>, module: mlua::Value) -> WResult<'ctx, LuaInfo<'ctx>> {

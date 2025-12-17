@@ -3,9 +3,11 @@ use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
 use crate::semant::parse_fragment;
+use crate::semant::tactic::tactic_info::{TacticInfo, TacticInfoStep};
+use crate::semant::theorems::TheoremId;
+use crate::util::ansi::{ANSI_BOLD, ANSI_GRAY, ANSI_RESET, ANSI_UNDERLINE, ANSI_YELLOW};
 use annotate_snippets::{Level, Message, Renderer, Snippet};
 use itertools::Itertools;
-use std::marker::PhantomData;
 use std::path::Path;
 use std::vec;
 use ustr::Ustr;
@@ -39,7 +41,13 @@ impl<'ctx> DiagManager<'ctx> {
 pub struct Diagnostic<'ctx> {
     title: &'static str,
     parts: Vec<DiagnosticPart>,
-    p: PhantomData<&'ctx ()>,
+    proof: Option<DiagnosticInProof<'ctx>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DiagnosticInProof<'ctx> {
+    thm: TheoremId<'ctx>,
+    tactic_info: TacticInfo<'ctx>,
 }
 
 #[derive(Debug, Clone)]
@@ -63,7 +71,7 @@ impl<'ctx> Diagnostic<'ctx> {
         Self {
             title,
             parts: Vec::new(),
-            p: PhantomData,
+            proof: None,
         }
     }
 
@@ -76,6 +84,11 @@ impl<'ctx> Diagnostic<'ctx> {
     pub fn with_info(mut self, msg: &str, span: Span) -> Self {
         let msg = Ustr::from(msg).as_str();
         self.parts.push(DiagnosticPart::Info(msg, span));
+        self
+    }
+
+    pub fn in_proof(mut self, thm: TheoremId<'ctx>, tactic_info: TacticInfo<'ctx>) -> Self {
+        self.proof = Some(DiagnosticInProof { thm, tactic_info });
         self
     }
 
@@ -101,8 +114,52 @@ impl<'ctx> Diagnostic<'ctx> {
             msg = msg.snippet(snippet);
         }
 
+        if let Some(in_proof) = &self.proof {
+            let title = format!("While checking theorem `{}`", in_proof.thm.name());
+            let title = Ustr::from(&title);
+            msg = msg.footer(Level::Help.title(title.as_str()));
+
+            let title = render_tactic_info(&in_proof.tactic_info);
+            let title = Ustr::from(&title);
+            msg = msg.footer(Level::Help.title(title.as_str()));
+        }
+
         msg
     }
+}
+
+fn render_tactic_info<'ctx>(tactic: &TacticInfo<'ctx>) -> String {
+    let mut res = String::new();
+
+    res += "Proof state:\n";
+
+    for step in tactic.steps() {
+        match step {
+            TacticInfoStep::Hypothesis(f) => {
+                res += ANSI_GRAY;
+                res += "> ";
+                res += ANSI_RESET;
+                res += &f.print();
+            }
+            TacticInfoStep::Assume(f) => {
+                res += ANSI_GRAY;
+                res += "? ";
+                res += ANSI_RESET;
+                res += &f.print()
+            }
+            TacticInfoStep::Deduce(f) => {
+                res += "  ";
+                res += &f.print()
+            }
+        }
+
+        res += "\n";
+    }
+
+    res += &format!("{ANSI_YELLOW}{ANSI_BOLD}⊢{ANSI_RESET} ");
+    res += &tactic.goal().print();
+
+    res
 }
 
 impl<'ctx> DiagManager<'ctx> {

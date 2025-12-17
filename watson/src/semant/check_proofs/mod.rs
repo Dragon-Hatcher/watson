@@ -6,11 +6,14 @@ use crate::{
     semant::{
         check_proofs::lua_api::{
             LuaInfo, diag_to_lua::LuaDiagnostic, proof_to_lua::LuaProofState, setup_lua,
-            theorem_to_lua::LuaTheorem,
+            tactic_info_to_lua::LuaTacticInfo, theorem_to_lua::LuaTheorem,
         },
         proof_kernel::ProofState,
         proof_status::{ProofStatus, ProofStatuses},
-        tactic::unresolved_proof::{TacticInst, UnresolvedProof},
+        tactic::{
+            tactic_info::TacticInfo,
+            unresolved_proof::{TacticInst, UnresolvedProof},
+        },
         theorems::TheoremId,
     },
 };
@@ -75,6 +78,9 @@ fn check_theorem<'ctx>(
     let lua_proof_state: mlua::Value = LuaProofState::new(proof_state)
         .into_lua(&lua.runtime)
         .or_else(|e| Diagnostic::err_lua_execution_error("tactic", e))?;
+    let lua_tactic_info: mlua::Value = LuaTacticInfo::new(TacticInfo::new(thm))
+        .into_lua(&lua.runtime)
+        .or_else(|e| Diagnostic::err_lua_execution_error("tactic", e))?;
 
     let theorem_info = LuaTheoremInfoInner {
         thm: LuaTheorem::new(thm),
@@ -87,7 +93,7 @@ fn check_theorem<'ctx>(
     // Call the tactic handler
     let proof = lua
         .handle_tactic_fn
-        .call::<LuaProofState>((lua_tactic, lua_proof_state))
+        .call::<LuaProofState>((lua_tactic, lua_proof_state, lua_tactic_info))
         .or_else(|e| Diagnostic::err_lua_execution_error("tactic", e))?;
     let proof = proof.out::<'ctx>();
     let cert = proof.complete(ctx).expect("TODO");

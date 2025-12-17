@@ -28,6 +28,7 @@ pub mod notation_to_lua;
 pub mod proof_to_lua;
 pub mod scope_to_lua;
 pub mod span_to_lua;
+pub mod tactic_info_to_lua;
 pub mod tactic_to_lua;
 pub mod theorem_to_lua;
 pub mod unresolved_to_lua;

@@ -1,6 +1,9 @@
 use crate::{
     diagnostics::Diagnostic,
-    semant::check_proofs::{LuaTheoremInfo, lua_api::span_to_lua::LuaSpan},
+    semant::check_proofs::{
+        LuaTheoremInfo,
+        lua_api::{span_to_lua::LuaSpan, tactic_info_to_lua::LuaTacticInfo},
+    },
 };
 use mlua::{FromLua, UserData};
 
@@ -33,6 +36,14 @@ impl UserData for LuaDiagnostic {
 
         methods.add_method("withInfo", |_, this, (msg, span): (String, LuaSpan)| {
             let new_diag = this.clone().out().with_info(&msg, span.out());
+            Ok(LuaDiagnostic::new(new_diag))
+        });
+
+        methods.add_method("withTacticInfo", |lua, this, tactic_info: LuaTacticInfo| {
+            let info = lua.app_data_ref::<LuaTheoremInfo>().unwrap();
+            let thm = info.borrow().thm.out();
+            let tactic_info = tactic_info.out_ref().clone();
+            let new_diag = this.clone().out().in_proof(thm, tactic_info);
             Ok(LuaDiagnostic::new(new_diag))
         });
 

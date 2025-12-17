@@ -262,6 +262,25 @@ declare class ProofState
     function applyError(self, justifying: Frag): ProofState
 end
 
+--- A representation of the reasoning chain of the tactic which can be
+--- presented to the user.
+declare class TacticInfo
+    --- Add an assumption to the reasoning chain.
+    --- @param f the assumption to add
+    --- @return a new TacticInfo containing the assumption
+    function withAssume(self, f: Frag): TacticInfo
+
+    --- Add a deduction to the reasoning chain.
+    --- @param f the fact that was deduced
+    --- @return a new TacticInfo containing the deduction
+    function withDeduce(self, f: Fact): TacticInfo
+
+    --- Change the goal of this TacticInfo.
+    --- @param f the new goal
+    --- @return a new TacticInfo containing the same reasoning chain with the new goal
+    function withGoal(self, f: Frag): TacticInfo
+end
+
 --- A diagnostic (error or warning) with source annotations.
 --- Diagnostics are built up by adding error/info annotations, then reported.
 declare class Diagnostic
@@ -276,6 +295,11 @@ declare class Diagnostic
     --- @param span The source location to highlight
     --- @return A new diagnostic with the annotation added
     function withInfo(self, msg: string, span: Span): Diagnostic
+
+    --- Adds the reasoning chain given by the TacticInfo.
+    --- @param info The TacticInfo to add
+    --- @return A new diagnostic with the info added
+    function withTacticInfo(self, info: TacticInfo): Diagnostic
 
     --- Reports this diagnostic (adds it to the diagnostic list for the current theorem).
     --- After reporting, the diagnostic will be displayed to the user.

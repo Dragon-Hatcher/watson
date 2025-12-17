@@ -1,7 +1,7 @@
 use crate::semant::{
-    check_proofs::lua_api::formal_to_lua::LuaFormalCat,
+    check_proofs::lua_api::{ctx_to_lua::LuaCtx, formal_to_lua::LuaFormalCat},
     fragment::{Fragment, FragmentId},
-    presentation::{Pres, PresFrag, PresId},
+    presentation::{Pres, PresFrag, PresId, instantiate_templates},
     theorems::PresFact,
 };
 use mlua::{FromLua, MetaMethod, UserData};
@@ -40,6 +40,20 @@ impl UserData for LuaPresFrag {
     }
 
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("fact", |_, this, _: ()| {
+            let fact = PresFact::new(None, this.out());
+            Ok(LuaPresFact::new(fact))
+        });
+
+        methods.add_method(
+            "instantiateTemplates",
+            |lua, this, templates: Vec<LuaPresFrag>| {
+                let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+                let frag = instantiate_templates(this.out(), &|idx| templates[idx].out(), ctx);
+                Ok(LuaPresFrag::new(frag))
+            },
+        );
+
         methods.add_meta_method(MetaMethod::ToString, |_, this, _args: ()| {
             Ok(this.out().print())
         });
@@ -75,6 +89,21 @@ impl UserData for LuaPresFact {
     }
 
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method(
+            "instantiateTemplates",
+            |lua, this, templates: Vec<LuaPresFrag>| {
+                let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+                let fact = this.out();
+                let templates = &|idx: usize| templates[idx].out();
+                let assumption = fact
+                    .assumption()
+                    .map(|a| instantiate_templates(a, templates, ctx));
+                let conclusion = instantiate_templates(fact.conclusion(), templates, ctx);
+                let fact = PresFact::new(assumption, conclusion);
+                Ok(LuaPresFact::new(fact))
+            },
+        );
+
         methods.add_meta_method(MetaMethod::ToString, |_, this, _args: ()| {
             Ok(this.out().print())
         });

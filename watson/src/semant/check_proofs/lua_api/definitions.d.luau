@@ -15,7 +15,7 @@ end
 
 declare class UnResAnyFrag
     span: Span
-    function resolve(self, scope: Scope, cat: FormalCat): (Fact?, Diagnostic?) --
+    function resolve(self, scope: Scope, cat: FormalCat): (Frag?, Diagnostic?) --
 end
 
 declare class UnResFact
@@ -31,6 +31,8 @@ end
 declare class Frag
     cat: FormalCat
     formal: Frag
+    function fact(self): Fact
+    function instantiateTemplates(self, templates: {Frag}): Frag
 end
 
 declare FragMap : {
@@ -39,13 +41,15 @@ declare FragMap : {
 
 export type FragMap<T> = {
     set: (any, f: Frag, val: T) -> T?,
-    get: (any, f: Frag) -> T?
+    get: (any, f: Frag) -> T?,
+    copy: <S>(self: S) -> S,
 }
 
 declare class Fact
     assumption: Frag?
     conclusion: Frag
     formal: Fact
+    function instantiateTemplates(self, templates: {Frag}): Fact
 end
 
 declare class FactMeta
@@ -61,7 +65,8 @@ declare FactMap : {
 
 export type FactMap<T> = {
     set: (any, f: Fact, val: T) -> T?,
-    get: (any, f: Fact) -> T?
+    get: (any, f: Fact) -> T?,
+    copy: <S>(self: S) -> S,
 }
 
 declare class Binding
@@ -69,21 +74,28 @@ end
 
 declare class Scope
     function bindFrag(self, binding: Binding, frag: Frag): Scope
-    function bindHole(self, binding: Binding, cat: FormalCat, idx: number): Scope
+    function bindHole(self, binding: Binding, idx: number): Scope
 end
 
-declare class Template
+declare class ThmTemplate
     cat: FormalCat
     binding: Binding
+    holes: {Binding}
 end
 
 declare class Theorem
     name: string
-    templates: {Template}
+    templates: {ThmTemplate}
     hypotheses: {Fact}
     conclusion: Frag
     scope: Scope
 end
+
+declare class TheoremMeta
+    function lookupByName(self, name: string): Theorem?
+end
+
+declare Theorem: TheoremMeta
 
 declare class ProofState
     theorem: Theorem

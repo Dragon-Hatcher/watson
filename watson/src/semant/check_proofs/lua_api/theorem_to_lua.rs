@@ -6,6 +6,7 @@ use crate::semant::{
         notation_to_lua::LuaNotationBinding,
         scope_to_lua::LuaScope,
     },
+    notation::NotationBinding,
     theorems::{Template, TheoremId, TheoremStatement},
 };
 use itertools::Itertools;
@@ -71,6 +72,18 @@ impl UserData for LuaTheorem {
     }
 }
 
+pub struct LuaTheoremMeta;
+
+impl UserData for LuaTheoremMeta {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("lookupByName", |lua, _, name: String| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let thm = ctx.arenas.theorem_stmts.get(name.into());
+            Ok(thm.map(|t| LuaTheorem::new(t)))
+        });
+    }
+}
+
 #[derive(Debug, Clone, FromLua)]
 pub struct LuaTemplate {
     tmp: Template<'static>,
@@ -101,6 +114,22 @@ impl UserData for LuaTemplate {
         fields.add_field_method_get("binding", |_, this| {
             let binding = this.out_ref().binding();
             Ok(LuaNotationBinding::new(binding))
+        });
+
+        fields.add_field_method_get("holes", |lua, this| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let bindings = this
+                .out_ref()
+                .holes()
+                .iter()
+                .map(|(cat, name)| {
+                    let pattern = ctx.single_name_notations[cat];
+                    let binding = NotationBinding::new(pattern, vec![*name]);
+                    let binding = ctx.arenas.notation_bindings.intern(binding);
+                    LuaNotationBinding::new(binding)
+                })
+                .collect_vec();
+            Ok(bindings)
         });
     }
 }

@@ -10,6 +10,7 @@ use crate::{
             frag_map_to_lua::{LuaFactMapMeta, LuaFragMapMeta},
             frag_to_lua::LuaPresFactMeta,
             tactic_to_lua::generate_luau_tactic_types,
+            theorem_to_lua::LuaTheoremMeta,
         },
     },
     util::ansi::{ANSI_BOLD, ANSI_RESET, ANSI_YELLOW},
@@ -107,6 +108,7 @@ pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
     lua.globals().set("Fact", LuaPresFactMeta).unwrap();
     lua.globals().set("FragMap", LuaFragMapMeta).unwrap();
     lua.globals().set("FactMap", LuaFactMapMeta).unwrap();
+    lua.globals().set("Theorem", LuaTheoremMeta).unwrap();
 
     // Set up our custom require system.
     let src_folder = ctx.config.project_dir().join("src");

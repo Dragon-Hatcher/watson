@@ -24,6 +24,8 @@ impl UserData for LuaFragMap {
         methods.add_method_mut("set", |_, this, (f, v): (LuaPresFrag, mlua::Value)| {
             Ok(this.map.insert(f, v))
         });
+
+        methods.add_method("copy", |_, this, _: ()| Ok(this.clone()));
     }
 }
 
@@ -57,6 +59,8 @@ impl UserData for LuaFactMap {
         methods.add_method_mut("set", |_, this, (f, v): (LuaPresFact, mlua::Value)| {
             Ok(this.map.insert(f, v))
         });
+
+        methods.add_method("copy", |_, this, _: ()| Ok(this.clone()));
     }
 }
 

@@ -1,8 +1,12 @@
+use itertools::Itertools;
+use rustc_hash::FxHashMap;
+
 use crate::{
+    context::Ctx,
     generate_arena_handle,
     semant::{
         formal_syntax::FormalSyntaxPatPart,
-        fragment::{FragHead, FragmentId},
+        fragment::{FragHead, Fragment, FragmentId},
         notation::{NotationBindingId, NotationPatternPart},
     },
 };
@@ -129,4 +133,275 @@ pub enum PresHead<'ctx> {
     /// The notation for the fragment is a notation binding which is replaced
     /// by the given PresFrag when instantiated.
     Notation(NotationBindingId<'ctx>, PresFrag<'ctx>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum PresInstTy {
+    Normal,
+    Formal,
+}
+
+fn instantiate_frag_holes<'ctx>(
+    frag: FragmentId<'ctx>,
+    holes: &impl Fn(usize) -> FragmentId<'ctx>,
+    ctx: &Ctx<'ctx>,
+    frag_cache: &mut FxHashMap<FragmentId<'ctx>, FragmentId<'ctx>>,
+) -> FragmentId<'ctx> {
+    if !frag.has_hole() {
+        return frag;
+    }
+
+    if let Some(cached) = frag_cache.get(&frag) {
+        return *cached;
+    }
+
+    let new_frag = match frag.head() {
+        FragHead::RuleApplication(_) | FragHead::TemplateRef(_) => {
+            let new_children = frag
+                .children()
+                .iter()
+                .map(|&child| instantiate_frag_holes(child, holes, ctx, frag_cache))
+                .collect();
+            let frag = Fragment::new(frag.cat(), frag.head(), new_children);
+            ctx.arenas.fragments.intern(frag)
+        }
+        FragHead::Variable(_var, _) => todo!(),
+        FragHead::Hole(idx) => holes(idx),
+    };
+    frag_cache.insert(frag, new_frag);
+    new_frag
+}
+
+fn instantiate_pres_holes<'ctx>(
+    pres: PresId<'ctx>,
+    ty: PresInstTy,
+    holes: &impl Fn(usize) -> PresFrag<'ctx>,
+    ctx: &Ctx<'ctx>,
+    frag_cache: &mut FxHashMap<FragmentId<'ctx>, FragmentId<'ctx>>,
+    pres_cache: &mut FxHashMap<(PresId<'ctx>, PresInstTy), PresId<'ctx>>,
+) -> PresId<'ctx> {
+    if let Some(cached) = pres_cache.get(&(pres, ty)) {
+        return *cached;
+    }
+
+    let new_pres = match pres.head() {
+        PresHead::FormalFrag(FragHead::Hole(idx)) => match ty {
+            PresInstTy::Normal => holes(idx).pres(),
+            PresInstTy::Formal => holes(idx).formal_pres(),
+        },
+        PresHead::FormalFrag(FragHead::Variable(_, _)) => todo!(),
+        _ => {
+            let new_children = pres
+                .children()
+                .iter()
+                .map(|&child| instantiate_holes_impl(child, ty, holes, ctx, frag_cache, pres_cache))
+                .collect();
+            let pres = Pres::new(pres.head(), new_children);
+            ctx.arenas.presentations.intern(pres)
+        }
+    };
+    pres_cache.insert((pres, ty), new_pres);
+    new_pres
+}
+
+fn instantiate_holes_impl<'ctx>(
+    pres_frag: PresFrag<'ctx>,
+    ty: PresInstTy,
+    holes: &impl Fn(usize) -> PresFrag<'ctx>,
+    ctx: &Ctx<'ctx>,
+    frag_cache: &mut FxHashMap<FragmentId<'ctx>, FragmentId<'ctx>>,
+    pres_cache: &mut FxHashMap<(PresId<'ctx>, PresInstTy), PresId<'ctx>>,
+) -> PresFrag<'ctx> {
+    let normal = instantiate_pres_holes(
+        pres_frag.pres(),
+        PresInstTy::Normal,
+        holes,
+        ctx,
+        frag_cache,
+        pres_cache,
+    );
+    let formal = instantiate_pres_holes(
+        pres_frag.formal_pres(),
+        PresInstTy::Formal,
+        holes,
+        ctx,
+        frag_cache,
+        pres_cache,
+    );
+
+    PresFrag::new(
+        instantiate_frag_holes(pres_frag.frag(), &|idx| holes(idx).frag(), ctx, frag_cache),
+        match ty {
+            PresInstTy::Normal => normal,
+            PresInstTy::Formal => formal,
+        },
+        formal,
+    )
+}
+
+pub fn instantiate_holes<'ctx>(
+    frag: PresFrag<'ctx>,
+    holes: &impl Fn(usize) -> PresFrag<'ctx>,
+    ctx: &Ctx<'ctx>,
+) -> PresFrag<'ctx> {
+    instantiate_holes_impl(
+        frag,
+        PresInstTy::Normal,
+        holes,
+        ctx,
+        &mut FxHashMap::default(),
+        &mut FxHashMap::default(),
+    )
+}
+
+fn instantiate_frag_templates<'ctx>(
+    frag: FragmentId<'ctx>,
+    templates: &dyn Fn(usize) -> PresFrag<'ctx>,
+    ctx: &Ctx<'ctx>,
+    frag_cache: &mut FxHashMap<FragmentId<'ctx>, FragmentId<'ctx>>,
+) -> FragmentId<'ctx> {
+    if !frag.has_template() {
+        return frag;
+    }
+
+    if let Some(cached) = frag_cache.get(&frag) {
+        return *cached;
+    }
+
+    let new_frag = match frag.head() {
+        FragHead::TemplateRef(idx) => {
+            let replacement = templates(idx);
+            let children = frag.children();
+            instantiate_frag_holes(
+                replacement.frag(),
+                &|idx| children[idx],
+                ctx,
+                &mut FxHashMap::default(),
+            )
+        }
+        FragHead::RuleApplication(_) => {
+            let new_children = frag
+                .children()
+                .iter()
+                .map(|&child| instantiate_frag_templates(child, templates, ctx, frag_cache))
+                .collect();
+            let frag = Fragment::new(frag.cat(), frag.head(), new_children);
+            ctx.arenas.fragments.intern(frag)
+        }
+        FragHead::Variable(_var, _) => todo!(),
+        FragHead::Hole(_) => frag,
+    };
+    frag_cache.insert(frag, new_frag);
+    new_frag
+}
+
+fn instantiate_pres_templates<'ctx>(
+    pres: PresId<'ctx>,
+    ty: PresInstTy,
+    templates: &dyn Fn(usize) -> PresFrag<'ctx>,
+    ctx: &Ctx<'ctx>,
+    frag_cache: &mut FxHashMap<FragmentId<'ctx>, FragmentId<'ctx>>,
+    pres_cache: &mut FxHashMap<(PresId<'ctx>, PresInstTy), PresId<'ctx>>,
+) -> PresId<'ctx> {
+    if let Some(cached) = pres_cache.get(&(pres, ty)) {
+        return *cached;
+    }
+
+    let mut new_children = || {
+        pres.children()
+            .iter()
+            .map(|&child| {
+                instantiate_templates_impl(child, ty, templates, ctx, frag_cache, pres_cache)
+            })
+            .collect_vec()
+    };
+
+    let new_pres = match pres.head() {
+        PresHead::FormalFrag(FragHead::TemplateRef(idx)) => {
+            let replacement = match ty {
+                PresInstTy::Normal => templates(idx).pres(),
+                PresInstTy::Formal => templates(idx).formal_pres(),
+            };
+            let new_children = new_children();
+            instantiate_pres_holes(
+                replacement,
+                ty,
+                &|idx| new_children[idx],
+                ctx,
+                &mut FxHashMap::default(),
+                &mut FxHashMap::default(),
+            )
+        }
+        PresHead::FormalFrag(FragHead::Variable(_, _)) => todo!(),
+        PresHead::Notation(_, replacement) if replacement.frag().has_template() => {
+            // If the replacement for this notation contains template params
+            // then we need to expand the notation. The notation isn't accurate
+            // any more.
+            instantiate_pres_templates(
+                replacement.pres(),
+                ty,
+                templates,
+                ctx,
+                frag_cache,
+                pres_cache,
+            )
+        }
+        _ => {
+            let new_children = new_children();
+            let pres = Pres::new(pres.head(), new_children);
+            ctx.arenas.presentations.intern(pres)
+        }
+    };
+    pres_cache.insert((pres, ty), new_pres);
+    new_pres
+}
+
+fn instantiate_templates_impl<'ctx>(
+    pres_frag: PresFrag<'ctx>,
+    ty: PresInstTy,
+    templates: &dyn Fn(usize) -> PresFrag<'ctx>,
+    ctx: &Ctx<'ctx>,
+    frag_cache: &mut FxHashMap<FragmentId<'ctx>, FragmentId<'ctx>>,
+    pres_cache: &mut FxHashMap<(PresId<'ctx>, PresInstTy), PresId<'ctx>>,
+) -> PresFrag<'ctx> {
+    let normal = instantiate_pres_templates(
+        pres_frag.pres(),
+        PresInstTy::Normal,
+        templates,
+        ctx,
+        frag_cache,
+        pres_cache,
+    );
+    let formal = instantiate_pres_templates(
+        pres_frag.formal_pres(),
+        PresInstTy::Formal,
+        templates,
+        ctx,
+        frag_cache,
+        pres_cache,
+    );
+
+    PresFrag::new(
+        instantiate_frag_templates(pres_frag.frag(), templates, ctx, frag_cache),
+        match ty {
+            PresInstTy::Normal => normal,
+            PresInstTy::Formal => formal,
+        },
+        formal,
+    )
+}
+
+pub fn instantiate_templates<'ctx>(
+    frag: PresFrag<'ctx>,
+    templates: &dyn Fn(usize) -> PresFrag<'ctx>,
+    ctx: &Ctx<'ctx>,
+) -> PresFrag<'ctx> {
+    instantiate_templates_impl(
+        frag,
+        PresInstTy::Normal,
+        templates,
+        ctx,
+        &mut FxHashMap::default(),
+        &mut FxHashMap::default(),
+    )
 }

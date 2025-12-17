@@ -1,5 +1,4 @@
 use crate::{
-    parse::Span,
     semant::{
         check_proofs::lua_api::{
             span_to_lua::LuaSpan,

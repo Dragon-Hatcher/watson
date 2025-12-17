@@ -3,14 +3,13 @@ use crate::{
     diagnostics::WResult,
     parse::{elaborator::elaborate_name, parse_state::ParseRuleSource, parse_tree::ParseTreeId},
     semant::{
-        formal_syntax::{FormalSyntaxCat, FormalSyntaxCatId},
-        fragment::{FragHead, Fragment, FragmentId, hole_frag},
+        formal_syntax::FormalSyntaxCatId,
+        fragment::{FragHead, Fragment, hole_frag},
         notation::{NotationBinding, NotationPatternPart},
-        presentation::{Pres, PresFrag, PresHead, PresId},
+        presentation::{Pres, PresFrag, PresHead, instantiate_holes},
         scope::{Scope, ScopeEntry, ScopeReplacement},
     },
 };
-use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnresolvedFrag<'ctx>(pub ParseTreeId<'ctx>);
@@ -156,7 +155,8 @@ fn parse_fragment_impl<'ctx>(
         let _intermediates = binding_depth - replacement.binding_depth();
         let instantiated = match replacement.replacement() {
             ScopeReplacement::Frag(replacement) => {
-                let instantiated_replacement = instantiate_replacement(replacement, &children, ctx);
+                let instantiated_replacement =
+                    instantiate_holes(replacement, &|idx| children[idx], ctx);
                 let my_pres = Pres::new(PresHead::Notation(binding, replacement), children);
                 let my_pres = ctx.arenas.presentations.intern(my_pres);
                 PresFrag::new(
@@ -176,123 +176,4 @@ fn parse_fragment_impl<'ctx>(
     }
 
     Ok(solution)
-}
-
-fn instantiate_replacement<'ctx>(
-    frag: PresFrag<'ctx>,
-    children: &[PresFrag<'ctx>],
-    ctx: &Ctx<'ctx>,
-) -> PresFrag<'ctx> {
-    fn instantiate_frag<'ctx>(
-        frag: FragmentId<'ctx>,
-        children: &[PresFrag<'ctx>],
-        ctx: &Ctx<'ctx>,
-        frag_cache: &mut FxHashMap<FragmentId<'ctx>, FragmentId<'ctx>>,
-    ) -> FragmentId<'ctx> {
-        if !frag.has_hole() {
-            return frag;
-        }
-
-        if let Some(cached) = frag_cache.get(&frag) {
-            return *cached;
-        }
-
-        let new_frag = match frag.head() {
-            FragHead::RuleApplication(_) | FragHead::TemplateRef(_) => {
-                let new_children = frag
-                    .children()
-                    .iter()
-                    .map(|&child| instantiate_frag(child, children, ctx, frag_cache))
-                    .collect();
-                let frag = Fragment::new(frag.cat(), frag.head(), new_children);
-                ctx.arenas.fragments.intern(frag)
-            }
-            FragHead::Variable(_var, _) => todo!(),
-            FragHead::Hole(idx) => children[idx].frag(),
-        };
-        frag_cache.insert(frag, new_frag);
-        new_frag
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    enum PresInstTy {
-        Normal,
-        Formal,
-    }
-
-    fn instantiate_pres<'ctx>(
-        pres: PresId<'ctx>,
-        ty: PresInstTy,
-        children: &[PresFrag<'ctx>],
-        ctx: &Ctx<'ctx>,
-        frag_cache: &mut FxHashMap<FragmentId<'ctx>, FragmentId<'ctx>>,
-        pres_cache: &mut FxHashMap<(PresId<'ctx>, PresInstTy), PresId<'ctx>>,
-    ) -> PresId<'ctx> {
-        if let Some(cached) = pres_cache.get(&(pres, ty)) {
-            return *cached;
-        }
-
-        let new_pres = match pres.head() {
-            PresHead::FormalFrag(FragHead::Hole(idx)) => match ty {
-                PresInstTy::Normal => children[idx].pres(),
-                PresInstTy::Formal => children[idx].formal_pres(),
-            },
-            PresHead::FormalFrag(FragHead::Variable(_, _)) => todo!(),
-            _ => {
-                let new_children = pres
-                    .children()
-                    .iter()
-                    .map(|&child| inner(child, ty, children, ctx, frag_cache, pres_cache))
-                    .collect();
-                let pres = Pres::new(pres.head(), new_children);
-                ctx.arenas.presentations.intern(pres)
-            }
-        };
-        pres_cache.insert((pres, ty), new_pres);
-        new_pres
-    }
-
-    fn inner<'ctx>(
-        pres_frag: PresFrag<'ctx>,
-        ty: PresInstTy,
-        children: &[PresFrag<'ctx>],
-        ctx: &Ctx<'ctx>,
-        frag_cache: &mut FxHashMap<FragmentId<'ctx>, FragmentId<'ctx>>,
-        pres_cache: &mut FxHashMap<(PresId<'ctx>, PresInstTy), PresId<'ctx>>,
-    ) -> PresFrag<'ctx> {
-        let normal = instantiate_pres(
-            pres_frag.pres(),
-            PresInstTy::Normal,
-            children,
-            ctx,
-            frag_cache,
-            pres_cache,
-        );
-        let formal = instantiate_pres(
-            pres_frag.formal_pres(),
-            PresInstTy::Formal,
-            children,
-            ctx,
-            frag_cache,
-            pres_cache,
-        );
-
-        PresFrag::new(
-            instantiate_frag(pres_frag.frag(), children, ctx, frag_cache),
-            match ty {
-                PresInstTy::Normal => normal,
-                PresInstTy::Formal => formal,
-            },
-            formal,
-        )
-    }
-
-    inner(
-        frag,
-        PresInstTy::Normal,
-        children,
-        ctx,
-        &mut FxHashMap::default(),
-        &mut FxHashMap::default(),
-    )
 }

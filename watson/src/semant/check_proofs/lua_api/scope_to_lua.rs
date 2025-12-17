@@ -45,9 +45,9 @@ impl UserData for LuaScope {
 
         methods.add_method(
             "bindHole",
-            |_, this, (binding, cat, idx): (LuaNotationBinding, LuaFormalCat, usize)| {
+            |_, this, (binding, idx): (LuaNotationBinding, usize)| {
                 let binding = binding.out();
-                let entry = ScopeEntry::new_hole(cat.out(), idx);
+                let entry = ScopeEntry::new_hole(binding.pattern().cat(), idx);
                 let new_scope = this.out_ref().child_with(binding, entry);
                 Ok(LuaScope::new(new_scope))
             },

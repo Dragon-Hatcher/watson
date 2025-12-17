@@ -1,3 +1,4 @@
+mod book;
 mod cli;
 mod config;
 mod context;

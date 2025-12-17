@@ -18,6 +18,7 @@ use crate::{
         parse_state::{
             Associativity, Category, ParseAtomPattern, Precedence, SyntaxCategorySource,
         },
+        parse_tree::ParseTreeId,
     },
     semant::{
         formal_syntax::FormalSyntaxCatId,
@@ -28,20 +29,36 @@ use crate::{
     },
 };
 
-pub fn parse<'ctx>(
-    root: SourceId,
-    ctx: &mut Ctx<'ctx>,
-) -> Vec<(TheoremId<'ctx>, UnresolvedProof<'ctx>)> {
+pub struct ParseReport<'ctx> {
+    pub theorems: Vec<(TheoremId<'ctx>, UnresolvedProof<'ctx>)>,
+    pub entries: Vec<ParseEntry<'ctx>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseEntry<'ctx> {
+    Text(Span),
+    Command(ParseTreeId<'ctx>),
+}
+
+pub fn parse<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> ParseReport<'ctx> {
     let mut sources_stack = Vec::new();
     let mut scope = Scope::new();
     sources_stack.push(root.start_loc());
 
     let mut theorems = Vec::new();
+    let mut entries = Vec::new();
     while let Some(next) = sources_stack.pop() {
-        parse_source(next, ctx, &mut sources_stack, &mut scope, &mut theorems);
+        parse_source(
+            next,
+            ctx,
+            &mut sources_stack,
+            &mut scope,
+            &mut theorems,
+            &mut entries,
+        );
     }
 
-    theorems
+    ParseReport { theorems, entries }
 }
 
 fn parse_source<'ctx>(
@@ -50,6 +67,7 @@ fn parse_source<'ctx>(
     sources_stack: &mut Vec<Location>,
     scope: &mut Scope<'ctx>,
     theorems: &mut Vec<(TheoremId<'ctx>, UnresolvedProof<'ctx>)>,
+    entries: &mut Vec<ParseEntry<'ctx>>,
 ) {
     let source = loc.source();
     let text = ctx.sources.get_text(source).as_str();
@@ -73,6 +91,8 @@ fn parse_source<'ctx>(
                 return;
             }
         };
+
+        entries.push(ParseEntry::Command(tree));
 
         // Push the location after this command onto the stack so we can
         // continue parsing this source file later.
@@ -151,7 +171,20 @@ fn parse_source<'ctx>(
         }
     } else {
         // This line doesn't start a command so we can skip to the next line.
-        sources_stack.push(next_line(text, loc));
+        let next_loc = next_line(text, loc);
+        sources_stack.push(next_loc);
+
+        if let Some(ParseEntry::Text(prev_span)) = entries.last()
+            && prev_span.end() == loc
+        {
+            // We can merge this text span with the previous one.
+            let span = Span::new(prev_span.start(), next_loc);
+            entries.pop();
+            entries.push(ParseEntry::Text(span));
+        } else {
+            let span = Span::new(loc, next_loc);
+            entries.push(ParseEntry::Text(span));
+        }
     }
 }
 

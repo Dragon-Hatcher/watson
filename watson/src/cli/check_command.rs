@@ -1,7 +1,7 @@
 use crate::{
     config::{WatsonConfig, find_config_file},
     context::{Arenas, Ctx},
-    parse::{SourceCache, SourceId, parse, source_cache::SourceDecl},
+    parse::{ParseReport, SourceCache, SourceId, parse, source_cache::SourceDecl},
     report::{ProofReport, display_report},
     semant::{check_circularity::find_circular_dependency_groups, check_proofs::check_proofs},
 };
@@ -23,7 +23,7 @@ pub struct CheckCommand {
     #[argh(switch, short = 'w')]
     watch: bool,
 
-    /// path to watson.toml config file (if not provided, searches up from current directory).
+    /// path to watson.toml config file.
     #[argh(option, short = 'c')]
     config: Option<PathBuf>,
 }
@@ -47,7 +47,7 @@ pub fn run_check(cmd: CheckCommand) {
         for i in 1.. {
             let _ = rx.try_iter().count();
             let arenas = Arenas::new();
-            let (ctx, report) = run(config.clone(), &arenas);
+            let (ctx, _, report) = check(config.clone(), &arenas);
 
             // Clear the screen to print the new info
             _ = execute!(io::stdout(), Clear(ClearType::Purge), MoveTo(0, 0));
@@ -67,7 +67,7 @@ pub fn run_check(cmd: CheckCommand) {
         let config = WatsonConfig::from_file(&config_file_path).unwrap();
 
         let arenas = Arenas::new();
-        let (ctx, report) = run(config, &arenas);
+        let (ctx, _, report) = check(config, &arenas);
 
         display_report(&report, ctx.diags.has_errors(), None);
 
@@ -78,11 +78,14 @@ pub fn run_check(cmd: CheckCommand) {
     }
 }
 
-fn run<'ctx>(config: WatsonConfig, arenas: &'ctx Arenas<'ctx>) -> (Ctx<'ctx>, ProofReport<'ctx>) {
+pub fn check<'ctx>(
+    config: WatsonConfig,
+    arenas: &'ctx Arenas<'ctx>,
+) -> (Ctx<'ctx>, ParseReport<'ctx>, ProofReport<'ctx>) {
     let (source_cache, root_id) = make_source_cache(&config);
     let mut ctx = Ctx::new(source_cache, config, arenas);
-    let report = compile(root_id, &mut ctx);
-    (ctx, report)
+    let (parse_report, proof_report) = compile(root_id, &mut ctx);
+    (ctx, parse_report, proof_report)
 }
 
 fn make_source_cache(config: &WatsonConfig) -> (SourceCache, SourceId) {
@@ -96,13 +99,14 @@ fn make_source_cache(config: &WatsonConfig) -> (SourceCache, SourceId) {
     (source_cache, root_id)
 }
 
-fn compile<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> ProofReport<'ctx> {
-    let theorems = parse(root, ctx);
-    let statuses = check_proofs(&theorems, ctx);
+fn compile<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> (ParseReport<'ctx>, ProofReport<'ctx>) {
+    let parse_report = parse(root, ctx);
+    let statuses = check_proofs(&parse_report.theorems, ctx);
     let circularities = find_circular_dependency_groups(&statuses);
 
-    ProofReport {
+    let proof_report = ProofReport {
         statuses,
         circularities,
-    }
+    };
+    (parse_report, proof_report)
 }

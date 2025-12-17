@@ -10,9 +10,9 @@ pub fn name_to_lua(name: &str) -> String {
 
 pub mod ansi {
     pub const ANSI_RESET: &str = "\x1b[0m";
-    pub const ANSI_RED: &str = "\x1b[31m";
-    pub const ANSI_GREEN: &str = "\x1b[32m";
-    pub const ANSI_YELLOW: &str = "\x1b[33m";
+    pub const ANSI_RED: &str = "\x1b[91m";
+    pub const ANSI_GREEN: &str = "\x1b[92m";
+    pub const ANSI_YELLOW: &str = "\x1b[93m";
     pub const ANSI_GRAY: &str = "\x1b[90m";
     pub const ANSI_BOLD: &str = "\x1b[1m";
 }

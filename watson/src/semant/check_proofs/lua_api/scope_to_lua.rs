@@ -1,7 +1,5 @@
 use crate::semant::{
-    check_proofs::lua_api::{
-        formal_to_lua::LuaFormalCat, frag_to_lua::LuaPresFrag, notation_to_lua::LuaNotationBinding,
-    },
+    check_proofs::lua_api::{frag_to_lua::LuaPresFrag, notation_to_lua::LuaNotationBinding},
     scope::{Scope, ScopeEntry},
 };
 use mlua::{FromLua, UserData};
@@ -18,11 +16,6 @@ impl LuaScope {
         // runtime doesn't live for as long as context, this is safe.
         let scope: Scope<'static> = unsafe { std::mem::transmute(scope) };
         Self { scope }
-    }
-
-    pub fn out<'ctx>(self) -> Scope<'ctx> {
-        // SAFETY: see above.
-        unsafe { std::mem::transmute(self.scope) }
     }
 
     pub fn out_ref<'ctx>(&self) -> &Scope<'ctx> {

@@ -83,6 +83,7 @@ macro_rules! match_rule {
     }}
 }
 
+#[allow(clippy::enum_variant_names)]
 pub enum ElaborateAction<'ctx> {
     NewSource(SourceId),
     NewFormalCat(FormalSyntaxCatId<'ctx>),

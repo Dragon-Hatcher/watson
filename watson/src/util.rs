@@ -15,5 +15,4 @@ pub mod ansi {
     pub const ANSI_YELLOW: &str = "\x1b[33m";
     pub const ANSI_GRAY: &str = "\x1b[90m";
     pub const ANSI_BOLD: &str = "\x1b[1m";
-    pub const ANSI_UNDERLINE: &str = "\x1b[4m";
 }

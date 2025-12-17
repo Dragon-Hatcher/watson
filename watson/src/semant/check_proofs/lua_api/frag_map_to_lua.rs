@@ -1,6 +1,5 @@
 use crate::semant::check_proofs::lua_api::frag_to_lua::{LuaPresFact, LuaPresFrag};
 use mlua::{FromLua, UserData};
-use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, FromLua)]
 struct LuaFragMap {

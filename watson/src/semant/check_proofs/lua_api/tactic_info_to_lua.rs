@@ -1,8 +1,5 @@
 use crate::semant::{
-    check_proofs::{
-        LuaTheoremInfo,
-        lua_api::frag_to_lua::{LuaPresFact, LuaPresFrag},
-    },
+    check_proofs::lua_api::frag_to_lua::{LuaPresFact, LuaPresFrag},
     tactic::tactic_info::TacticInfo,
 };
 use mlua::{FromLua, UserData};

@@ -112,7 +112,7 @@ impl<'ctx> FragRuleApplication<'ctx> {
         self.rule
     }
 
-    pub fn bindings_added(&self) -> usize {
+    pub fn _bindings_added(&self) -> usize {
         self.bindings_added
     }
 }

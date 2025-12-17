@@ -30,10 +30,6 @@ impl<'ctx> ProofCertificate<'ctx> {
         Ok(ProofCertificate { proof })
     }
 
-    pub fn theorem(&self) -> TheoremId<'ctx> {
-        self.proof.theorem
-    }
-
     pub fn theorems_used(&self) -> &im::HashSet<TheoremId<'ctx>> {
         &self.proof.theorems_used
     }

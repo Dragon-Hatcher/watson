@@ -5,7 +5,7 @@ use crate::parse::{Location, SourceCache, SourceId, Span};
 use crate::semant::parse_fragment;
 use crate::semant::tactic::tactic_info::{TacticInfo, TacticInfoStep};
 use crate::semant::theorems::TheoremId;
-use crate::util::ansi::{ANSI_BOLD, ANSI_GRAY, ANSI_RESET, ANSI_UNDERLINE, ANSI_YELLOW};
+use crate::util::ansi::{ANSI_BOLD, ANSI_GRAY, ANSI_RESET, ANSI_YELLOW};
 use annotate_snippets::{Level, Message, Renderer, Snippet};
 use itertools::Itertools;
 use std::path::Path;
@@ -299,9 +299,6 @@ impl<'ctx> Diagnostic<'ctx> {
     }
 
     pub fn err_frag_parse_failure(span: Span, err: parse_fragment::ParseResultErr) -> Self {
-        let diag = Diagnostic::new(&format!("failed to parse fragment because {err:?}"))
-            .with_error("", span);
-
-        diag
+        Diagnostic::new(&format!("failed to parse fragment because {err:?}")).with_error("", span)
     }
 }

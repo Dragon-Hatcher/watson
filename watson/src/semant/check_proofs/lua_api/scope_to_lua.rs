@@ -1,4 +1,9 @@
-use crate::semant::scope::Scope;
+use crate::semant::{
+    check_proofs::lua_api::{
+        formal_to_lua::LuaFormalCat, frag_to_lua::LuaPresFrag, notation_to_lua::LuaNotationBinding,
+    },
+    scope::{Scope, ScopeEntry},
+};
 use mlua::{FromLua, UserData};
 
 #[derive(Debug, Clone, FromLua)]
@@ -26,4 +31,26 @@ impl LuaScope {
     }
 }
 
-impl UserData for LuaScope {}
+impl UserData for LuaScope {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method(
+            "bindFrag",
+            |_, this, (binding, frag): (LuaNotationBinding, LuaPresFrag)| {
+                let binding = binding.out();
+                let entry = ScopeEntry::new(frag.out());
+                let new_scope = this.out_ref().child_with(binding, entry);
+                Ok(LuaScope::new(new_scope))
+            },
+        );
+
+        methods.add_method(
+            "bindHole",
+            |_, this, (binding, cat, idx): (LuaNotationBinding, LuaFormalCat, usize)| {
+                let binding = binding.out();
+                let entry = ScopeEntry::new_hole(cat.out(), idx);
+                let new_scope = this.out_ref().child_with(binding, entry);
+                Ok(LuaScope::new(new_scope))
+            },
+        );
+    }
+}

@@ -682,7 +682,7 @@ pub fn add_parse_rules_for_formal_cat<'ctx>(
     let rule = ctx.arenas.parse_rules.alloc(Rule::new(
         "any_fragment",
         ctx.builtin_cats.any_fragment,
-        ParseRuleSource::Builtin,
+        ParseRuleSource::AnyFrag(formal_cat),
         RulePattern::new(
             vec![cat(parse_cat)],
             Precedence::default(),

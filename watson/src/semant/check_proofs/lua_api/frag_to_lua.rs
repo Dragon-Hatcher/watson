@@ -1,4 +1,5 @@
 use crate::semant::{
+    check_proofs::lua_api::formal_to_lua::LuaFormalCat,
     fragment::{Fragment, FragmentId},
     presentation::{Pres, PresFrag, PresId},
     theorems::PresFact,
@@ -28,6 +29,11 @@ impl LuaPresFrag {
 
 impl UserData for LuaPresFrag {
     fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("cat", |_, this| {
+            let cat = this.out().frag().cat();
+            Ok(LuaFormalCat::new(cat))
+        });
+
         fields.add_field_method_get("formal", |_, this| {
             Ok(LuaPresFrag::new(this.out().formal()))
         });

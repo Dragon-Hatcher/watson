@@ -15,6 +15,7 @@ end
 
 declare class UnResAnyFrag
     span: Span
+    function resolve(self, scope: Scope, cat: FormalCat): (Fact?, Diagnostic?) --
 end
 
 declare class UnResFact
@@ -23,7 +24,12 @@ declare class UnResFact
     function resolve(self, scope: Scope): (Fact?, Diagnostic?, Diagnostic?)
 end
 
+declare class FormalCat
+    name: string
+end
+
 declare class Frag
+    cat: FormalCat
     formal: Frag
 end
 
@@ -58,11 +64,22 @@ export type FactMap<T> = {
     get: (any, f: Fact) -> T?
 }
 
+declare class Binding
+end
+
 declare class Scope
+    function bindFrag(self, binding: Binding, frag: Frag): Scope
+    function bindHole(self, binding: Binding, cat: FormalCat, idx: number): Scope
+end
+
+declare class Template
+    cat: FormalCat
+    binding: Binding
 end
 
 declare class Theorem
     name: string
+    templates: {Template}
     hypotheses: {Fact}
     conclusion: Frag
     scope: Scope

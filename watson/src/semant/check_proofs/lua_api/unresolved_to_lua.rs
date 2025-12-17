@@ -5,11 +5,14 @@ use crate::{
         check_proofs::lua_api::{
             ctx_to_lua::LuaCtx,
             diag_to_lua::LuaDiagnostic,
+            formal_to_lua::LuaFormalCat,
             frag_to_lua::{LuaPresFact, LuaPresFrag},
             scope_to_lua::LuaScope,
             span_to_lua::LuaSpan,
         },
-        parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag, parse_fragment},
+        parse_fragment::{
+            UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag, parse_any_fragment, parse_fragment,
+        },
         theorems::PresFact,
     },
 };
@@ -93,6 +96,28 @@ impl UserData for LuaUnresolvedAnyFrag {
             let span = this.out().0.span();
             Ok(LuaSpan::new(span))
         });
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method(
+            "resolve",
+            |lua, this, (scope, cat): (LuaScope, LuaFormalCat)| {
+                let un_frag = this.out();
+                let cat = cat.out();
+                let scope = scope.out_ref();
+                let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+                let frag = parse_any_fragment(un_frag, cat, scope, ctx).expect("TODO");
+
+                let res = match frag {
+                    Ok(frag) => (Some(LuaPresFrag::new(frag)), None),
+                    Err(err) => {
+                        let diag = Diagnostic::err_frag_parse_failure(un_frag.0.span(), err);
+                        (None, Some(LuaDiagnostic::new(diag)))
+                    }
+                };
+                Ok(res)
+            },
+        );
     }
 }
 

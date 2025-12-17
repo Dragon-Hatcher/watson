@@ -227,6 +227,7 @@ impl<'ctx> Rule<'ctx> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ParseRuleSource<'ctx> {
     Builtin,
+    AnyFrag(FormalSyntaxCatId<'ctx>),
     Notation(NotationPatternId<'ctx>),
     TacticRule(TacticRuleId<'ctx>),
 }

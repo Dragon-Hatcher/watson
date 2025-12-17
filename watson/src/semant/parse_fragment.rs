@@ -1,8 +1,9 @@
 use crate::{
     context::Ctx,
     diagnostics::WResult,
-    parse::{elaborator::elaborate_name, parse_tree::ParseTreeId},
+    parse::{elaborator::elaborate_name, parse_state::ParseRuleSource, parse_tree::ParseTreeId},
     semant::{
+        formal_syntax::{FormalSyntaxCat, FormalSyntaxCatId},
         fragment::{FragHead, Fragment, FragmentId, hole_frag},
         notation::{NotationBinding, NotationPatternPart},
         presentation::{Pres, PresFrag, PresHead, PresId},
@@ -23,6 +24,29 @@ pub struct UnresolvedFact<'ctx> {
     pub conclusion: UnresolvedFrag<'ctx>,
 }
 
+pub fn parse_any_fragment<'ctx>(
+    frag: UnresolvedAnyFrag<'ctx>,
+    cat: FormalSyntaxCatId<'ctx>,
+    scope: &Scope<'ctx>,
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Result<PresFrag<'ctx>, ParseResultErr>> {
+    for possibility in frag.0.possibilities() {
+        let ParseRuleSource::AnyFrag(p_cat) = possibility.rule().0.source() else {
+            unreachable!();
+        };
+
+        if cat != *p_cat {
+            continue;
+        }
+
+        let frag = possibility.children()[0].as_node().unwrap();
+        let frag = UnresolvedFrag(frag);
+        return parse_fragment(frag, scope, ctx);
+    }
+
+    Ok(Err(ParseResultErr::WrongCat))
+}
+
 pub fn parse_fragment<'ctx>(
     frag: UnresolvedFrag<'ctx>,
     scope: &Scope<'ctx>,
@@ -35,6 +59,7 @@ pub fn parse_fragment<'ctx>(
 pub enum ParseResultErr {
     NoSolutions,
     MultipleSolutions,
+    WrongCat,
 }
 
 fn parse_fragment_impl<'ctx>(
@@ -117,6 +142,7 @@ fn parse_fragment_impl<'ctx>(
                         continue 'possibility;
                     }
                     Err(ParseResultErr::MultipleSolutions) => multiple_solutions = true,
+                    Err(ParseResultErr::WrongCat) => unreachable!(),
                 }
             }
         }

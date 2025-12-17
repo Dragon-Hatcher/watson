@@ -4,13 +4,13 @@ use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, FromLua)]
 struct LuaFragMap {
-    map: FxHashMap<LuaPresFrag, mlua::Value>,
+    map: im::HashMap<LuaPresFrag, mlua::Value>,
 }
 
 impl LuaFragMap {
     fn new() -> Self {
         Self {
-            map: FxHashMap::default(),
+            map: im::HashMap::new(),
         }
     }
 }
@@ -39,13 +39,13 @@ impl UserData for LuaFragMapMeta {
 
 #[derive(Debug, Clone, FromLua)]
 struct LuaFactMap {
-    map: FxHashMap<LuaPresFact, mlua::Value>,
+    map: im::HashMap<LuaPresFact, mlua::Value>,
 }
 
 impl LuaFactMap {
     fn new() -> Self {
         Self {
-            map: FxHashMap::default(),
+            map: im::HashMap::new(),
         }
     }
 }

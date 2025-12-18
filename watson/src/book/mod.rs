@@ -115,6 +115,8 @@ impl DocState {
             return;
         }
 
+        self.close_section();
+
         let current = std::mem::take(&mut self.current_chapter_content);
         self.chapter_contents.push(current);
 
@@ -147,13 +149,24 @@ impl DocState {
         Ok(())
     }
 
+    fn close_section(&mut self) {
+        if self.section.is_some() {
+            self.current_chapter_content += "</section>\n";
+        }
+    }
+
     fn next_section<'ctx>(&mut self, title: &str, span: Span) -> WResult<'ctx, ()> {
         self.commit_paragraph();
+        self.close_section();
 
         let Some(chapter_num) = self.chapter else {
             return Diagnostic::err_section_outside_chapter(span);
         };
         let next_section_num = self.section.unwrap_or(0) + 1;
+        self.current_chapter_content += &format!(
+            "<section id=\"section-{}\">\n",
+            next_section_num
+        );
         self.current_chapter_content += &replace_patterns(
             include_str!("templates/section_header.html"),
             &["{{SECTION_TITLE}}", "{{CHAPTER_NUM}}", "{{SECTION_NUM}}"],

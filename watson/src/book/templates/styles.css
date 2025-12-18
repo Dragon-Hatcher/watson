@@ -35,6 +35,10 @@ article {
   margin-bottom: 256px;
 }
 
+section {
+  scroll-margin-top: 16px;
+}
+
 h1,
 h2,
 h3 {
@@ -47,8 +51,6 @@ h3 {
   display: flex;
   justify-content: space-between;
   width: 100%;
-
-  scroll-margin-top: 16px;
 }
 
 h1 {
@@ -240,7 +242,7 @@ code .comment {
   top: 0px;
   bottom: 0px;
 
-  background: #70828b58;
+  background: #70828b36;
   border-left: 3px solid rgb(107, 158, 194);
   z-index: -1;
 }

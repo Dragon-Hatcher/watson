@@ -13,69 +13,94 @@
     />
   </head>
   <body>
-    <aside class="nav">
-      {{SIDEBAR}}
-    </aside>
+    <aside class="nav">{{SIDEBAR}}</aside>
 
     <article>{{CHAPTER_CONTENT}}</article>
 
     <script>
       // Get the current chapter number from the page filename
-      const currentPage = window.location.pathname.split('/').pop();
+      const currentPage = window.location.pathname.split("/").pop();
 
-      // Track which section is currently visible and highlight it in the sidebar
+      // Track visible sections and chapter header
+      let visibleSections = new Set();
+      let chapterHeaderVisible = false;
+
       function updateActiveSection() {
-        // Get all section headers on the current page
-        const sections = document.querySelectorAll('h2[id^="section-"]');
-
-        // Find the section that's currently most visible
-        let currentSection = null;
-        const scrollPos = window.scrollY + 100; // Offset for better UX
-
-        for (const section of sections) {
-          if (section.offsetTop <= scrollPos) {
-            currentSection = section;
-          } else {
-            break;
-          }
-        }
-
         // Remove all existing 'selected' classes
-        document.querySelectorAll('.nav .selected').forEach(el => {
-          el.classList.remove('selected');
+        document.querySelectorAll(".nav .selected").forEach((el) => {
+          el.classList.remove("selected");
         });
 
-        if (currentSection == null || sections.length === 0) {
-          // Highlight the chapter link for the current page
-          const chapterLink = document.querySelector(`.nav a[href="${currentPage}"]`);
+        // Prioritize chapter header if visible
+        if (chapterHeaderVisible || visibleSections.size == 0) {
+          const chapterLink = document.querySelector(
+            `.nav a[href="${currentPage}"]`
+          );
           if (chapterLink) {
-            chapterLink.classList.add('selected');
+            chapterLink.classList.add("selected");
           }
         } else {
-          // Highlight the section link (only for sections on the current page)
-          const sectionId = currentSection.id;
-          const sectionLink = document.querySelector(`.nav a[href="${currentPage}#${sectionId}"]`);
-          if (sectionLink) {
-            sectionLink.classList.add('selected');
+          // Find the topmost visible section
+          const sections = Array.from(
+            document.querySelectorAll('section[id^="section-"]')
+          );
+          let currentSection = null;
+
+          for (const section of sections) {
+            if (visibleSections.has(section.id)) {
+              currentSection = section;
+              break;
+            }
+          }
+
+          if (currentSection) {
+            const sectionId = currentSection.id;
+            const sectionLink = document.querySelector(
+              `.nav a[href="${currentPage}#${sectionId}"]`
+            );
+            if (sectionLink) {
+              sectionLink.classList.add("selected");
+            }
           }
         }
       }
 
-      // Update on scroll with throttling
-      let scrollTimeout;
-      window.addEventListener('scroll', () => {
-        if (scrollTimeout) {
-          clearTimeout(scrollTimeout);
+      // Set up Intersection Observer to track section visibility
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.target.id === "chapter-header") {
+              chapterHeaderVisible = entry.isIntersecting;
+            } else if (entry.isIntersecting) {
+              visibleSections.add(entry.target.id);
+            } else {
+              visibleSections.delete(entry.target.id);
+            }
+          });
+          updateActiveSection();
+        },
+        {
+          rootMargin: "-100px 0px -50% 0px",
+          threshold: [0, 0.1, 0.5, 1],
         }
-        scrollTimeout = setTimeout(updateActiveSection, 50);
-      });
+      );
 
-      // Update on load
-      window.addEventListener('load', updateActiveSection);
+      // Observe all section elements and chapter header
+      window.addEventListener("load", () => {
+        // Observe chapter header
+        const chapterHeader = document.querySelector("#chapter-header");
+        if (chapterHeader) {
+          observer.observe(chapterHeader);
+        }
 
-      // Update on hash change (when clicking nav links)
-      window.addEventListener('hashchange', () => {
-        setTimeout(updateActiveSection, 100);
+        // Observe all sections
+        document
+          .querySelectorAll('section[id^="section-"]')
+          .forEach((section) => {
+            observer.observe(section);
+          });
+
+        updateActiveSection();
       });
     </script>
   </body>

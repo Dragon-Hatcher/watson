@@ -245,10 +245,9 @@ impl DocState {
             return Diagnostic::err_content_outside_chapter(span);
         }
 
-        self.current_para_content += text;
+        self.current_para_content += &process_inline_formatting(text);
         self.current_para_content += "\n";
 
-        // TODO
         Ok(())
     }
 }
@@ -257,4 +256,46 @@ fn replace_patterns(template: &str, patterns: &[&str], replacements: &[&str]) ->
     AhoCorasick::new(patterns)
         .unwrap()
         .replace_all(template, replacements)
+}
+
+fn process_inline_formatting(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0;
+
+    while i < chars.len() {
+        if chars[i] == '*' {
+            // Look for closing *
+            if let Some(end) = find_closing_delimiter(&chars, i + 1, '*') {
+                result.push_str("<strong>");
+                result.push_str(&chars[i + 1..end].iter().collect::<String>());
+                result.push_str("</strong>");
+                i = end + 1;
+                continue;
+            }
+        } else if chars[i] == '_' {
+            // Look for closing _
+            if let Some(end) = find_closing_delimiter(&chars, i + 1, '_') {
+                result.push_str("<em>");
+                result.push_str(&chars[i + 1..end].iter().collect::<String>());
+                result.push_str("</em>");
+                i = end + 1;
+                continue;
+            }
+        }
+
+        result.push(chars[i]);
+        i += 1;
+    }
+
+    result
+}
+
+fn find_closing_delimiter(chars: &[char], start: usize, delimiter: char) -> Option<usize> {
+    for i in start..chars.len() {
+        if chars[i] == delimiter {
+            return Some(i);
+        }
+    }
+    None
 }

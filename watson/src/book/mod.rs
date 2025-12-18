@@ -444,6 +444,7 @@ fn collect_highlights<'ctx>(
         highlights: &mut Vec<Highlight>,
         offset: usize,
         source_text: &str,
+        prev_was_keyword: bool,
     ) {
         // Just use the first possibility for highlighting
         if let Some(possibility) = tree.0.possibilities().first() {
@@ -452,6 +453,7 @@ fn collect_highlights<'ctx>(
                 return;
             }
 
+            let mut last_atom_was_keyword = prev_was_keyword;
             for child in possibility.children() {
                 match child {
                     ParseTreePart::Atom(atom) => {
@@ -463,7 +465,6 @@ fn collect_highlights<'ctx>(
                             let ignored_text = &source_text
                                 [full_span.start().byte_offset()..span.start().byte_offset()];
                             if !ignored_text.trim().is_empty() {
-                                dbg!(ignored_text);
                                 // The ignored text contains non-whitespace, which
                                 // must be a comment.
                                 highlights.push(Highlight {
@@ -474,9 +475,19 @@ fn collect_highlights<'ctx>(
                             }
                         }
 
-                        let kind = match atom._kind() {
+                        let atom_kind = atom._kind();
+                        let is_keyword = matches!(atom_kind, ParseAtomKind::Kw(_));
+
+                        let kind = match atom_kind {
                             ParseAtomKind::Kw(_) => Some(HighlightKind::Keyword),
-                            ParseAtomKind::Name(_) => Some(HighlightKind::Name),
+                            ParseAtomKind::Name(_) => {
+                                // Only highlight names that immediately follow a keyword
+                                if last_atom_was_keyword {
+                                    Some(HighlightKind::Name)
+                                } else {
+                                    None
+                                }
+                            }
                             ParseAtomKind::StrLit(_) => Some(HighlightKind::StrLit),
                             ParseAtomKind::Num(_) => Some(HighlightKind::Num),
                             ParseAtomKind::Lit(text) => {
@@ -500,16 +511,21 @@ fn collect_highlights<'ctx>(
                                 kind,
                             });
                         }
+
+                        // Update flag for next atom
+                        last_atom_was_keyword = is_keyword;
                     }
                     ParseTreePart::Node { id, .. } => {
-                        visit_tree(*id, highlights, offset, source_text);
+                        visit_tree(*id, highlights, offset, source_text, last_atom_was_keyword);
+                        // After visiting a node, reset the flag since nodes break the immediate sequence
+                        last_atom_was_keyword = false;
                     }
                 }
             }
         }
     }
 
-    visit_tree(parse_tree, &mut highlights, offset, source_text);
+    visit_tree(parse_tree, &mut highlights, offset, source_text, false);
     highlights.sort_by_key(|h| h.start);
     highlights
 }

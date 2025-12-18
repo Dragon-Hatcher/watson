@@ -128,6 +128,21 @@ code .line {
   user-select: none;
 }
 
+code .kw {
+  color: #8839ef;
+}
+code .name {
+  color: #1e66f5;
+  font-style: italic;
+}
+code .literal {
+  color: #179299;
+}
+code .comment {
+  color: #7c7f93;
+  font-style: italic;
+}
+
 /* Makes katex fraction lines render a little thicker, which I think looks better */
 .katex .mfrac .frac-line {
   border-bottom-width: 1px !important;

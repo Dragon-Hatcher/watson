@@ -1,7 +1,11 @@
 use crate::{
     context::Ctx,
     diagnostics::{Diagnostic, WResult},
-    parse::{Location, ParseEntry, ParseReport, Span, location::SourceOffset},
+    parse::{
+        Location, ParseEntry, ParseReport, Span,
+        location::SourceOffset,
+        parse_tree::{ParseAtomKind, ParseTreeId, ParseTreePart},
+    },
     report::ProofReport,
     util::ansi::{ANSI_BOLD, ANSI_GREEN, ANSI_RESET},
 };
@@ -251,18 +255,33 @@ impl DocState {
                 // Get starting line number using the optimized method
                 let start_line = ctx.sources.get_line_number(span.start());
 
+                // Collect syntax highlighting information
+                let highlights = collect_highlights(parse_tree, span.start().byte_offset());
+
                 // Commit any existing paragraph before adding the code block
                 self.commit_paragraph();
 
-                // Add code block with line numbers to chapter content
+                // Add code block with line numbers and syntax highlighting
                 self.current_chapter_content += "<pre><code>";
+                let mut byte_offset = 0;
                 for (i, line) in command_text.lines().enumerate() {
                     let line_num = start_line + i;
                     self.current_chapter_content += r#"<span class="line">"#;
                     self.current_chapter_content += &line_num.to_string();
                     self.current_chapter_content += r#"</span>"#;
-                    self.current_chapter_content += &html_escape(line);
+
+                    // Calculate byte offsets for this line within the command
+                    let line_start = byte_offset;
+                    let line_end = byte_offset + line.len();
+
+                    self.current_chapter_content += r#"<span>"#;
+                    self.current_chapter_content +=
+                        &render_highlighted_line(line, line_start, line_end, &highlights);
+                    self.current_chapter_content += r#"</span>"#;
                     self.current_chapter_content += "\n";
+
+                    // Move to next line (line length + newline)
+                    byte_offset = line_end + 1;
                 }
                 self.current_chapter_content += "</code></pre>\n";
 
@@ -388,4 +407,117 @@ fn html_escape(text: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HighlightKind {
+    Keyword,
+    Name,
+    StrLit,
+    Num,
+    Lit,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Highlight {
+    start: usize,
+    end: usize,
+    kind: HighlightKind,
+}
+
+/// Collect syntax highlighting information from the parse tree
+fn collect_highlights<'ctx>(parse_tree: ParseTreeId<'ctx>, offset: usize) -> Vec<Highlight> {
+    let mut highlights = Vec::new();
+
+    fn visit_tree<'ctx>(tree: ParseTreeId<'ctx>, highlights: &mut Vec<Highlight>, offset: usize) {
+        // Just use the first possibility for highlighting
+        if let Some(possibility) = tree.0.possibilities().first() {
+            for child in possibility.children() {
+                match child {
+                    ParseTreePart::Atom(atom) => {
+                        let span = atom._span();
+                        let kind = match atom._kind() {
+                            ParseAtomKind::Kw(_) => Some(HighlightKind::Keyword),
+                            ParseAtomKind::Name(_) => Some(HighlightKind::Name),
+                            ParseAtomKind::StrLit(_) => Some(HighlightKind::StrLit),
+                            ParseAtomKind::Num(_) => Some(HighlightKind::Num),
+                            ParseAtomKind::Lit(_) => Some(HighlightKind::Lit),
+                        };
+
+                        if let Some(kind) = kind {
+                            highlights.push(Highlight {
+                                start: span.start().byte_offset() - offset,
+                                end: span.end().byte_offset() - offset,
+                                kind,
+                            });
+                        }
+                    }
+                    ParseTreePart::Node { id, .. } => {
+                        visit_tree(*id, highlights, offset);
+                    }
+                }
+            }
+        }
+    }
+
+    visit_tree(parse_tree, &mut highlights, offset);
+    highlights.sort_by_key(|h| h.start);
+    highlights
+}
+
+/// Render a line with syntax highlighting
+fn render_highlighted_line(
+    line: &str,
+    line_start: usize,
+    line_end: usize,
+    highlights: &[Highlight],
+) -> String {
+    let mut result = String::new();
+    let mut pos = line_start;
+
+    // Find highlights that overlap with this line
+    for highlight in highlights {
+        // Skip highlights that end before this line
+        if highlight.end <= line_start {
+            continue;
+        }
+        // Stop processing highlights that start after this line
+        if highlight.start >= line_end {
+            break;
+        }
+
+        // Calculate the portion of the highlight within this line
+        let hl_start = highlight.start.max(line_start);
+        let hl_end = highlight.end.min(line_end);
+
+        // Add any unhighlighted text before this highlight
+        if pos < hl_start {
+            let text = &line[(pos - line_start)..(hl_start - line_start)];
+            result.push_str(&html_escape(text));
+        }
+
+        // Add the highlighted text
+        let class = match highlight.kind {
+            HighlightKind::Keyword => "kw",
+            HighlightKind::Name => "name",
+            HighlightKind::StrLit => "str",
+            HighlightKind::Num => "number",
+            HighlightKind::Lit => "lit",
+        };
+
+        result.push_str(&format!(r#"<span class="{}">"#, class));
+        let text = &line[(hl_start - line_start)..(hl_end - line_start)];
+        result.push_str(&html_escape(text));
+        result.push_str("</span>");
+
+        pos = hl_end;
+    }
+
+    // Add any remaining unhighlighted text
+    if pos < line_end {
+        let text = &line[(pos - line_start)..];
+        result.push_str(&html_escape(text));
+    }
+
+    result
 }

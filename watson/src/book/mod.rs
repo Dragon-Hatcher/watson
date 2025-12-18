@@ -517,7 +517,7 @@ fn collect_highlights<'ctx>(
                                 // Only highlight literals that aren't common punctuation
                                 let common = matches!(
                                     text.as_str(),
-                                    "(" | ")" | "[" | "]" | "{" | "}" | ":"
+                                    "(" | ")" | "[" | "]" | "{" | "}" | ":" | ";"
                                 );
                                 if common {
                                     None

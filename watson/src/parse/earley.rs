@@ -360,7 +360,10 @@ fn read_chart<'ctx>(
                             ParseAtomKind::Num(num.parse().unwrap())
                         }
                     };
-                    let atom = ParseAtom::new(span, kind);
+                    let no_ws_start = skip_ws_and_comments(text, span.start().offset());
+                    let no_ws_span =
+                        Span::new(Location::new(span.source(), no_ws_start), span.end());
+                    let atom = ParseAtom::new(span, no_ws_span, kind);
                     parts.push(ParseTreePart::Atom(atom));
                 }
                 RulePatternPart::Cat(id) => {

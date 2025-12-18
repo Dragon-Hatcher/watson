@@ -4,6 +4,7 @@ use crate::{
     parse::{
         Location, ParseEntry, ParseReport, Span,
         location::SourceOffset,
+        parse_state::ParseRuleSource,
         parse_tree::{ParseAtomKind, ParseTreeId, ParseTreePart},
     },
     report::ProofReport,
@@ -256,7 +257,11 @@ impl DocState {
                 let start_line = ctx.sources.get_line_number(span.start());
 
                 // Collect syntax highlighting information
-                let highlights = collect_highlights(parse_tree, span.start().byte_offset());
+                let highlights = collect_highlights(
+                    parse_tree,
+                    span.start().byte_offset(),
+                    source_text.as_str(),
+                );
 
                 // Commit any existing paragraph before adding the code block
                 self.commit_paragraph();
@@ -416,6 +421,7 @@ enum HighlightKind {
     StrLit,
     Num,
     Lit,
+    Comment,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -426,12 +432,19 @@ struct Highlight {
 }
 
 /// Collect syntax highlighting information from the parse tree
-fn collect_highlights<'ctx>(parse_tree: ParseTreeId<'ctx>, offset: usize) -> Vec<Highlight> {
-    use crate::parse::parse_state::ParseRuleSource;
-
+fn collect_highlights<'ctx>(
+    parse_tree: ParseTreeId<'ctx>,
+    offset: usize,
+    source_text: &str,
+) -> Vec<Highlight> {
     let mut highlights = Vec::new();
 
-    fn visit_tree<'ctx>(tree: ParseTreeId<'ctx>, highlights: &mut Vec<Highlight>, offset: usize) {
+    fn visit_tree<'ctx>(
+        tree: ParseTreeId<'ctx>,
+        highlights: &mut Vec<Highlight>,
+        offset: usize,
+        source_text: &str,
+    ) {
         // Just use the first possibility for highlighting
         if let Some(possibility) = tree.0.possibilities().first() {
             // Check if this rule is from a notation (fragment) - if so, skip highlighting
@@ -442,7 +455,25 @@ fn collect_highlights<'ctx>(parse_tree: ParseTreeId<'ctx>, offset: usize) -> Vec
             for child in possibility.children() {
                 match child {
                     ParseTreePart::Atom(atom) => {
-                        let span = atom._span();
+                        let full_span = atom.full_span();
+                        let span = atom.span();
+
+                        // Check for comments in the whitespace before this atom
+                        if full_span.start().byte_offset() < span.start().byte_offset() {
+                            let ignored_text = &source_text
+                                [full_span.start().byte_offset()..span.start().byte_offset()];
+                            if !ignored_text.trim().is_empty() {
+                                dbg!(ignored_text);
+                                // The ignored text contains non-whitespace, which
+                                // must be a comment.
+                                highlights.push(Highlight {
+                                    start: full_span.start().byte_offset() - offset,
+                                    end: span.start().byte_offset() - offset,
+                                    kind: HighlightKind::Comment,
+                                });
+                            }
+                        }
+
                         let kind = match atom._kind() {
                             ParseAtomKind::Kw(_) => Some(HighlightKind::Keyword),
                             ParseAtomKind::Name(_) => Some(HighlightKind::Name),
@@ -471,14 +502,14 @@ fn collect_highlights<'ctx>(parse_tree: ParseTreeId<'ctx>, offset: usize) -> Vec
                         }
                     }
                     ParseTreePart::Node { id, .. } => {
-                        visit_tree(*id, highlights, offset);
+                        visit_tree(*id, highlights, offset, source_text);
                     }
                 }
             }
         }
     }
 
-    visit_tree(parse_tree, &mut highlights, offset);
+    visit_tree(parse_tree, &mut highlights, offset, source_text);
     highlights.sort_by_key(|h| h.start);
     highlights
 }
@@ -521,6 +552,7 @@ fn render_highlighted_line(
             HighlightKind::StrLit => "str",
             HighlightKind::Num => "number",
             HighlightKind::Lit => "lit",
+            HighlightKind::Comment => "comment",
         };
 
         result.push_str(&format!(r#"<span class="{}">"#, class));

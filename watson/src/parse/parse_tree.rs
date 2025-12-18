@@ -76,7 +76,7 @@ pub enum ParseTreePart<'ctx> {
 impl<'ctx> ParseTreePart<'ctx> {
     pub fn span(&self) -> Span {
         match self {
-            Self::Atom(atom) => atom.span,
+            Self::Atom(atom) => atom.full_span,
             Self::Node { span, .. } => *span,
         }
     }
@@ -142,16 +142,25 @@ impl<'ctx> ParseTreePart<'ctx> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ParseAtom {
+    full_span: Span,
     span: Span,
     kind: ParseAtomKind,
 }
 
 impl ParseAtom {
-    pub fn new(span: Span, kind: ParseAtomKind) -> Self {
-        Self { span, kind }
+    pub fn new(full_span: Span, span: Span, kind: ParseAtomKind) -> Self {
+        Self {
+            full_span,
+            span,
+            kind,
+        }
     }
 
-    pub fn _span(&self) -> Span {
+    pub fn full_span(&self) -> Span {
+        self.full_span
+    }
+
+    pub fn span(&self) -> Span {
         self.span
     }
 

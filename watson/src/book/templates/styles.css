@@ -35,7 +35,7 @@ article {
   margin-bottom: 256px;
 }
 
-section {
+section, h3 {
   scroll-margin-top: 16px;
 }
 
@@ -94,6 +94,26 @@ h3 {
 
 h3 .num {
   font-size: 18px;
+}
+
+/* Header anchor links */
+.header-link {
+  color: inherit;
+  text-decoration: none;
+  position: relative;
+}
+
+.header-link::before {
+  content: "§";
+  position: absolute;
+  left: -1.2em;
+  opacity: 0;
+  transition: opacity 0.15s;
+  color: lightgray;
+}
+
+.header-link:hover::before {
+  opacity: 1;
 }
 
 p + p,

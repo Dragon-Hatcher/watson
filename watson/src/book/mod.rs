@@ -32,11 +32,11 @@ pub fn build_book<'ctx>(
 
     for (i, chapter_contents) in doc.chapter_contents.iter().enumerate() {
         let chapter_num = i + 1;
-        let path = book_dir.join(format!("chapter_{chapter_num}.html"));
+        let path = book_dir.join(format!("chapter-{chapter_num}.html"));
         let content = replace_patterns(
             include_str!("templates/layout.html"),
             &["{{SIDEBAR}}", "{{CHAPTER_CONTENT}}"],
-            &["", chapter_contents],
+            &[&doc.sidebar_content, chapter_contents],
         );
         fs::write(path, content).expect("TODO");
     }
@@ -73,6 +73,7 @@ struct DocState {
     chapter_contents: Vec<String>,
     current_chapter_content: String,
     current_para_content: String,
+    sidebar_content: String,
 
     chapter: Option<usize>,
     section: Option<usize>,
@@ -85,6 +86,7 @@ impl DocState {
             chapter_contents: Vec::new(),
             current_chapter_content: String::new(),
             current_para_content: String::new(),
+            sidebar_content: String::new(),
             chapter: None,
             section: None,
             subsection: None,
@@ -110,6 +112,9 @@ impl DocState {
 
         let current = std::mem::take(&mut self.current_chapter_content);
         self.chapter_contents.push(current);
+
+        self.sidebar_content += "</ol>\n";
+        self.sidebar_content += "</li>\n";
     }
 
     fn next_chapter<'ctx>(&mut self, title: &str) -> WResult<'ctx, ()> {
@@ -126,6 +131,13 @@ impl DocState {
         self.chapter = Some(next_chapter_num);
         self.section = None;
         self.subsection = None;
+
+        self.sidebar_content += "<li>\n";
+        self.sidebar_content += &format!(
+            "<a href=\"chapter-{}.html\" class=\"chapter\"><span class=\"num\">{}</span> {}</a>\n",
+            next_chapter_num, next_chapter_num, title
+        );
+        self.sidebar_content += "<ol class=\"section-list\">\n";
 
         Ok(())
     }
@@ -148,6 +160,11 @@ impl DocState {
         );
         self.section = Some(next_section_num);
         self.subsection = None;
+
+        self.sidebar_content += &format!(
+            "<li class=\"section\"><a href=\"chapter-{}.html#section-{}\"><span class=\"num\">{}.{}</span> {}</a></li>\n",
+            chapter_num, next_section_num, chapter_num, next_section_num, title
+        );
 
         Ok(())
     }
@@ -184,12 +201,18 @@ impl DocState {
     }
 
     fn process_entries<'ctx>(&mut self, entries: &[ParseEntry<'ctx>], ctx: &mut Ctx<'ctx>) {
+        self.sidebar_content += r#"<ol class="chapter-list">"#;
+        self.sidebar_content += "\n";
+
         for &entry in entries {
             match self.process_entry(entry, ctx) {
                 Ok(_) => {}
                 Err(err) => ctx.diags.add_diags(err),
             }
         }
+
+        self.sidebar_content += r#"</ol>"#;
+        self.sidebar_content += "\n";
         self.commit_paragraph();
         self.commit_chapter();
     }

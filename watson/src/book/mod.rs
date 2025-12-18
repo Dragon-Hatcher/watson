@@ -264,8 +264,8 @@ fn process_inline_formatting(text: &str) -> String {
     let mut i = 0;
 
     while i < chars.len() {
-        // Check for display math $$...$$
         if i + 1 < chars.len() && chars[i] == '$' && chars[i + 1] == '$' {
+            // Check for display math $$...$$
             if let Some(end) = find_double_dollar_end(&chars, i + 2) {
                 let latex = chars[i + 2..end].iter().collect::<String>();
                 let rendered = render_latex(&latex, true);
@@ -273,9 +273,8 @@ fn process_inline_formatting(text: &str) -> String {
                 i = end + 2;
                 continue;
             }
-        }
-        // Check for inline math $...$
-        else if chars[i] == '$' {
+        } else if chars[i] == '$' {
+            // Check for inline math $...$
             if let Some(end) = find_closing_delimiter(&chars, i + 1, '$') {
                 let latex = chars[i + 1..end].iter().collect::<String>();
                 let rendered = render_latex(&latex, false);
@@ -283,9 +282,8 @@ fn process_inline_formatting(text: &str) -> String {
                 i = end + 1;
                 continue;
             }
-        }
-        // Check for bold *...*
-        else if chars[i] == '*' {
+        } else if chars[i] == '*' {
+            // Check for bold *...*
             if let Some(end) = find_closing_delimiter(&chars, i + 1, '*') {
                 result.push_str("<strong>");
                 result.push_str(&chars[i + 1..end].iter().collect::<String>());
@@ -293,9 +291,8 @@ fn process_inline_formatting(text: &str) -> String {
                 i = end + 1;
                 continue;
             }
-        }
-        // Check for italic _..._
-        else if chars[i] == '_' {
+        } else if chars[i] == '_' {
+            // Check for italic _..._
             if let Some(end) = find_closing_delimiter(&chars, i + 1, '_') {
                 result.push_str("<em>");
                 result.push_str(&chars[i + 1..end].iter().collect::<String>());
@@ -313,12 +310,7 @@ fn process_inline_formatting(text: &str) -> String {
 }
 
 fn find_closing_delimiter(chars: &[char], start: usize, delimiter: char) -> Option<usize> {
-    for i in start..chars.len() {
-        if chars[i] == delimiter {
-            return Some(i);
-        }
-    }
-    None
+    (start..chars.len()).find(|&i| chars[i] == delimiter)
 }
 
 fn find_double_dollar_end(chars: &[char], start: usize) -> Option<usize> {

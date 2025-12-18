@@ -12,13 +12,15 @@ use crate::{
 };
 use aho_corasick::AhoCorasick;
 use line_span::LineSpanExt;
-use std::fs;
+use std::{fs, path::PathBuf};
+
+pub mod server;
 
 pub fn build_book<'ctx>(
     ctx: &mut Ctx<'ctx>,
     parse_report: ParseReport<'ctx>,
     _proof_report: ProofReport<'ctx>,
-) {
+) -> PathBuf {
     ctx.diags.clear_errors();
 
     let mut doc = DocState::new();
@@ -72,7 +74,9 @@ pub fn build_book<'ctx>(
     println!(
         "{ANSI_GREEN}{ANSI_BOLD}Created book{ANSI_RESET} at {}",
         full_path.display()
-    )
+    );
+
+    full_path
 }
 
 impl<'ctx> Diagnostic<'ctx> {
@@ -166,8 +170,8 @@ impl DocState {
 
         self.sidebar_content += "<li>\n";
         self.sidebar_content += &format!(
-            "<a href=\"chapter-{}/\" class=\"chapter\"><span class=\"num\">{}</span> {}</a>\n",
-            next_chapter_num, next_chapter_num, title
+            "<a href=\"/chapter-{}/\" class=\"chapter\" data-chapter=\"{}\"><span class=\"num\">{}</span> {}</a>\n",
+            next_chapter_num, next_chapter_num, next_chapter_num, title
         );
         self.sidebar_content += "<ol class=\"section-list\">\n";
 
@@ -202,8 +206,14 @@ impl DocState {
         self.subsection = None;
 
         self.sidebar_content += &format!(
-            "<li class=\"section\"><a href=\"chapter-{}/#section-{}\"><span class=\"num\">{}.{}</span> {}</a></li>\n",
-            chapter_num, next_section_num, chapter_num, next_section_num, title
+            "<li class=\"section\"><a href=\"/chapter-{}/#section-{}\" data-chapter=\"{}\" data-section=\"{}\"><span class=\"num\">{}.{}</span> {}</a></li>\n",
+            chapter_num,
+            next_section_num,
+            chapter_num,
+            next_section_num,
+            chapter_num,
+            next_section_num,
+            title
         );
 
         Ok(())

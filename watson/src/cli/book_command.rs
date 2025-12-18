@@ -3,8 +3,6 @@ use crate::{
     cli::check_command,
     config::{WatsonConfig, find_config_file},
     context::Arenas,
-    parse::ParseEntry,
-    report::display_report,
     util::ansi::{ANSI_BOLD, ANSI_RED, ANSI_RESET},
 };
 use argh::FromArgs;
@@ -35,5 +33,6 @@ pub fn run_book(cmd: BookCommand) {
         println!("{ANSI_RED}{ANSI_BOLD}Errors reported.{ANSI_RESET} Building book anyway.")
     }
 
-    book::build_book(&mut ctx, parse_report, proof_report);
+    let book_path = book::build_book(&mut ctx, parse_report, proof_report);
+    book::server::serve(&book_path);
 }

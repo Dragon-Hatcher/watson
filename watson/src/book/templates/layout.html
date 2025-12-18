@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{PAGE_TITLE}}</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="/styles.css" />
 
     <link
       rel="stylesheet"
@@ -13,14 +13,14 @@
       crossorigin="anonymous"
     />
   </head>
-  <body>
+  <body data-chapter="{{CHAPTER_NUM}}">
     <aside class="nav">{{SIDEBAR}}</aside>
 
     <article>{{CHAPTER_CONTENT}}</article>
 
     <script>
-      // Current chapter number injected during generation
-      const currentPage = "chapter-{{CHAPTER_NUM}}/";
+      // Get current chapter from data attribute
+      const currentChapter = document.body.dataset.chapter;
 
       // Track visible sections and chapter header
       let visibleSections = new Set();
@@ -35,7 +35,7 @@
         // Prioritize chapter header if visible
         if (chapterHeaderVisible || visibleSections.size == 0) {
           const chapterLink = document.querySelector(
-            `.nav a[href="${currentPage}"]`
+            `.nav a.chapter[data-chapter="${currentChapter}"]`
           );
           if (chapterLink) {
             chapterLink.classList.add("selected");
@@ -55,9 +55,10 @@
           }
 
           if (currentSection) {
-            const sectionId = currentSection.id;
+            // Extract section number from id (e.g., "section-2" -> "2")
+            const sectionNum = currentSection.id.replace("section-", "");
             const sectionLink = document.querySelector(
-              `.nav a[href="${currentPage}#${sectionId}"]`
+              `.nav a[data-chapter="${currentChapter}"][data-section="${sectionNum}"]`
             );
             if (sectionLink) {
               sectionLink.classList.add("selected");

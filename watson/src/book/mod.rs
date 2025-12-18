@@ -264,8 +264,28 @@ fn process_inline_formatting(text: &str) -> String {
     let mut i = 0;
 
     while i < chars.len() {
-        if chars[i] == '*' {
-            // Look for closing *
+        // Check for display math $$...$$
+        if i + 1 < chars.len() && chars[i] == '$' && chars[i + 1] == '$' {
+            if let Some(end) = find_double_dollar_end(&chars, i + 2) {
+                let latex = chars[i + 2..end].iter().collect::<String>();
+                let rendered = render_latex(&latex, true);
+                result.push_str(&rendered);
+                i = end + 2;
+                continue;
+            }
+        }
+        // Check for inline math $...$
+        else if chars[i] == '$' {
+            if let Some(end) = find_closing_delimiter(&chars, i + 1, '$') {
+                let latex = chars[i + 1..end].iter().collect::<String>();
+                let rendered = render_latex(&latex, false);
+                result.push_str(&rendered);
+                i = end + 1;
+                continue;
+            }
+        }
+        // Check for bold *...*
+        else if chars[i] == '*' {
             if let Some(end) = find_closing_delimiter(&chars, i + 1, '*') {
                 result.push_str("<strong>");
                 result.push_str(&chars[i + 1..end].iter().collect::<String>());
@@ -273,8 +293,9 @@ fn process_inline_formatting(text: &str) -> String {
                 i = end + 1;
                 continue;
             }
-        } else if chars[i] == '_' {
-            // Look for closing _
+        }
+        // Check for italic _..._
+        else if chars[i] == '_' {
             if let Some(end) = find_closing_delimiter(&chars, i + 1, '_') {
                 result.push_str("<em>");
                 result.push_str(&chars[i + 1..end].iter().collect::<String>());
@@ -298,4 +319,25 @@ fn find_closing_delimiter(chars: &[char], start: usize, delimiter: char) -> Opti
         }
     }
     None
+}
+
+fn find_double_dollar_end(chars: &[char], start: usize) -> Option<usize> {
+    let mut i = start;
+    while i + 1 < chars.len() {
+        if chars[i] == '$' && chars[i + 1] == '$' {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
+fn render_latex(latex: &str, display_mode: bool) -> String {
+    let ctx = katex::KatexContext::default();
+    let settings = katex::Settings::builder()
+        .display_mode(display_mode)
+        .throw_on_error(false)
+        .build();
+
+    katex::render_to_string(&ctx, latex, &settings).unwrap()
 }

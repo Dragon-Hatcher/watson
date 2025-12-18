@@ -93,3 +93,8 @@ p + code,
 code + code {
   margin-top: 8px;
 }
+
+/* Makes katex fraction lines render a little thicker, which I think looks better */
+.katex .mfrac .frac-line {
+  border-bottom-width: 1px !important;
+}

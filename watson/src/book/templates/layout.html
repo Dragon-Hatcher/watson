@@ -1,16 +1,30 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="stylesheet" href="styles.css">
-	</head>
-	<body>
-        {{SIDEBAR}}
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="styles.css" />
 
-        <article>
-            {{CHAPTER_CONTENT}}
-        </article>
-	</body>
+    <!-- <link
+			rel="stylesheet"
+			href="https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.css"
+			integrity="sha384-WcoG4HRXMzYzfCgiyfrySxx90XSl2rxY5mnVY5TwtWE6KLrArNKn0T/mOgNL0Mmi"
+			crossorigin="anonymous"
+		/> -->
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.27/dist/katex.min.css"
+      integrity="sha384-Pu5+C18nP5dwykLJOhd2U4Xen7rjScHN/qusop27hdd2drI+lL5KvX7YntvT8yew"
+      crossorigin="anonymous"
+    />
+  </head>
+  <body>
+	<aside class="nav">
+	    {{SIDEBAR}}
+	</aside>
+
+    <article>
+		{{CHAPTER_CONTENT}}
+	</article>
+  </body>
 </html>
-

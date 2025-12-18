@@ -1290,6 +1290,7 @@ dependencies = [
  "argh",
  "convert_case 0.10.0",
  "crossterm",
+ "httpdate",
  "im",
  "itertools",
  "katex-rs",

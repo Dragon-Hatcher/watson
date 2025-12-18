@@ -33,7 +33,7 @@ pub fn run_book(cmd: BookCommand) {
         println!("{ANSI_RED}{ANSI_BOLD}Errors reported.{ANSI_RESET} Building book anyway.")
     }
 
-    let book_path = book::build_book(&mut ctx, parse_report, proof_report);
+    let book_path = book::build_book(&mut ctx, parse_report, proof_report, false);
     let port = ctx.config.book().port();
     book::server::serve(&book_path, port);
 }

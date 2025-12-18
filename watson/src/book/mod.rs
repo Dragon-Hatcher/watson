@@ -20,6 +20,7 @@ pub fn build_book<'ctx>(
     ctx: &mut Ctx<'ctx>,
     parse_report: ParseReport<'ctx>,
     _proof_report: ProofReport<'ctx>,
+    watch: bool,
 ) -> PathBuf {
     ctx.diags.clear_errors();
 
@@ -41,6 +42,13 @@ pub fn build_book<'ctx>(
     let css_path = book_dir.join("styles.css");
     fs::write(css_path, include_str!("templates/styles.css")).expect("TODO");
 
+    // Include auto-reload script only for watch mode
+    let auto_reload_script = if watch {
+        include_str!("templates/auto_reload.js")
+    } else {
+        ""
+    };
+
     for (i, chapter_contents) in doc.chapter_contents.iter().enumerate() {
         let chapter_num = i + 1;
         let chapter_title = &doc.chapter_titles[i];
@@ -59,12 +67,14 @@ pub fn build_book<'ctx>(
                 "{{SIDEBAR}}",
                 "{{CHAPTER_CONTENT}}",
                 "{{CHAPTER_NUM}}",
+                "{{AUTO_RELOAD_SCRIPT}}",
             ],
             &[
                 &page_title,
                 &doc.sidebar_content,
                 chapter_contents,
                 &chapter_num.to_string(),
+                auto_reload_script,
             ],
         );
         fs::write(path, content).expect("TODO");

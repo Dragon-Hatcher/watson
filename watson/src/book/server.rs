@@ -25,10 +25,24 @@ pub fn serve(book_dir: &Path, port: u16) {
         match fs::read(&file_path) {
             Ok(content) => {
                 let content_type = get_content_type(&file_path);
-                let header = Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
-                    .expect("Failed to create header");
+                let content_type_header =
+                    Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes())
+                        .expect("Failed to create header");
 
-                let response = Response::from_data(content).with_header(header);
+                let mut response = Response::from_data(content).with_header(content_type_header);
+
+                // Add Last-Modified header for auto-reload support
+                if let Ok(metadata) = fs::metadata(&file_path)
+                    && let Ok(modified) = metadata.modified()
+                {
+                    // Format as HTTP date (RFC 7231)
+                    let http_date = httpdate::fmt_http_date(modified);
+                    if let Ok(last_modified_header) =
+                        Header::from_bytes(&b"Last-Modified"[..], http_date.as_bytes())
+                    {
+                        response.add_header(last_modified_header);
+                    }
+                }
 
                 if let Err(e) = request.respond(response) {
                     eprintln!("Failed to send response: {}", e);

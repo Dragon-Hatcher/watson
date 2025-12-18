@@ -34,17 +34,19 @@ pub fn find_config_file() -> Result<PathBuf, ConfigError> {
 pub struct WatsonConfig {
     project_dir: PathBuf,
     build_dir: PathBuf,
+    book_title: Option<String>,
 }
 
 impl WatsonConfig {
     pub fn from_file(path: &Path) -> Result<Self, ConfigError> {
-        let _ = WatsonConfigFile::from_file(path)?;
+        let config_file = WatsonConfigFile::from_file(path)?;
         let project_dir = path.parent().unwrap().canonicalize().unwrap();
         let build_dir = project_dir.join("build");
 
         Ok(Self {
             project_dir,
             build_dir,
+            book_title: config_file.book.and_then(|b| b.title),
         })
     }
 
@@ -55,10 +57,21 @@ impl WatsonConfig {
     pub fn build_dir(&self) -> &Path {
         &self.build_dir
     }
+
+    pub fn book_title(&self) -> Option<&str> {
+        self.book_title.as_deref()
+    }
 }
 
 #[derive(Debug, Deserialize)]
-struct WatsonConfigFile {}
+struct WatsonConfigFile {
+    book: Option<BookConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BookConfig {
+    title: Option<String>,
+}
 
 impl WatsonConfigFile {
     /// Parse a watson.toml config file from the given path

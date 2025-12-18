@@ -41,11 +41,17 @@ pub fn build_book<'ctx>(
 
     for (i, chapter_contents) in doc.chapter_contents.iter().enumerate() {
         let chapter_num = i + 1;
+        let chapter_title = &doc.chapter_titles[i];
+        let page_title = match ctx.config.book_title() {
+            Some(book_title) => format!("{} - {}", chapter_title, book_title),
+            None => chapter_title.to_string(),
+        };
+
         let path = book_dir.join(format!("chapter-{chapter_num}.html"));
         let content = replace_patterns(
             include_str!("templates/layout.html"),
-            &["{{SIDEBAR}}", "{{CHAPTER_CONTENT}}"],
-            &[&doc.sidebar_content, chapter_contents],
+            &["{{PAGE_TITLE}}", "{{SIDEBAR}}", "{{CHAPTER_CONTENT}}"],
+            &[&page_title, &doc.sidebar_content, chapter_contents],
         );
         fs::write(path, content).expect("TODO");
     }
@@ -80,6 +86,7 @@ impl<'ctx> Diagnostic<'ctx> {
 #[derive(Debug)]
 struct DocState {
     chapter_contents: Vec<String>,
+    chapter_titles: Vec<String>,
     current_chapter_content: String,
     current_para_content: String,
     sidebar_content: String,
@@ -93,6 +100,7 @@ impl DocState {
     fn new() -> Self {
         Self {
             chapter_contents: Vec::new(),
+            chapter_titles: Vec::new(),
             current_chapter_content: String::new(),
             current_para_content: String::new(),
             sidebar_content: String::new(),
@@ -140,6 +148,7 @@ impl DocState {
         );
 
         self.chapter = Some(next_chapter_num);
+        self.chapter_titles.push(title.to_string());
         self.section = None;
         self.subsection = None;
 

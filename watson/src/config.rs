@@ -34,7 +34,13 @@ pub fn find_config_file() -> Result<PathBuf, ConfigError> {
 pub struct WatsonConfig {
     project_dir: PathBuf,
     build_dir: PathBuf,
-    book_title: Option<String>,
+    book: BookConfig,
+}
+
+#[derive(Debug, Clone)]
+pub struct BookConfig {
+    title: Option<String>,
+    port: u16,
 }
 
 impl WatsonConfig {
@@ -43,10 +49,21 @@ impl WatsonConfig {
         let project_dir = path.parent().unwrap().canonicalize().unwrap();
         let build_dir = project_dir.join("build");
 
+        let book = match config_file.book {
+            Some(book_config) => BookConfig {
+                title: book_config.title,
+                port: book_config.port.unwrap_or(4747),
+            },
+            None => BookConfig {
+                title: None,
+                port: 4747,
+            },
+        };
+
         Ok(Self {
             project_dir,
             build_dir,
-            book_title: config_file.book.and_then(|b| b.title),
+            book,
         })
     }
 
@@ -58,19 +75,30 @@ impl WatsonConfig {
         &self.build_dir
     }
 
-    pub fn book_title(&self) -> Option<&str> {
-        self.book_title.as_deref()
+    pub fn book(&self) -> &BookConfig {
+        &self.book
+    }
+}
+
+impl BookConfig {
+    pub fn title(&self) -> Option<&str> {
+        self.title.as_deref()
+    }
+
+    pub fn port(&self) -> u16 {
+        self.port
     }
 }
 
 #[derive(Debug, Deserialize)]
 struct WatsonConfigFile {
-    book: Option<BookConfig>,
+    book: Option<BookConfigFile>,
 }
 
 #[derive(Debug, Deserialize)]
-struct BookConfig {
+struct BookConfigFile {
     title: Option<String>,
+    port: Option<u16>,
 }
 
 impl WatsonConfigFile {

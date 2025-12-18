@@ -44,7 +44,7 @@ pub fn build_book<'ctx>(
     for (i, chapter_contents) in doc.chapter_contents.iter().enumerate() {
         let chapter_num = i + 1;
         let chapter_title = &doc.chapter_titles[i];
-        let page_title = match ctx.config.book_title() {
+        let page_title = match ctx.config.book().title() {
             Some(book_title) => format!("{} - {}", chapter_title, book_title),
             None => chapter_title.to_string(),
         };

@@ -34,5 +34,6 @@ pub fn run_book(cmd: BookCommand) {
     }
 
     let book_path = book::build_book(&mut ctx, parse_report, proof_report);
-    book::server::serve(&book_path);
+    let port = ctx.config.book().port();
+    book::server::serve(&book_path, port);
 }

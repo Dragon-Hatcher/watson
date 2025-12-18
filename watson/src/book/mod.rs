@@ -427,11 +427,18 @@ struct Highlight {
 
 /// Collect syntax highlighting information from the parse tree
 fn collect_highlights<'ctx>(parse_tree: ParseTreeId<'ctx>, offset: usize) -> Vec<Highlight> {
+    use crate::parse::parse_state::ParseRuleSource;
+
     let mut highlights = Vec::new();
 
     fn visit_tree<'ctx>(tree: ParseTreeId<'ctx>, highlights: &mut Vec<Highlight>, offset: usize) {
         // Just use the first possibility for highlighting
         if let Some(possibility) = tree.0.possibilities().first() {
+            // Check if this rule is from a notation (fragment) - if so, skip highlighting
+            if matches!(possibility.rule().0.source(), ParseRuleSource::Notation(_)) {
+                return;
+            }
+
             for child in possibility.children() {
                 match child {
                     ParseTreePart::Atom(atom) => {
@@ -441,7 +448,18 @@ fn collect_highlights<'ctx>(parse_tree: ParseTreeId<'ctx>, offset: usize) -> Vec
                             ParseAtomKind::Name(_) => Some(HighlightKind::Name),
                             ParseAtomKind::StrLit(_) => Some(HighlightKind::StrLit),
                             ParseAtomKind::Num(_) => Some(HighlightKind::Num),
-                            ParseAtomKind::Lit(_) => Some(HighlightKind::Lit),
+                            ParseAtomKind::Lit(text) => {
+                                // Only highlight literals that aren't common punctuation
+                                let common = matches!(
+                                    text.as_str(),
+                                    "(" | ")" | "[" | "]" | "{" | "}" | ":"
+                                );
+                                if common {
+                                    None
+                                } else {
+                                    Some(HighlightKind::Lit)
+                                }
+                            }
                         };
 
                         if let Some(kind) = kind {

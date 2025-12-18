@@ -138,6 +138,12 @@ code .name {
 code .literal {
   color: #179299;
 }
+code .str {
+  color: #40a02b;
+}
+code .lit {
+  color: #179299;
+}
 code .comment {
   color: #7c7f93;
   font-style: italic;

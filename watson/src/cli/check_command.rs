@@ -1,4 +1,5 @@
 use crate::{
+    book,
     config::{WatsonConfig, find_config_file},
     context::{Arenas, Ctx},
     parse::{ParseReport, SourceCache, SourceId, parse, source_cache::SourceDecl},
@@ -12,7 +13,7 @@ use crossterm::{
     terminal::{Clear, ClearType},
 };
 use notify::Watcher;
-use std::{io, path::PathBuf, sync::mpsc};
+use std::{io, path::PathBuf, sync::mpsc, thread};
 use ustr::Ustr;
 
 /// Check proofs in a Watson project.
@@ -22,6 +23,10 @@ pub struct CheckCommand {
     /// continually recheck on file changes.
     #[argh(switch, short = 'w')]
     watch: bool,
+
+    /// build and serve the book after successful checks.
+    #[argh(switch, short = 'b')]
+    book: bool,
 
     /// path to watson.toml config file.
     #[argh(option, short = 'c')]
@@ -41,13 +46,22 @@ pub fn run_check(cmd: CheckCommand) {
         let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
         let mut watcher = notify::recommended_watcher(tx).unwrap();
         watcher
-            .watch(config.project_dir(), notify::RecursiveMode::Recursive)
+            .watch(config.src_dir(), notify::RecursiveMode::Recursive)
             .unwrap();
+
+        // Build book initially and start server in background if book flag is set
+        if cmd.book {
+            let book_path = config.build_dir().join("book");
+            let book_port = config.book().port();
+            thread::spawn(move || {
+                book::server::serve(&book_path, book_port);
+            });
+        }
 
         for i in 1.. {
             let _ = rx.try_iter().count();
             let arenas = Arenas::new();
-            let (ctx, _, report) = check(config.clone(), &arenas);
+            let (mut ctx, parse_report, report) = check(config.clone(), &arenas);
 
             // Clear the screen to print the new info
             _ = execute!(io::stdout(), Clear(ClearType::Purge), MoveTo(0, 0));
@@ -55,6 +69,10 @@ pub fn run_check(cmd: CheckCommand) {
             display_report(&report, ctx.diags.has_errors(), Some(i));
             if ctx.diags.has_errors() {
                 ctx.diags.print_errors(&ctx);
+            } else if cmd.book {
+                // Rebuild book on successful check
+                println!();
+                book::build_book(&mut ctx, parse_report, report);
             }
 
             while let Ok(e) = rx.recv().unwrap() {
@@ -67,13 +85,19 @@ pub fn run_check(cmd: CheckCommand) {
         let config = WatsonConfig::from_file(&config_file_path).unwrap();
 
         let arenas = Arenas::new();
-        let (ctx, _, report) = check(config, &arenas);
+        let (mut ctx, parse_report, report) = check(config.clone(), &arenas);
 
         display_report(&report, ctx.diags.has_errors(), None);
 
         if ctx.diags.has_errors() {
             ctx.diags.print_errors(&ctx);
             std::process::exit(1)
+        } else if cmd.book {
+            // Build and serve book after successful check
+            let book_path = book::build_book(&mut ctx, parse_report, report);
+            let port = config.book().port();
+            println!();
+            book::server::serve(&book_path, port);
         }
     }
 }
@@ -91,7 +115,7 @@ pub fn check<'ctx>(
 fn make_source_cache(config: &WatsonConfig) -> (SourceCache, SourceId) {
     let source_cache = SourceCache::new(config.project_dir().into());
 
-    let root_path = config.project_dir().join("src").join("main.wats");
+    let root_path = config.src_dir().join("main.wats");
     let root_text = std::fs::read_to_string(&root_path).unwrap();
     let root_id = SourceId::new(Ustr::from("main"));
     source_cache.add(root_id, root_text, SourceDecl::Root);

@@ -20,7 +20,7 @@ pub fn display_report(report: &ProofReport, errors: bool, iteration: Option<usiz
     };
 
     println!(
-        "Checked {} theorem{} ({} axiom{}, {} theorem{}): {}",
+        "{ANSI_BOLD}{ANSI_GREEN}Checked{ANSI_RESET} {} theorem{} ({} axiom{}, {} theorem{}): {}",
         statuses.total_cnt(),
         plural(statuses.total_cnt()),
         statuses.axiom_cnt(),

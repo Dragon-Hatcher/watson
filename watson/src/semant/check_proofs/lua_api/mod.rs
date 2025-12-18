@@ -112,8 +112,8 @@ pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
     lua.globals().set("Theorem", LuaTheoremMeta).unwrap();
 
     // Set up our custom require system.
-    let src_folder = ctx.config.project_dir().join("src");
-    let require = LuaFileRequirer::new(src_folder.clone());
+    let src_folder = ctx.config.src_dir();
+    let require = LuaFileRequirer::new(src_folder.to_path_buf());
     let require = lua.create_require_function(require).unwrap();
     lua.globals().set("require", require).unwrap();
 

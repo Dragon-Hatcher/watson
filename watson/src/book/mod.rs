@@ -21,9 +21,6 @@ pub fn build_book<'ctx>(
 ) {
     ctx.diags.clear_errors();
 
-    let book_dir = ctx.config.build_dir().join("book");
-    fs::create_dir_all(&book_dir).unwrap();
-
     let mut doc = DocState::new();
     doc.process_entries(&parse_report.entries, ctx);
 
@@ -31,6 +28,13 @@ pub fn build_book<'ctx>(
         ctx.diags.print_errors(ctx);
         std::process::exit(1);
     }
+
+    // Delete existing book directory to ensure clean build
+    let book_dir = ctx.config.build_dir().join("book");
+    if book_dir.exists() {
+        fs::remove_dir_all(&book_dir).expect("Failed to remove old book directory");
+    }
+    fs::create_dir_all(&book_dir).unwrap();
 
     let css_path = book_dir.join("styles.css");
     fs::write(css_path, include_str!("templates/styles.css")).expect("TODO");
@@ -163,10 +167,7 @@ impl DocState {
             return Diagnostic::err_section_outside_chapter(span);
         };
         let next_section_num = self.section.unwrap_or(0) + 1;
-        self.current_chapter_content += &format!(
-            "<section id=\"section-{}\">\n",
-            next_section_num
-        );
+        self.current_chapter_content += &format!("<section id=\"section-{}\">\n", next_section_num);
         self.current_chapter_content += &replace_patterns(
             include_str!("templates/section_header.html"),
             &["{{SECTION_TITLE}}", "{{CHAPTER_NUM}}", "{{SECTION_NUM}}"],

@@ -18,5 +18,65 @@
     </aside>
 
     <article>{{CHAPTER_CONTENT}}</article>
+
+    <script>
+      // Get the current chapter number from the page filename
+      const currentPage = window.location.pathname.split('/').pop();
+
+      // Track which section is currently visible and highlight it in the sidebar
+      function updateActiveSection() {
+        // Get all section headers on the current page
+        const sections = document.querySelectorAll('h2[id^="section-"]');
+
+        // Find the section that's currently most visible
+        let currentSection = null;
+        const scrollPos = window.scrollY + 100; // Offset for better UX
+
+        for (const section of sections) {
+          if (section.offsetTop <= scrollPos) {
+            currentSection = section;
+          } else {
+            break;
+          }
+        }
+
+        // Remove all existing 'selected' classes
+        document.querySelectorAll('.nav .selected').forEach(el => {
+          el.classList.remove('selected');
+        });
+
+        if (currentSection == null || sections.length === 0) {
+          // Highlight the chapter link for the current page
+          const chapterLink = document.querySelector(`.nav a[href="${currentPage}"]`);
+          if (chapterLink) {
+            chapterLink.classList.add('selected');
+          }
+        } else {
+          // Highlight the section link (only for sections on the current page)
+          const sectionId = currentSection.id;
+          const sectionLink = document.querySelector(`.nav a[href="${currentPage}#${sectionId}"]`);
+          if (sectionLink) {
+            sectionLink.classList.add('selected');
+          }
+        }
+      }
+
+      // Update on scroll with throttling
+      let scrollTimeout;
+      window.addEventListener('scroll', () => {
+        if (scrollTimeout) {
+          clearTimeout(scrollTimeout);
+        }
+        scrollTimeout = setTimeout(updateActiveSection, 50);
+      });
+
+      // Update on load
+      window.addEventListener('load', updateActiveSection);
+
+      // Update on hash change (when clicking nav links)
+      window.addEventListener('hashchange', () => {
+        setTimeout(updateActiveSection, 100);
+      });
+    </script>
   </body>
 </html>

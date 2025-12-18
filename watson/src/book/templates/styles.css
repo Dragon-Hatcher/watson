@@ -31,8 +31,8 @@ article {
   max-width: 700px;
   margin-left: calc(128px + var(--nav-width));
   margin-right: 128px;
-  margin-bottom: 256px;
   margin-top: 112px;
+  margin-bottom: 256px;
 }
 
 h1,
@@ -227,5 +227,20 @@ code .comment {
   bottom: 0px;
 
   background: #70828b36;
+  z-index: -1;
+}
+
+.nav .selected::after {
+  display: block;
+  content: "";
+
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  top: 0px;
+  bottom: 0px;
+
+  background: #70828b58;
+  border-left: 3px solid rgb(107, 158, 194);
   z-index: -1;
 }

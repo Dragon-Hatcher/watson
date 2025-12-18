@@ -23,6 +23,18 @@ impl<'ctx> DiagManager<'ctx> {
         Self { diags: Vec::new() }
     }
 
+    pub fn add_diag(&mut self, diag: Diagnostic<'ctx>) {
+        self.diags.push(diag);
+    }
+
+    pub fn add_diags(&mut self, diags: Vec<Diagnostic<'ctx>>) {
+        self.diags.extend(diags);
+    }
+
+    pub fn clear_errors(&mut self) {
+        self.diags.clear();
+    }
+
     pub fn print_errors(&self, ctx: &Ctx) {
         let renderer = Renderer::styled();
         for diag in &self.diags {
@@ -160,16 +172,6 @@ fn render_tactic_info<'ctx>(tactic: &TacticInfo<'ctx>) -> String {
     res += &tactic.goal().print();
 
     res
-}
-
-impl<'ctx> DiagManager<'ctx> {
-    pub fn add_diag(&mut self, diag: Diagnostic<'ctx>) {
-        self.diags.push(diag);
-    }
-
-    pub fn add_diags(&mut self, diags: Vec<Diagnostic<'ctx>>) {
-        self.diags.extend(diags);
-    }
 }
 
 impl<'ctx> Diagnostic<'ctx> {

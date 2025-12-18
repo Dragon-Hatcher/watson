@@ -1,25 +1,260 @@
 use crate::{
     context::Ctx,
-    parse::ParseReport,
+    diagnostics::{Diagnostic, WResult},
+    parse::{Location, ParseEntry, ParseReport, Span, location::SourceOffset},
     report::ProofReport,
     util::ansi::{ANSI_BOLD, ANSI_GREEN, ANSI_RESET},
 };
+use aho_corasick::AhoCorasick;
+use line_span::LineSpanExt;
 use std::fs;
 
 pub fn build_book<'ctx>(
-    ctx: &Ctx<'ctx>,
-    _parse_report: ParseReport<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+    parse_report: ParseReport<'ctx>,
     _proof_report: ProofReport<'ctx>,
 ) {
+    ctx.diags.clear_errors();
+
     let book_dir = ctx.config.build_dir().join("book");
     fs::create_dir_all(&book_dir).unwrap();
 
-    let index_html = book_dir.join("index.html");
-    fs::write(&index_html, "<h1>Hello, World!</h1>").unwrap();
+    let mut doc = DocState::new();
+    doc.process_entries(&parse_report.entries, ctx);
 
-    let full_path = index_html.canonicalize().unwrap();
+    if ctx.diags.has_errors() {
+        ctx.diags.print_errors(ctx);
+        std::process::exit(1);
+    }
+
+    let css_path = book_dir.join("styles.css");
+    fs::write(css_path, include_str!("templates/styles.css")).expect("TODO");
+
+    for (i, chapter_contents) in doc.chapter_contents.iter().enumerate() {
+        let chapter_num = i + 1;
+        let path = book_dir.join(format!("chapter_{chapter_num}.html"));
+        let content = replace_patterns(
+            include_str!("templates/layout.html"),
+            &["{{SIDEBAR}}", "{{CHAPTER_CONTENT}}"],
+            &["", chapter_contents],
+        );
+        fs::write(path, content).expect("TODO");
+    }
+
+    let full_path = book_dir.canonicalize().unwrap();
     println!(
         "{ANSI_GREEN}{ANSI_BOLD}Created book{ANSI_RESET} at {}",
         full_path.display()
     )
+}
+
+impl<'ctx> Diagnostic<'ctx> {
+    pub fn err_content_outside_chapter<T>(span: Span) -> WResult<'ctx, T> {
+        let diag = Diagnostic::new("content must be inside a chapter").with_error("", span);
+
+        Err(vec![diag])
+    }
+
+    pub fn err_section_outside_chapter<T>(span: Span) -> WResult<'ctx, T> {
+        let diag = Diagnostic::new("section must be inside a chapter").with_error("", span);
+
+        Err(vec![diag])
+    }
+
+    pub fn err_subsection_outside_section<T>(span: Span) -> WResult<'ctx, T> {
+        let diag = Diagnostic::new("subsection must be inside a section").with_error("", span);
+
+        Err(vec![diag])
+    }
+}
+
+#[derive(Debug)]
+struct DocState {
+    chapter_contents: Vec<String>,
+    current_chapter_content: String,
+    current_para_content: String,
+
+    chapter: Option<usize>,
+    section: Option<usize>,
+    subsection: Option<usize>,
+}
+
+impl DocState {
+    fn new() -> Self {
+        Self {
+            chapter_contents: Vec::new(),
+            current_chapter_content: String::new(),
+            current_para_content: String::new(),
+            chapter: None,
+            section: None,
+            subsection: None,
+        }
+    }
+
+    fn commit_paragraph(&mut self) {
+        if self.current_para_content.is_empty() {
+            return;
+        }
+
+        self.current_chapter_content += "<p>\n";
+        self.current_chapter_content += &self.current_para_content;
+        self.current_chapter_content += "</p>\n\n";
+
+        self.current_para_content = String::new();
+    }
+
+    fn commit_chapter(&mut self) {
+        if self.current_chapter_content.is_empty() {
+            return;
+        }
+
+        let current = std::mem::take(&mut self.current_chapter_content);
+        self.chapter_contents.push(current);
+    }
+
+    fn next_chapter<'ctx>(&mut self, title: &str) -> WResult<'ctx, ()> {
+        self.commit_paragraph();
+        self.commit_chapter();
+
+        let next_chapter_num = self.chapter.unwrap_or(0) + 1;
+        self.current_chapter_content += &replace_patterns(
+            include_str!("templates/chapter_header.html"),
+            &["{{CHAPTER_TITLE}}", "{{CHAPTER_NUM}}"],
+            &[title, &next_chapter_num.to_string()],
+        );
+
+        self.chapter = Some(next_chapter_num);
+        self.section = None;
+        self.subsection = None;
+
+        Ok(())
+    }
+
+    fn next_section<'ctx>(&mut self, title: &str, span: Span) -> WResult<'ctx, ()> {
+        self.commit_paragraph();
+
+        let Some(chapter_num) = self.chapter else {
+            return Diagnostic::err_section_outside_chapter(span);
+        };
+        let next_section_num = self.section.unwrap_or(0) + 1;
+        self.current_chapter_content += &replace_patterns(
+            include_str!("templates/section_header.html"),
+            &["{{SECTION_TITLE}}", "{{CHAPTER_NUM}}", "{{SECTION_NUM}}"],
+            &[
+                title,
+                &chapter_num.to_string(),
+                &next_section_num.to_string(),
+            ],
+        );
+        self.section = Some(next_section_num);
+        self.subsection = None;
+
+        Ok(())
+    }
+
+    fn next_subsection<'ctx>(&mut self, title: &str, span: Span) -> WResult<'ctx, ()> {
+        self.commit_paragraph();
+
+        let Some(chapter_num) = self.chapter else {
+            return Diagnostic::err_section_outside_chapter(span);
+        };
+        let Some(section_num) = self.section else {
+            return Diagnostic::err_subsection_outside_section(span);
+        };
+        let next_subsection_num = self.subsection.unwrap_or(0) + 1;
+        self.current_chapter_content += &replace_patterns(
+            include_str!("templates/subsection_header.html"),
+            &[
+                "{{SUBSECTION_TITLE}}",
+                "{{CHAPTER_NUM}}",
+                "{{SECTION_NUM}}",
+                "{{SUBSECTION_NUM}}",
+            ],
+            &[
+                title,
+                &chapter_num.to_string(),
+                &section_num.to_string(),
+                &next_subsection_num.to_string(),
+            ],
+        );
+
+        self.subsection = Some(next_subsection_num);
+
+        Ok(())
+    }
+
+    fn process_entries<'ctx>(&mut self, entries: &[ParseEntry<'ctx>], ctx: &mut Ctx<'ctx>) {
+        for &entry in entries {
+            match self.process_entry(entry, ctx) {
+                Ok(_) => {}
+                Err(err) => ctx.diags.add_diags(err),
+            }
+        }
+        self.commit_paragraph();
+        self.commit_chapter();
+    }
+
+    fn process_entry<'ctx>(
+        &mut self,
+        entry: ParseEntry<'ctx>,
+        ctx: &Ctx<'ctx>,
+    ) -> WResult<'ctx, ()> {
+        match entry {
+            ParseEntry::Text(span) => {
+                let text = ctx.sources.get_text(span.source());
+                let text = &text[span.bytes()];
+
+                for line in text.line_spans() {
+                    let start = SourceOffset::new(line.start());
+                    let end = SourceOffset::new(line.end());
+                    let line_span = Span::new(
+                        Location::new(span.source(), start),
+                        Location::new(span.source(), end),
+                    );
+                    self.process_text_line(line.as_str(), line_span)?;
+                }
+
+                Ok(())
+            }
+            ParseEntry::Command(parse_tree) => {
+                // TODO
+                Ok(())
+            }
+        }
+    }
+
+    fn process_text_line<'ctx>(&mut self, line: &str, span: Span) -> WResult<'ctx, ()> {
+        let line = line.trim_start();
+
+        if let Some(subsection_title) = line.strip_prefix("===") {
+            self.next_subsection(subsection_title, span)
+        } else if let Some(section_title) = line.strip_prefix("==") {
+            self.next_section(section_title, span)
+        } else if let Some(chapter_title) = line.strip_prefix("=") {
+            self.next_chapter(chapter_title)
+        } else if line.is_empty() {
+            self.commit_paragraph();
+            Ok(())
+        } else {
+            self.process_para_text(line, span)
+        }
+    }
+
+    fn process_para_text<'ctx>(&mut self, text: &str, span: Span) -> WResult<'ctx, ()> {
+        if self.chapter.is_none() {
+            return Diagnostic::err_content_outside_chapter(span);
+        }
+
+        self.current_para_content += text;
+        self.current_para_content += "\n";
+
+        // TODO
+        Ok(())
+    }
+}
+
+fn replace_patterns(template: &str, patterns: &[&str], replacements: &[&str]) -> String {
+    AhoCorasick::new(patterns)
+        .unwrap()
+        .replace_all(template, replacements)
 }

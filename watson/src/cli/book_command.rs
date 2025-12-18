@@ -29,11 +29,11 @@ pub fn run_book(cmd: BookCommand) {
     let config = WatsonConfig::from_file(&config_file_path).unwrap();
 
     let arenas = Arenas::new();
-    let (ctx, parse_report, proof_report) = check_command::check(config, &arenas);
+    let (mut ctx, parse_report, proof_report) = check_command::check(config, &arenas);
 
     if ctx.diags.has_errors() {
         println!("{ANSI_RED}{ANSI_BOLD}Errors reported.{ANSI_RESET} Building book anyway.")
     }
 
-    book::build_book(&ctx, parse_report, proof_report);
+    book::build_book(&mut ctx, parse_report, proof_report);
 }

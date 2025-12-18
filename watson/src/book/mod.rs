@@ -47,11 +47,23 @@ pub fn build_book<'ctx>(
             None => chapter_title.to_string(),
         };
 
-        let path = book_dir.join(format!("chapter-{chapter_num}.html"));
+        let chapter_dir = book_dir.join(format!("chapter-{chapter_num}"));
+        fs::create_dir_all(&chapter_dir).expect("Failed to create chapter directory");
+        let path = chapter_dir.join("index.html");
         let content = replace_patterns(
             include_str!("templates/layout.html"),
-            &["{{PAGE_TITLE}}", "{{SIDEBAR}}", "{{CHAPTER_CONTENT}}"],
-            &[&page_title, &doc.sidebar_content, chapter_contents],
+            &[
+                "{{PAGE_TITLE}}",
+                "{{SIDEBAR}}",
+                "{{CHAPTER_CONTENT}}",
+                "{{CHAPTER_NUM}}",
+            ],
+            &[
+                &page_title,
+                &doc.sidebar_content,
+                chapter_contents,
+                &chapter_num.to_string(),
+            ],
         );
         fs::write(path, content).expect("TODO");
     }
@@ -154,7 +166,7 @@ impl DocState {
 
         self.sidebar_content += "<li>\n";
         self.sidebar_content += &format!(
-            "<a href=\"chapter-{}.html\" class=\"chapter\"><span class=\"num\">{}</span> {}</a>\n",
+            "<a href=\"chapter-{}/\" class=\"chapter\"><span class=\"num\">{}</span> {}</a>\n",
             next_chapter_num, next_chapter_num, title
         );
         self.sidebar_content += "<ol class=\"section-list\">\n";
@@ -190,7 +202,7 @@ impl DocState {
         self.subsection = None;
 
         self.sidebar_content += &format!(
-            "<li class=\"section\"><a href=\"chapter-{}.html#section-{}\"><span class=\"num\">{}.{}</span> {}</a></li>\n",
+            "<li class=\"section\"><a href=\"chapter-{}/#section-{}\"><span class=\"num\">{}.{}</span> {}</a></li>\n",
             chapter_num, next_section_num, chapter_num, next_section_num, title
         );
 

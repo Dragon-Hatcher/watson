@@ -19,8 +19,8 @@
     <article>{{CHAPTER_CONTENT}}</article>
 
     <script>
-      // Get the current chapter number from the page filename
-      const currentPage = window.location.pathname.split("/").pop();
+      // Current chapter number injected during generation
+      const currentPage = "chapter-{{CHAPTER_NUM}}/";
 
       // Track visible sections and chapter header
       let visibleSections = new Set();

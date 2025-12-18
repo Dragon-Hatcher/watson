@@ -240,7 +240,32 @@ impl DocState {
                 Ok(())
             }
             ParseEntry::Command(parse_tree) => {
-                // TODO
+                if self.chapter.is_none() {
+                    return Diagnostic::err_content_outside_chapter(parse_tree.0.span());
+                }
+
+                let span = parse_tree.0.span();
+                let source_text = ctx.sources.get_text(span.source());
+                let command_text = &source_text[span.bytes()];
+
+                // Get starting line number using the optimized method
+                let start_line = ctx.sources.get_line_number(span.start());
+
+                // Commit any existing paragraph before adding the code block
+                self.commit_paragraph();
+
+                // Add code block with line numbers to chapter content
+                self.current_chapter_content += "<pre><code>";
+                for (i, line) in command_text.lines().enumerate() {
+                    let line_num = start_line + i;
+                    self.current_chapter_content += r#"<span class="line">"#;
+                    self.current_chapter_content += &line_num.to_string();
+                    self.current_chapter_content += r#"</span>"#;
+                    self.current_chapter_content += &html_escape(line);
+                    self.current_chapter_content += "\n";
+                }
+                self.current_chapter_content += "</code></pre>\n";
+
                 Ok(())
             }
         }
@@ -355,4 +380,12 @@ fn render_latex(latex: &str, display_mode: bool) -> String {
         .build();
 
     katex::render_to_string(&ctx, latex, &settings).unwrap()
+}
+
+fn html_escape(text: &str) -> String {
+    text.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }

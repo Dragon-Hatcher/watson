@@ -115,6 +115,8 @@ struct DocState {
     chapter_titles: Vec<String>,
     current_chapter_content: String,
     current_para_content: String,
+    current_blockquote_content: String,
+    current_blockquote_citation: Option<String>,
     sidebar_content: String,
 
     chapter: Option<usize>,
@@ -129,6 +131,8 @@ impl DocState {
             chapter_titles: Vec::new(),
             current_chapter_content: String::new(),
             current_para_content: String::new(),
+            current_blockquote_content: String::new(),
+            current_blockquote_citation: None,
             sidebar_content: String::new(),
             chapter: None,
             section: None,
@@ -148,6 +152,25 @@ impl DocState {
         self.current_para_content = String::new();
     }
 
+    fn commit_blockquote(&mut self) {
+        if self.current_blockquote_content.is_empty() {
+            return;
+        }
+
+        self.current_chapter_content += "<blockquote>\n";
+        self.current_chapter_content += &self.current_blockquote_content;
+        self.current_chapter_content += "\n</blockquote>\n";
+
+        if let Some(citation) = &self.current_blockquote_citation {
+            self.current_chapter_content += "<p class=\"cite\">&ndash; ";
+            self.current_chapter_content += &html_escape(citation);
+            self.current_chapter_content += "</p>\n";
+        }
+
+        self.current_blockquote_content = String::new();
+        self.current_blockquote_citation = None;
+    }
+
     fn commit_chapter(&mut self) {
         if self.current_chapter_content.is_empty() {
             return;
@@ -164,6 +187,7 @@ impl DocState {
 
     fn next_chapter<'ctx>(&mut self, title: &str) -> WResult<'ctx, ()> {
         self.commit_paragraph();
+        self.commit_blockquote();
         self.commit_chapter();
 
         let next_chapter_num = self.chapter.unwrap_or(0) + 1;
@@ -196,6 +220,7 @@ impl DocState {
 
     fn next_section<'ctx>(&mut self, title: &str, span: Span) -> WResult<'ctx, ()> {
         self.commit_paragraph();
+        self.commit_blockquote();
         self.close_section();
 
         let Some(chapter_num) = self.chapter else {
@@ -231,6 +256,7 @@ impl DocState {
 
     fn next_subsection<'ctx>(&mut self, title: &str, span: Span) -> WResult<'ctx, ()> {
         self.commit_paragraph();
+        self.commit_blockquote();
 
         let Some(chapter_num) = self.chapter else {
             return Diagnostic::err_section_outside_chapter(span);
@@ -274,6 +300,7 @@ impl DocState {
         self.sidebar_content += r#"</ol>"#;
         self.sidebar_content += "\n";
         self.commit_paragraph();
+        self.commit_blockquote();
         self.commit_chapter();
     }
 
@@ -318,8 +345,9 @@ impl DocState {
                     source_text.as_str(),
                 );
 
-                // Commit any existing paragraph before adding the code block
+                // Commit any existing paragraph or blockquote before adding the code block
                 self.commit_paragraph();
+                self.commit_blockquote();
 
                 // Add code block with line numbers and syntax highlighting
                 self.current_chapter_content += "<pre><code>";
@@ -359,12 +387,47 @@ impl DocState {
             self.next_section(section_title, span)
         } else if let Some(chapter_title) = line.strip_prefix("=") {
             self.next_chapter(chapter_title)
+        } else if let Some(quote_content) = line.strip_prefix(">>") {
+            self.process_blockquote_line(quote_content.trim())
         } else if line.is_empty() {
             self.commit_paragraph();
+            self.commit_blockquote();
             Ok(())
         } else {
+            // Starting regular text, commit any blockquote
+            self.commit_blockquote();
             self.process_para_text(line, span)
         }
+    }
+
+    fn process_blockquote_line<'ctx>(&mut self, content: &str) -> WResult<'ctx, ()> {
+        // Commit any existing paragraph when starting a blockquote
+        if self.current_blockquote_content.is_empty() {
+            self.commit_paragraph();
+        }
+
+        // Check if this line has a citation (look for " - " at the end)
+        if let Some(dash_pos) = content.rfind(" - ") {
+            let quote = &content[..dash_pos];
+            let citation = &content[dash_pos + 3..];
+
+            // Add the quote part
+            if !self.current_blockquote_content.is_empty() {
+                self.current_blockquote_content += " ";
+            }
+            self.current_blockquote_content += &process_inline_formatting(quote);
+
+            // Set the citation (will be used when committing)
+            self.current_blockquote_citation = Some(citation.to_string());
+        } else {
+            // No citation on this line, just add the content
+            if !self.current_blockquote_content.is_empty() {
+                self.current_blockquote_content += " ";
+            }
+            self.current_blockquote_content += &process_inline_formatting(content);
+        }
+
+        Ok(())
     }
 
     fn process_para_text<'ctx>(&mut self, text: &str, span: Span) -> WResult<'ctx, ()> {

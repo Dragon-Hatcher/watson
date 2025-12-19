@@ -356,7 +356,7 @@ impl DocState {
                 self.commit_blockquote();
 
                 // Add code block with line numbers and syntax highlighting
-                self.current_chapter_content += "<pre><code>";
+                self.current_chapter_content += r#"<pre><code class="code-block">"#;
                 let mut byte_offset = 0;
                 for (i, line) in command_text.lines().enumerate() {
                     let line_num = start_line + i;
@@ -475,6 +475,16 @@ fn process_inline_formatting(text: &str) -> String {
                 let latex = chars[i + 1..end].iter().collect::<String>();
                 let rendered = render_latex(&latex, false);
                 result.push_str(&rendered);
+                i = end + 1;
+                continue;
+            }
+        } else if chars[i] == '`' {
+            // Check for inline code `...`
+            if let Some(end) = find_closing_delimiter(&chars, i + 1, '`') {
+                result.push_str(r#"<code>"#);
+                let code = chars[i + 1..end].iter().collect::<String>();
+                result.push_str(&html_escape(&code));
+                result.push_str("</code>");
                 i = end + 1;
                 continue;
             }

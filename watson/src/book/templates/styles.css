@@ -151,7 +151,9 @@ code {
   font-family: "Fira Code", "JuliaMono", monospace;
   font-size: 15px;
   line-height: 22px;
+}
 
+code.code-block {
   --num-gap: 24px;
 
   border-radius: 4px;

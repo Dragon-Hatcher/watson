@@ -90,6 +90,32 @@ class Rewriter {
     }
   }
 
+  isInMathMode(position: vscode.Position): boolean {
+    const line = this.activeEditor!.document.lineAt(position.line);
+    const textBeforeCursor = line.text.substring(0, position.character);
+
+    // Count unmatched $ signs
+    let dollarCount = 0;
+    let i = 0;
+    while (i < textBeforeCursor.length) {
+      if (textBeforeCursor[i] === '$') {
+        // Check if it's $$
+        if (i + 1 < textBeforeCursor.length && textBeforeCursor[i + 1] === '$') {
+          dollarCount++;
+          i += 2;
+        } else {
+          dollarCount++;
+          i++;
+        }
+      } else {
+        i++;
+      }
+    }
+
+    // If there's an odd number of dollar signs, we're inside math mode
+    return dollarCount % 2 === 1;
+  }
+
   onChange(e: vscode.TextDocumentChangeEvent) {
     this.switchToActiveEditor();
     if (!this.activeEditor) return;
@@ -97,6 +123,11 @@ class Rewriter {
 
     for (let change of e.contentChanges) {
       if (this.activeRange == null && change.text == "\\") {
+        // Don't start replacement if we're in math mode
+        if (this.isInMathMode(change.range.start)) {
+          continue;
+        }
+
         // Start a new active range:
         let range = new vscode.Range(
           change.range.start,

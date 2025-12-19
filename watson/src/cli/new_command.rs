@@ -53,7 +53,7 @@ fn run(cmd: NewCommand) -> Result<(), std::io::Error> {
     let main_luau_path = src_path.join("main.luau");
     let main_luau_content = r#"local M = {}
     
-function M.handleTactic(tactic: Tactic, proofState: ProofState)
+function M.handleTactic(tactic: Tactic, proofState: ProofState, tacticInfo: TacticInfo)
     local thm = proofState.theorem
     return proofState:applyTodo(thm.conclusion)
 end

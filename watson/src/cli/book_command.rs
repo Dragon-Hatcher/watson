@@ -12,6 +12,10 @@ use std::path::PathBuf;
 #[derive(FromArgs)]
 #[argh(subcommand, name = "book")]
 pub struct BookCommand {
+    /// serve the book on a local web server after building.
+    #[argh(switch, short = 's')]
+    serve: bool,
+
     /// path to watson.toml config file.
     #[argh(option, short = 'c')]
     config: Option<PathBuf>,
@@ -34,6 +38,9 @@ pub fn run_book(cmd: BookCommand) {
     }
 
     let book_path = book::build_book(&mut ctx, parse_report, proof_report, false);
-    let port = ctx.config.book().port();
-    book::server::serve(&book_path, port);
+
+    if cmd.serve {
+        let port = ctx.config.book().port();
+        book::server::serve(&book_path, port);
+    }
 }

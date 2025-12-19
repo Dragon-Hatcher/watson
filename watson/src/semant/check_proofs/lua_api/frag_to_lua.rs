@@ -57,6 +57,10 @@ impl UserData for LuaPresFrag {
         methods.add_meta_method(MetaMethod::ToString, |_, this, _args: ()| {
             Ok(this.out().print())
         });
+
+        methods.add_meta_method(MetaMethod::Eq, |_, this, other: Self| {
+            Ok(this.out() == other.out())
+        });
     }
 }
 
@@ -106,6 +110,10 @@ impl UserData for LuaPresFact {
 
         methods.add_meta_method(MetaMethod::ToString, |_, this, _args: ()| {
             Ok(this.out().print())
+        });
+
+        methods.add_meta_method(MetaMethod::Eq, |_, this, other: Self| {
+            Ok(this.out() == other.out())
         });
     }
 }

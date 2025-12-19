@@ -183,17 +183,16 @@ fn read_main_module<'ctx>(lua: WLua<'ctx>, module: mlua::Value) -> WResult<'ctx,
 fn write_luau_types<'ctx>(ctx: &Ctx<'ctx>) {
     let definitions_file = include_str!("./definitions.d.luau");
     let types_content = generate_luau_tactic_types(&ctx.tactic_manager);
-    let types_path = ctx
-        .config
-        .build_dir()
-        .join("luau")
-        .join("definitions.d.luau");
+
+    let luau_dir = ctx.config.build_dir().join("luau");
+    let types_path = luau_dir.join("definitions.d.luau");
 
     let current_def_file = fs::read_to_string(&types_path).unwrap_or_default();
     let new_def_file = format!("{definitions_file}\n{types_content}");
 
     // Only write if it has actually changed as it confused the LSP.
     if current_def_file != new_def_file {
+        fs::create_dir_all(luau_dir).expect("TODO");
         fs::write(types_path, new_def_file).expect("TODO");
     }
 }

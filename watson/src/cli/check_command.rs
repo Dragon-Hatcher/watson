@@ -72,7 +72,7 @@ pub fn run_check(cmd: CheckCommand) {
             } else if cmd.book {
                 // Rebuild book on successful check
                 println!();
-                book::build_book(&mut ctx, parse_report, report, true);
+                book::build_book(&mut ctx, parse_report, report, true, "/");
             }
 
             while let Ok(e) = rx.recv().unwrap() {
@@ -94,7 +94,7 @@ pub fn run_check(cmd: CheckCommand) {
             std::process::exit(1)
         } else if cmd.book {
             // Build and serve book after successful check
-            let book_path = book::build_book(&mut ctx, parse_report, report, false);
+            let book_path = book::build_book(&mut ctx, parse_report, report, false, "/");
             let port = config.book().port();
             println!();
             book::server::serve(&book_path, port);

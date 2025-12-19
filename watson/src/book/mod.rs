@@ -21,10 +21,11 @@ pub fn build_book<'ctx>(
     parse_report: ParseReport<'ctx>,
     _proof_report: ProofReport<'ctx>,
     watch: bool,
+    base_path: &str,
 ) -> PathBuf {
     ctx.diags.clear_errors();
 
-    let mut doc = DocState::new();
+    let mut doc = DocState::new(base_path.to_string());
     doc.process_entries(&parse_report.entries, ctx);
 
     if ctx.diags.has_errors() {
@@ -68,6 +69,7 @@ pub fn build_book<'ctx>(
                 "{{CHAPTER_CONTENT}}",
                 "{{CHAPTER_NUM}}",
                 "{{AUTO_RELOAD_SCRIPT}}",
+                "{{BASE_PATH}}",
             ],
             &[
                 &page_title,
@@ -75,6 +77,7 @@ pub fn build_book<'ctx>(
                 chapter_contents,
                 &chapter_num.to_string(),
                 auto_reload_script,
+                base_path,
             ],
         );
         fs::write(path, content).expect("TODO");
@@ -118,6 +121,7 @@ struct DocState {
     current_blockquote_content: String,
     current_blockquote_citation: Option<String>,
     sidebar_content: String,
+    base_path: String,
 
     chapter: Option<usize>,
     section: Option<usize>,
@@ -125,7 +129,7 @@ struct DocState {
 }
 
 impl DocState {
-    fn new() -> Self {
+    fn new(base_path: String) -> Self {
         Self {
             chapter_contents: Vec::new(),
             chapter_titles: Vec::new(),
@@ -134,6 +138,7 @@ impl DocState {
             current_blockquote_content: String::new(),
             current_blockquote_citation: None,
             sidebar_content: String::new(),
+            base_path,
             chapter: None,
             section: None,
             subsection: None,
@@ -204,8 +209,8 @@ impl DocState {
 
         self.sidebar_content += "<li>\n";
         self.sidebar_content += &format!(
-            "<a href=\"/chapter-{}/\" class=\"chapter\" data-chapter=\"{}\"><span class=\"num\">{}</span> {}</a>\n",
-            next_chapter_num, next_chapter_num, next_chapter_num, title
+            "<a href=\"{}chapter-{}/\" class=\"chapter\" data-chapter=\"{}\"><span class=\"num\">{}</span> {}</a>\n",
+            self.base_path, next_chapter_num, next_chapter_num, next_chapter_num, title
         );
         self.sidebar_content += "<ol class=\"section-list\">\n";
 
@@ -241,7 +246,8 @@ impl DocState {
         self.subsection = None;
 
         self.sidebar_content += &format!(
-            "<li class=\"section\"><a href=\"/chapter-{}/#section-{}\" data-chapter=\"{}\" data-section=\"{}\"><span class=\"num\">{}.{}</span> {}</a></li>\n",
+            "<li class=\"section\"><a href=\"{}chapter-{}/#section-{}\" data-chapter=\"{}\" data-section=\"{}\"><span class=\"num\">{}.{}</span> {}</a></li>\n",
+            self.base_path,
             chapter_num,
             next_section_num,
             chapter_num,

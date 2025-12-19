@@ -1,18 +1,16 @@
-use rustc_hash::FxHashMap;
-use ustr::Ustr;
-
 use crate::{
     parse::{Location, Span, location::SourceId},
     strings,
 };
+use rustc_hash::FxHashMap;
 use std::{
     path::{Path, PathBuf},
     sync::{OnceLock, RwLock},
 };
+use ustr::Ustr;
 
 /// Stores the text of all the loaded source files.
 pub struct SourceCache {
-    root_dir: PathBuf,
     sources: RwLock<FxHashMap<SourceId, SourceInfo>>,
 }
 
@@ -32,15 +30,10 @@ pub enum SourceDecl {
 }
 
 impl SourceCache {
-    pub fn new(root_dir: PathBuf) -> Self {
+    pub fn new() -> Self {
         Self {
-            root_dir,
             sources: RwLock::default(),
         }
-    }
-
-    pub fn root_dir(&self) -> &Path {
-        &self.root_dir
     }
 
     pub fn has_source(&self, id: SourceId) -> bool {

@@ -113,7 +113,7 @@ pub fn check<'ctx>(
 }
 
 fn make_source_cache(config: &WatsonConfig) -> (SourceCache, SourceId) {
-    let source_cache = SourceCache::new(config.project_dir().into());
+    let source_cache = SourceCache::new();
 
     let root_path = config.src_dir().join("main.wats");
     let root_text = std::fs::read_to_string(&root_path).unwrap();

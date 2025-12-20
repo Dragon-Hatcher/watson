@@ -1,6 +1,7 @@
 {
   "scopeName": "source.watson",
   "patterns": [
+    { "include": "#comments" },
     { "include": "#simple-command" },
     { "include": "#block-command" }
   ],
@@ -89,7 +90,7 @@
     "keywords": {
       "patterns": [
         {
-          "match": "\\b(have)\\b",
+          "match": "\\b(have|as|assume)\\b",
           "name": "keyword.control.watson"
         },
         {
@@ -99,12 +100,7 @@
         {
           "match": "(@kw|@template|@variable|@binding|@fact|@fragment|@any_fragment|@name)\\b",
           "name": "keyword.other.watson"
-        },
-        {
-          "match": "\\b(assume)\\b",
-          "name": "keyword.operator.watson"
-        }
-      ]
+        }      ]
     },
     "comments": {
       "patterns": [

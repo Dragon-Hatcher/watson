@@ -26,6 +26,7 @@ struct SourceInfo {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SourceDecl {
     Root,
+    LuaSnippet,
     Module(Span),
 }
 

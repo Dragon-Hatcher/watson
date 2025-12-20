@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
 
 use crate::{
     context::Ctx,
@@ -404,4 +404,53 @@ pub fn instantiate_templates<'ctx>(
         &mut FxHashMap::default(),
         &mut FxHashMap::default(),
     )
+}
+
+pub fn match_presentation<'ctx>(
+    haystack: PresFrag<'ctx>,
+    pattern: PresFrag<'ctx>,
+) -> Option<FxHashMap<usize, PresFrag<'ctx>>> {
+    fn inner<'ctx>(
+        haystack: PresFrag<'ctx>,
+        pattern: PresFrag<'ctx>,
+        found_holes: &mut FxHashMap<usize, PresFrag<'ctx>>,
+        already_checked: &mut FxHashSet<(PresFrag<'ctx>, PresFrag<'ctx>)>,
+    ) -> bool {
+        if already_checked.contains(&(haystack, pattern)) {
+            return true;
+        }
+
+        if let PresHead::FormalFrag(FragHead::Hole(idx)) = pattern.pres().head() {
+            // Insert the haystack as the solution for this hole or get the
+            // previous solution.
+            let previous = found_holes.entry(idx).or_insert(haystack);
+
+            // Allow fragments that only match on formal and not on presentation.
+            return previous.formal() == haystack.formal();
+        } else if pattern.pres().head() != haystack.pres().head() {
+            // The haystack and the pattern don't use the same notation at this node.
+            return false;
+        }
+
+        already_checked.insert((haystack, pattern));
+
+        // Now we recurse to our children.
+        for (h_child, p_child) in haystack
+            .pres()
+            .children()
+            .iter()
+            .zip(pattern.pres().children())
+        {
+            if !inner(*h_child, *p_child, found_holes, already_checked) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    let mut holes = FxHashMap::default();
+    let matches = inner(haystack, pattern, &mut holes, &mut FxHashSet::default());
+
+    matches.then_some(holes)
 }

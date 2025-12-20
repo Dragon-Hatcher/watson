@@ -1,10 +1,11 @@
 use crate::semant::{
     check_proofs::lua_api::{ctx_to_lua::LuaCtx, formal_to_lua::LuaFormalCat},
     fragment::{Fragment, FragmentId},
-    presentation::{Pres, PresFrag, PresId, instantiate_templates},
+    presentation::{Pres, PresFrag, PresId, instantiate_templates, match_presentation},
     theorems::PresFact,
 };
 use mlua::{FromLua, MetaMethod, UserData};
+use rustc_hash::FxHashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromLua)]
 pub struct LuaPresFrag {
@@ -51,6 +52,20 @@ impl UserData for LuaPresFrag {
                 let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
                 let frag = instantiate_templates(this.out(), &|idx| templates[idx].out(), ctx);
                 Ok(LuaPresFrag::new(frag))
+            },
+        );
+
+        methods.add_method(
+            "match",
+            |_, this, pattern: LuaPresFrag| match match_presentation(this.out(), pattern.out()) {
+                Some(matches) => {
+                    let map = matches
+                        .into_iter()
+                        .map(|(idx, f)| (idx, LuaPresFrag::new(f)))
+                        .collect::<FxHashMap<usize, LuaPresFrag>>();
+                    Ok(Some(map))
+                }
+                None => Ok(None),
             },
         );
 

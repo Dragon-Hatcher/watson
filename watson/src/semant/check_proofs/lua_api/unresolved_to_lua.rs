@@ -1,6 +1,11 @@
 use crate::{
     diagnostics::Diagnostic,
-    parse::parse_tree::{ParseTree, ParseTreeId},
+    parse::{
+        Location, SourceId, earley,
+        location::SourceOffset,
+        parse_tree::{ParseTree, ParseTreeId},
+        source_cache::SourceDecl,
+    },
     semant::{
         check_proofs::lua_api::{
             ctx_to_lua::LuaCtx,
@@ -66,6 +71,41 @@ impl UserData for LuaUnresolvedFrag {
                 }
             };
             Ok(res)
+        });
+    }
+}
+
+pub struct LuaUnResFragMeta;
+
+impl UserData for LuaUnResFragMeta {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("parse", |lua, _, (text, cat): (String, LuaFormalCat)| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+
+            // Create a source for this piece of text.
+            let source_id = SourceId::new_snippet();
+            let text_len = text.len();
+            ctx.sources.add(source_id, text, SourceDecl::LuaSnippet);
+
+            // Now parse the snippet.
+            let sentence_syntax_cat = ctx.parse_state.cat_for_formal_cat(ctx.sentence_cat);
+            let parse = earley::parse(source_id.start_loc(), sentence_syntax_cat, ctx);
+
+            match parse {
+                Ok(tree) => {
+                    if tree.span().end().byte_offset() != text_len {
+                        panic!("TODO: parse didn't fully match")
+                    }
+
+                    let frag = UnresolvedFrag(tree);
+                    Ok((Some(LuaUnresolvedFrag::new(frag)), None))
+                }
+                Err(mut errs) => {
+                    // TODO: multiple diags?
+                    let diag = errs.pop().unwrap();
+                    Ok((None, Some(LuaDiagnostic::new(diag))))
+                }
+            }
         });
     }
 }

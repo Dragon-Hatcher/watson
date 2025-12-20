@@ -1,4 +1,4 @@
-use crate::semant::formal_syntax::FormalSyntaxCatId;
+use crate::semant::{check_proofs::lua_api::ctx_to_lua::LuaCtx, formal_syntax::FormalSyntaxCatId};
 use mlua::{FromLua, UserData};
 
 #[derive(Debug, Clone, FromLua)]
@@ -24,5 +24,16 @@ impl LuaFormalCat {
 impl UserData for LuaFormalCat {
     fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
         fields.add_field_method_get("name", |_, this| Ok(this.out().name().to_string()));
+    }
+}
+
+pub struct LuaFormalCatMeta;
+
+impl UserData for LuaFormalCatMeta {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("sentence", |lua, _, _: ()| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            Ok(LuaFormalCat::new(ctx.sentence_cat))
+        });
     }
 }

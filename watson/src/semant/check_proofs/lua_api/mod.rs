@@ -7,10 +7,13 @@ use crate::{
             ctx_to_lua::LuaCtx,
             diag_to_lua::LuaDiagnosticMeta,
             file_loader::LuaFileRequirer,
+            formal_to_lua::LuaFormalCatMeta,
             frag_map_to_lua::{LuaFactMapMeta, LuaFragMapMeta},
             frag_to_lua::LuaPresFactMeta,
+            notation_to_lua::LuaNotationBindingMeta,
             tactic_to_lua::generate_luau_tactic_types,
             theorem_to_lua::LuaTheoremMeta,
+            unresolved_to_lua::LuaUnResFragMeta,
         },
     },
     util::ansi::{ANSI_BOLD, ANSI_RESET, ANSI_YELLOW},
@@ -105,11 +108,16 @@ pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
     add_log_fn(&lua);
 
     // Set up metatables.
+    lua.globals().set("UnResFrag", LuaUnResFragMeta).unwrap();
+    lua.globals()
+        .set("Binding", LuaNotationBindingMeta)
+        .unwrap();
     lua.globals().set("Diagnostic", LuaDiagnosticMeta).unwrap();
     lua.globals().set("Fact", LuaPresFactMeta).unwrap();
     lua.globals().set("FragMap", LuaFragMapMeta).unwrap();
     lua.globals().set("FactMap", LuaFactMapMeta).unwrap();
     lua.globals().set("Theorem", LuaTheoremMeta).unwrap();
+    lua.globals().set("FormalCat", LuaFormalCatMeta).unwrap();
 
     // Set up our custom require system.
     let src_folder = ctx.config.src_dir();

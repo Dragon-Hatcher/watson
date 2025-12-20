@@ -1,4 +1,7 @@
-use crate::semant::notation::NotationBindingId;
+use crate::semant::{
+    check_proofs::lua_api::{ctx_to_lua::LuaCtx, formal_to_lua::LuaFormalCat},
+    notation::{NotationBinding, NotationBindingId},
+};
 use mlua::{FromLua, UserData};
 
 #[derive(Debug, Clone, Copy, FromLua)]
@@ -22,3 +25,17 @@ impl LuaNotationBinding {
 }
 
 impl UserData for LuaNotationBinding {}
+
+pub struct LuaNotationBindingMeta;
+
+impl UserData for LuaNotationBindingMeta {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("name", |lua, _, (name, cat): (String, LuaFormalCat)| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let pattern = ctx.single_name_notations[&cat.out()];
+            let binding = NotationBinding::new(pattern, vec![name.into()]);
+            let binding = ctx.arenas.notation_bindings.intern(binding);
+            Ok(LuaNotationBinding::new(binding))
+        });
+    }
+}

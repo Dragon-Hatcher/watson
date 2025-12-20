@@ -1,4 +1,4 @@
-mod earley;
+pub mod earley;
 pub mod elaborator;
 pub mod grammar;
 pub mod location;

@@ -1,4 +1,8 @@
-use std::{fmt::Debug, ops::Range};
+use std::{
+    fmt::Debug,
+    ops::Range,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use ustr::Ustr;
 
@@ -10,6 +14,13 @@ pub struct SourceId(Ustr);
 impl SourceId {
     pub fn new(path: Ustr) -> Self {
         Self(path)
+    }
+
+    pub fn new_snippet() -> Self {
+        static NEXT_NUM: AtomicUsize = AtomicUsize::new(0);
+        let num = NEXT_NUM.fetch_add(1, Ordering::SeqCst);
+        let text = format!("#snippet.{num}").into();
+        Self::new(text)
     }
 
     pub fn name(&self) -> Ustr {

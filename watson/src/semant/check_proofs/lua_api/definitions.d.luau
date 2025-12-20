@@ -30,6 +30,17 @@ declare class UnResFrag
     function resolve(self, scope: Scope): (Frag?, Diagnostic?)
 end
 
+declare class UnResFragMeta
+    --- Attempt to parse the given string as a fragment of the given category
+    --- @param text the string to parse
+    --- @param cat the formal category to parse the string as
+    --- @return an unresolved fragment if the parse was successful or a diagnostic
+    --- why it was not 
+    function parse(self, text: string, cat: FormalCat): (UnResFrag?, Diagnostic?)
+end
+
+declare UnResFrag: UnResFragMeta
+
 --- An unresolved fragment with an unknown resolution category.
 --- Unlike UnResFrag, this requires an explicit category to be provided.
 declare class UnResAnyFrag
@@ -67,6 +78,14 @@ declare class FormalCat
     name: string
 end
 
+declare class FormalCatMeta
+    --- Get the formal category of sentences
+    --- @return the formal cat for sentences
+    function sentence(self): FormalCat
+end
+
+declare FormalCat: FormalCatMeta
+
 --- A fragment - a piece of syntax in a formal category represented as a tree of
 --- the notation used to define it 
 declare class Frag
@@ -84,6 +103,13 @@ declare class Frag
     --- @param templates Array of fragments to substitute for template holes 
     --- @return A new fragment with templates substituted
     function instantiateTemplates(self, templates: {Frag}): Frag
+
+    --- Attempt to match this fragment to the provided pattern. If the pattern
+    --- contains holes the corresponding subfragments of this fragment are 
+    --- returned as a map.
+    --- @param pattern the pattern to match
+    --- @return a map from hole indexes to the matched fragments or nil if no match
+    function match(self, pattern: Frag): {[number]: Frag}?
 end
 
 --- Metatable for creating fragment maps.
@@ -172,6 +198,16 @@ export type FactMap<T> = {
 --- Bindings are created from notation patterns and associate with scope entries.
 declare class Binding
 end
+
+declare class BindingMeta
+    --- Get the binding for a single name in the given category
+    --- @param name the name to attach the binding too
+    --- @param cat the formal category of the binding
+    --- @return the binding for the name
+    function name(self, name: string, cat: FormalCat): Binding
+end
+
+declare Binding: BindingMeta
 
 --- A scope for name resolution.
 --- Scopes are immutable - binding operations return new child scopes.

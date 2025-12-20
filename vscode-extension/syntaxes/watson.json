@@ -1,45 +1,93 @@
 {
   "scopeName": "source.watson",
   "patterns": [
-    { "include": "#keywords" },
-    { "include": "#operators" },
-    { "include": "#comments" },
-    { "include": "#strings" },
-    {
-      "begin": "^(module|syntax_category|syntax|tactic|tactic_category|notation|theorem|axiom)\\b",
-      "beginCaptures": {
-        "1": { "name": "keyword.other.watson" }
-      },
-      "patterns": [{ "include": "#comments" }],
-      "end": "\\b([\\w_'][\\w_'\\d\\.]*)\\b",
-      "endCaptures": {
-        "1": { "name": "entity.name.function.watson" }
-      },
-      "name": "meta.command.watson"
-    },
-    {
-      "begin": "\\b(by)\\b",
-      "beginCaptures": {
-        "1": { "name": "keyword.control.watson" }
-      },
-      "patterns": [{ "include": "#comments" }],
-      "end": "\\b([\\w_'][\\w_'\\d\\.]*)\\b",
-      "endCaptures": {
-        "1": { "name": "entity.name.function.watson" }
-      }
-    }
+    { "include": "#simple-command" },
+    { "include": "#block-command" }
   ],
   "repository": {
-    "keywords": {
+    "simple-command": {
       "patterns": [
         {
-          "match": "\\b(definition)\\b",
-          "name": "keyword.other.watson"
-        },
+          "match": "^(module|syntax_category|tactic_category)\\s+([\\w_'][\\w_'\\d\\.]*)",
+          "captures": {
+            "1": { "name": "keyword.other.watson" },
+            "2": { "name": "entity.name.function.watson" }
+          },
+          "name": "meta.simple-command.watson"
+        }
+      ]
+    },
+    "block-command": {
+      "patterns": [
         {
-          "match": "\\b(end|qed|proof)\\b",
-          "name": "keyword.other.watson"
-        },
+          "begin": "^(syntax|tactic|notation|theorem|axiom|definition)\\s+",
+          "beginCaptures": {
+            "1": { "name": "keyword.other.watson" }
+          },
+          "end": "\\b(end|qed)\\b",
+          "endCaptures": {
+            "1": { "name": "keyword.other.watson" }
+          },
+          "name": "meta.command.watson",
+          "patterns": [
+            { "include": "#command-name-first" },
+            { "include": "#command-content" }
+          ]
+        }
+      ]
+    },
+    "command-name-first": {
+      "patterns": [
+        {
+          "match": "\\G([\\w_'][\\w_'\\d\\.]*)",
+          "captures": {
+            "1": { "name": "entity.name.function.watson" }
+          }
+        }
+      ]
+    },
+    "command-content": {
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#strings" },
+        { "include": "#proof-block" },
+        { "include": "#by-theorem" },
+        { "include": "#keywords" },
+        { "include": "#operators" }
+      ]
+    },
+    "by-theorem": {
+      "patterns": [
+        {
+          "match": "\\b(by)\\s+([\\w_'][\\w_'\\d\\.]*)",
+          "captures": {
+            "1": { "name": "keyword.control.watson" },
+            "2": { "name": "entity.name.function.watson" }
+          }
+        }
+      ]
+    },
+    "proof-block": {
+      "patterns": [
+        {
+          "begin": "\\b(proof)\\b",
+          "beginCaptures": {
+            "1": { "name": "keyword.other.watson" }
+          },
+          "end": "(?=\\b(qed)\\b)",
+          "name": "meta.proof.watson",
+          "patterns": [
+            { "include": "#comments" },
+            { "include": "#strings" },
+            { "include": "#by-theorem" },
+            { "include": "#keywords" },
+            { "include": "#operators" }
+          ]
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
         {
           "match": "\\b(have)\\b",
           "name": "keyword.control.watson"
@@ -51,6 +99,10 @@
         {
           "match": "(@kw|@template|@variable|@binding|@fact|@fragment|@any_fragment|@name)\\b",
           "name": "keyword.other.watson"
+        },
+        {
+          "match": "\\b(assume)\\b",
+          "name": "keyword.operator.watson"
         }
       ]
     },
@@ -58,7 +110,7 @@
       "patterns": [
         {
           "begin": "--",
-          "end": "\n",
+          "end": "$",
           "name": "comment.line.double-dash.watson"
         }
       ]
@@ -66,23 +118,19 @@
     "operators": {
       "patterns": [
         {
-          "match": "(\\|-)|(::=)|(=>)|;|:",
-          "name": "keyword.operator.watson"
-        },
-        {
-          "match": "\\bassume\\b",
+          "match": "(\\|-)|(::=)|(=>)|(:=)|;|:",
           "name": "keyword.operator.watson"
         }
       ]
     },
     "strings": {
-        "patterns": [
-            {
-                "begin": "\"",
-                "end": "\"",
-                "name": "string.quoted.double.watson"
-            }
-        ]
+      "patterns": [
+        {
+          "begin": "\"",
+          "end": "\"",
+          "name": "string.quoted.double.watson"
+        }
+      ]
     }
   }
 }

@@ -1,6 +1,3 @@
-use itertools::Itertools;
-use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
-
 use crate::{
     context::Ctx,
     generate_arena_handle,
@@ -10,6 +7,8 @@ use crate::{
         notation::{NotationBindingId, NotationPatternPart},
     },
 };
+use itertools::Itertools;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PresFrag<'ctx> {

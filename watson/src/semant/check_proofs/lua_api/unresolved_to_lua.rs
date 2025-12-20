@@ -1,8 +1,7 @@
 use crate::{
     diagnostics::Diagnostic,
     parse::{
-        Location, SourceId, earley,
-        location::SourceOffset,
+        SourceId, earley,
         parse_tree::{ParseTree, ParseTreeId},
         source_cache::SourceDecl,
     },

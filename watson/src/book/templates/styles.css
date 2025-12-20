@@ -133,13 +133,13 @@ blockquote {
   font-size: 18px;
 }
 
-blockquote::before {
+blockquote *:first-child:before {
   content: "“";
   position: absolute;
   margin-left: -0.4em;
 }
 
-blockquote::after {
+blockquote *:last-child:after {
   content: "”";
 }
 

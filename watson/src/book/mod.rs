@@ -2,8 +2,7 @@ use crate::{
     context::Ctx,
     diagnostics::{Diagnostic, WResult},
     parse::{
-        Location, ParseEntry, ParseReport, Span,
-        location::SourceOffset,
+        ParseEntry, ParseReport, Span,
         parse_state::ParseRuleSource,
         parse_tree::{ParseAtomKind, ParseTreeId, ParseTreePart},
     },
@@ -11,7 +10,7 @@ use crate::{
     util::ansi::{ANSI_BOLD, ANSI_GREEN, ANSI_RESET},
 };
 use aho_corasick::AhoCorasick;
-use line_span::LineSpanExt;
+use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::{fs, path::PathBuf};
 
 pub mod server;
@@ -98,18 +97,6 @@ impl<'ctx> Diagnostic<'ctx> {
 
         Err(vec![diag])
     }
-
-    pub fn err_section_outside_chapter<T>(span: Span) -> WResult<'ctx, T> {
-        let diag = Diagnostic::new("section must be inside a chapter").with_error("", span);
-
-        Err(vec![diag])
-    }
-
-    pub fn err_subsection_outside_section<T>(span: Span) -> WResult<'ctx, T> {
-        let diag = Diagnostic::new("subsection must be inside a section").with_error("", span);
-
-        Err(vec![diag])
-    }
 }
 
 #[derive(Debug)]
@@ -117,15 +104,11 @@ struct DocState {
     chapter_contents: Vec<String>,
     chapter_titles: Vec<String>,
     current_chapter_content: String,
-    current_para_content: String,
-    current_blockquote_content: String,
-    current_blockquote_citation: Option<String>,
     sidebar_content: String,
     base_path: String,
 
     chapter: Option<usize>,
     section: Option<usize>,
-    subsection: Option<usize>,
 }
 
 impl DocState {
@@ -134,46 +117,11 @@ impl DocState {
             chapter_contents: Vec::new(),
             chapter_titles: Vec::new(),
             current_chapter_content: String::new(),
-            current_para_content: String::new(),
-            current_blockquote_content: String::new(),
-            current_blockquote_citation: None,
             sidebar_content: String::new(),
             base_path,
             chapter: None,
             section: None,
-            subsection: None,
         }
-    }
-
-    fn commit_paragraph(&mut self) {
-        if self.current_para_content.is_empty() {
-            return;
-        }
-
-        self.current_chapter_content += "<p>\n";
-        self.current_chapter_content += &self.current_para_content;
-        self.current_chapter_content += "</p>\n\n";
-
-        self.current_para_content = String::new();
-    }
-
-    fn commit_blockquote(&mut self) {
-        if self.current_blockquote_content.is_empty() {
-            return;
-        }
-
-        self.current_chapter_content += "<blockquote>\n";
-        self.current_chapter_content += &self.current_blockquote_content;
-        self.current_chapter_content += "\n</blockquote>\n";
-
-        if let Some(citation) = &self.current_blockquote_citation {
-            self.current_chapter_content += "<p class=\"cite\">&ndash; ";
-            self.current_chapter_content += &html_escape(citation);
-            self.current_chapter_content += "</p>\n";
-        }
-
-        self.current_blockquote_content = String::new();
-        self.current_blockquote_citation = None;
     }
 
     fn commit_chapter(&mut self) {
@@ -191,8 +139,6 @@ impl DocState {
     }
 
     fn next_chapter<'ctx>(&mut self, title: &str) -> WResult<'ctx, ()> {
-        self.commit_paragraph();
-        self.commit_blockquote();
         self.commit_chapter();
 
         let next_chapter_num = self.chapter.unwrap_or(0) + 1;
@@ -205,7 +151,6 @@ impl DocState {
         self.chapter = Some(next_chapter_num);
         self.chapter_titles.push(title.to_string());
         self.section = None;
-        self.subsection = None;
 
         self.sidebar_content += "<li>\n";
         self.sidebar_content += &format!(
@@ -223,13 +168,11 @@ impl DocState {
         }
     }
 
-    fn next_section<'ctx>(&mut self, title: &str, span: Span) -> WResult<'ctx, ()> {
-        self.commit_paragraph();
-        self.commit_blockquote();
+    fn next_section<'ctx>(&mut self, title: &str) -> WResult<'ctx, ()> {
         self.close_section();
 
         let Some(chapter_num) = self.chapter else {
-            return Diagnostic::err_section_outside_chapter(span);
+            return Err(vec![Diagnostic::new("section must be inside a chapter")]);
         };
         let next_section_num = self.section.unwrap_or(0) + 1;
         self.current_chapter_content += &format!("<section id=\"section-{}\">\n", next_section_num);
@@ -243,7 +186,6 @@ impl DocState {
             ],
         );
         self.section = Some(next_section_num);
-        self.subsection = None;
 
         self.sidebar_content += &format!(
             "<li class=\"section\"><a href=\"{}chapter-{}/#section-{}\" data-chapter=\"{}\" data-section=\"{}\"><span class=\"num\">{}.{}</span> {}</a></li>\n",
@@ -256,38 +198,6 @@ impl DocState {
             next_section_num,
             title
         );
-
-        Ok(())
-    }
-
-    fn next_subsection<'ctx>(&mut self, title: &str, span: Span) -> WResult<'ctx, ()> {
-        self.commit_paragraph();
-        self.commit_blockquote();
-
-        let Some(chapter_num) = self.chapter else {
-            return Diagnostic::err_section_outside_chapter(span);
-        };
-        let Some(section_num) = self.section else {
-            return Diagnostic::err_subsection_outside_section(span);
-        };
-        let next_subsection_num = self.subsection.unwrap_or(0) + 1;
-        self.current_chapter_content += &replace_patterns(
-            include_str!("templates/subsection_header.html"),
-            &[
-                "{{SUBSECTION_TITLE}}",
-                "{{CHAPTER_NUM}}",
-                "{{SECTION_NUM}}",
-                "{{SUBSECTION_NUM}}",
-            ],
-            &[
-                title,
-                &chapter_num.to_string(),
-                &section_num.to_string(),
-                &next_subsection_num.to_string(),
-            ],
-        );
-
-        self.subsection = Some(next_subsection_num);
 
         Ok(())
     }
@@ -305,8 +215,6 @@ impl DocState {
 
         self.sidebar_content += r#"</ol>"#;
         self.sidebar_content += "\n";
-        self.commit_paragraph();
-        self.commit_blockquote();
         self.commit_chapter();
     }
 
@@ -319,17 +227,7 @@ impl DocState {
             ParseEntry::Text(span) => {
                 let text = ctx.sources.get_text(span.source());
                 let text = &text[span.bytes()];
-
-                for line in text.line_spans() {
-                    let start = SourceOffset::new(line.start());
-                    let end = SourceOffset::new(line.end());
-                    let line_span = Span::new(
-                        Location::new(span.source(), start),
-                        Location::new(span.source(), end),
-                    );
-                    self.process_text_line(line.as_str(), line_span)?;
-                }
-
+                self.process_markdown_text(text)?;
                 Ok(())
             }
             ParseEntry::Command(parse_tree) => {
@@ -350,10 +248,6 @@ impl DocState {
                     span.start().byte_offset(),
                     source_text.as_str(),
                 );
-
-                // Commit any existing paragraph or blockquote before adding the code block
-                self.commit_paragraph();
-                self.commit_blockquote();
 
                 // Add code block with line numbers and syntax highlighting
                 self.current_chapter_content += r#"<pre><code class="code-block">"#;
@@ -384,65 +278,132 @@ impl DocState {
         }
     }
 
-    fn process_text_line<'ctx>(&mut self, line: &str, span: Span) -> WResult<'ctx, ()> {
-        let line = line.trim_start();
+    fn process_markdown_text<'ctx>(&mut self, text: &str) -> WResult<'ctx, ()> {
+        // Enable math support in pulldown-cmark
+        let mut options = Options::empty();
+        options.insert(Options::ENABLE_MATH);
+        let parser = Parser::new_ext(text, options);
 
-        if let Some(subsection_title) = line.strip_prefix("===") {
-            self.next_subsection(subsection_title, span)
-        } else if let Some(section_title) = line.strip_prefix("==") {
-            self.next_section(section_title, span)
-        } else if let Some(chapter_title) = line.strip_prefix("=") {
-            self.next_chapter(chapter_title)
-        } else if let Some(quote_content) = line.strip_prefix(">>") {
-            self.process_blockquote_line(quote_content.trim())
-        } else if line.is_empty() {
-            self.commit_paragraph();
-            self.commit_blockquote();
-            Ok(())
-        } else {
-            // Starting regular text, commit any blockquote
-            self.commit_blockquote();
-            self.process_para_text(line, span)
-        }
-    }
+        let mut in_heading: Option<HeadingLevel> = None;
+        let mut heading_text = String::new();
 
-    fn process_blockquote_line<'ctx>(&mut self, content: &str) -> WResult<'ctx, ()> {
-        // Commit any existing paragraph when starting a blockquote
-        if self.current_blockquote_content.is_empty() {
-            self.commit_paragraph();
-        }
-
-        // Check if this line has a citation (look for " - " at the end)
-        if let Some(dash_pos) = content.rfind(" - ") {
-            let quote = &content[..dash_pos];
-            let citation = &content[dash_pos + 3..];
-
-            // Add the quote part
-            if !self.current_blockquote_content.is_empty() {
-                self.current_blockquote_content += " ";
+        for event in parser {
+            match event {
+                Event::Start(tag) => match tag {
+                    Tag::Heading { level, .. } => {
+                        in_heading = Some(level);
+                        heading_text.clear();
+                    }
+                    _ if in_heading.is_none() => match tag {
+                        Tag::Paragraph => self.current_chapter_content += "<p>",
+                        Tag::BlockQuote(_) => self.current_chapter_content += "<blockquote>",
+                        Tag::CodeBlock(_) => self.current_chapter_content += "<pre><code>",
+                        Tag::List(None) => self.current_chapter_content += "<ul>",
+                        Tag::List(Some(_)) => self.current_chapter_content += "<ol>",
+                        Tag::Item => self.current_chapter_content += "<li>",
+                        Tag::Emphasis => self.current_chapter_content += "<em>",
+                        Tag::Strong => self.current_chapter_content += "<strong>",
+                        Tag::Link { dest_url, .. } => {
+                            self.current_chapter_content +=
+                                &format!(r#"<a href="{}">"#, html_escape(&dest_url));
+                        }
+                        _ => {}
+                    },
+                    _ => {}
+                },
+                Event::End(tag_end) => {
+                    match tag_end {
+                        TagEnd::Heading(level) => {
+                            // Handle the heading based on its level
+                            match level {
+                                HeadingLevel::H1 => {
+                                    self.next_chapter(&heading_text)?;
+                                }
+                                HeadingLevel::H2 => {
+                                    self.next_section(&heading_text)?;
+                                }
+                                _ => {
+                                    // Regular headings
+                                    self.current_chapter_content +=
+                                        &format!("<{}>", heading_tag(level));
+                                    self.current_chapter_content += &heading_text;
+                                    self.current_chapter_content +=
+                                        &format!("</{}>", heading_tag(level));
+                                }
+                            }
+                            in_heading = None;
+                            heading_text.clear();
+                        }
+                        _ if in_heading.is_none() => match tag_end {
+                            TagEnd::Paragraph => self.current_chapter_content += "</p>\n",
+                            TagEnd::BlockQuote(_) => {
+                                self.current_chapter_content += "</blockquote>\n"
+                            }
+                            TagEnd::CodeBlock => self.current_chapter_content += "</code></pre>\n",
+                            TagEnd::List(false) => self.current_chapter_content += "</ul>\n",
+                            TagEnd::List(true) => self.current_chapter_content += "</ol>\n",
+                            TagEnd::Item => self.current_chapter_content += "</li>\n",
+                            TagEnd::Emphasis => self.current_chapter_content += "</em>",
+                            TagEnd::Strong => self.current_chapter_content += "</strong>",
+                            TagEnd::Link => self.current_chapter_content += "</a>",
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                }
+                Event::Text(text) => {
+                    if in_heading.is_some() {
+                        // Accumulate heading text
+                        heading_text.push_str(&text);
+                    } else {
+                        self.current_chapter_content += &html_escape(&text);
+                    }
+                }
+                Event::Code(code) => {
+                    if in_heading.is_some() {
+                        heading_text.push_str(&code);
+                    } else {
+                        self.current_chapter_content += "<code>";
+                        self.current_chapter_content += &html_escape(&code);
+                        self.current_chapter_content += "</code>";
+                    }
+                }
+                Event::Html(html) => {
+                    if in_heading.is_some() {
+                        // Strip HTML tags from headings
+                        heading_text.push_str(&html);
+                    } else {
+                        // Preserve HTML (including rendered math from KaTeX)
+                        self.current_chapter_content += &html;
+                    }
+                }
+                Event::InlineMath(latex) => {
+                    if in_heading.is_some() {
+                        // Include math in heading text (rendered)
+                        heading_text.push_str(&render_latex(&latex, false));
+                    } else {
+                        let rendered = render_latex(&latex, false);
+                        self.current_chapter_content += &rendered;
+                    }
+                }
+                Event::DisplayMath(latex) => {
+                    if in_heading.is_some() {
+                        // Include math in heading text (rendered)
+                        heading_text.push_str(&render_latex(&latex, false));
+                    } else {
+                        let rendered = render_latex(&latex, true);
+                        self.current_chapter_content += &rendered;
+                    }
+                }
+                Event::SoftBreak if in_heading.is_none() => {
+                    self.current_chapter_content += "\n";
+                }
+                Event::HardBreak if in_heading.is_none() => {
+                    self.current_chapter_content += "<br/>\n";
+                }
+                _ => {}
             }
-            self.current_blockquote_content += &process_inline_formatting(quote);
-
-            // Set the citation (will be used when committing)
-            self.current_blockquote_citation = Some(citation.to_string());
-        } else {
-            // No citation on this line, just add the content
-            if !self.current_blockquote_content.is_empty() {
-                self.current_blockquote_content += " ";
-            }
-            self.current_blockquote_content += &process_inline_formatting(content);
         }
-
-        Ok(())
-    }
-
-    fn process_para_text<'ctx>(&mut self, text: &str, span: Span) -> WResult<'ctx, ()> {
-        if self.chapter.is_none() {
-            return Diagnostic::err_content_outside_chapter(span);
-        }
-
-        self.current_para_content += &process_inline_formatting(text);
-        self.current_para_content += "\n";
 
         Ok(())
     }
@@ -454,80 +415,15 @@ fn replace_patterns(template: &str, patterns: &[&str], replacements: &[&str]) ->
         .replace_all(template, replacements)
 }
 
-fn process_inline_formatting(text: &str) -> String {
-    let mut result = String::with_capacity(text.len());
-    let chars: Vec<char> = text.chars().collect();
-    let mut i = 0;
-
-    while i < chars.len() {
-        if i + 1 < chars.len() && chars[i] == '$' && chars[i + 1] == '$' {
-            // Check for display math $$...$$
-            if let Some(end) = find_double_dollar_end(&chars, i + 2) {
-                let latex = chars[i + 2..end].iter().collect::<String>();
-                let rendered = render_latex(&latex, true);
-                result.push_str(&rendered);
-                i = end + 2;
-                continue;
-            }
-        } else if chars[i] == '$' {
-            // Check for inline math $...$
-            if let Some(end) = find_closing_delimiter(&chars, i + 1, '$') {
-                let latex = chars[i + 1..end].iter().collect::<String>();
-                let rendered = render_latex(&latex, false);
-                result.push_str(&rendered);
-                i = end + 1;
-                continue;
-            }
-        } else if chars[i] == '`' {
-            // Check for inline code `...`
-            if let Some(end) = find_closing_delimiter(&chars, i + 1, '`') {
-                result.push_str(r#"<code>"#);
-                let code = chars[i + 1..end].iter().collect::<String>();
-                result.push_str(&html_escape(&code));
-                result.push_str("</code>");
-                i = end + 1;
-                continue;
-            }
-        } else if chars[i] == '*' {
-            // Check for bold *...*
-            if let Some(end) = find_closing_delimiter(&chars, i + 1, '*') {
-                result.push_str("<strong>");
-                result.push_str(&chars[i + 1..end].iter().collect::<String>());
-                result.push_str("</strong>");
-                i = end + 1;
-                continue;
-            }
-        } else if chars[i] == '_' {
-            // Check for italic _..._
-            if let Some(end) = find_closing_delimiter(&chars, i + 1, '_') {
-                result.push_str("<em>");
-                result.push_str(&chars[i + 1..end].iter().collect::<String>());
-                result.push_str("</em>");
-                i = end + 1;
-                continue;
-            }
-        }
-
-        result.push(chars[i]);
-        i += 1;
+fn heading_tag(level: HeadingLevel) -> &'static str {
+    match level {
+        HeadingLevel::H1 => "h1",
+        HeadingLevel::H2 => "h2",
+        HeadingLevel::H3 => "h3",
+        HeadingLevel::H4 => "h4",
+        HeadingLevel::H5 => "h5",
+        HeadingLevel::H6 => "h6",
     }
-
-    result
-}
-
-fn find_closing_delimiter(chars: &[char], start: usize, delimiter: char) -> Option<usize> {
-    (start..chars.len()).find(|&i| chars[i] == delimiter)
-}
-
-fn find_double_dollar_end(chars: &[char], start: usize) -> Option<usize> {
-    let mut i = start;
-    while i + 1 < chars.len() {
-        if chars[i] == '$' && chars[i + 1] == '$' {
-            return Some(i);
-        }
-        i += 1;
-    }
-    None
 }
 
 fn render_latex(latex: &str, display_mode: bool) -> String {

@@ -1,8 +1,7 @@
-use std::{cell::RefCell, rc::Rc};
-
 use crate::{
     context::Ctx,
     diagnostics::{Diagnostic, WResult},
+    parse::Span,
     semant::{
         check_proofs::lua_api::{
             LuaInfo, diag_to_lua::LuaDiagnostic, proof_to_lua::LuaProofState, setup_lua,
@@ -18,6 +17,8 @@ use crate::{
     },
 };
 use mlua::IntoLua;
+use std::{cell::RefCell, rc::Rc, vec};
+use ustr::Ustr;
 
 mod lua_api;
 
@@ -54,6 +55,15 @@ pub fn check_proofs<'ctx>(
     }
 
     statuses
+}
+
+impl<'ctx> Diagnostic<'ctx> {
+    pub fn err_tactic_did_not_prove<T>(thm: Ustr, span: Span) -> WResult<'ctx, T> {
+        let diag = Diagnostic::new(&format!("tactic for theorem `{thm}` did not prove goal"))
+            .with_error("", span);
+
+        Err(vec![diag])
+    }
 }
 
 struct LuaTheoremInfoInner {
@@ -96,7 +106,9 @@ fn check_theorem<'ctx>(
         .call::<LuaProofState>((lua_tactic, lua_proof_state, lua_tactic_info))
         .or_else(|e| Diagnostic::err_lua_execution_error("tactic", e))?;
     let proof = proof.out::<'ctx>();
-    let cert = proof.complete(ctx).expect("TODO");
+    let cert = proof
+        .complete(ctx)
+        .or_else(|_| Diagnostic::err_tactic_did_not_prove(thm.name(), tactic.span()))?;
 
     // Add diagnostics reported by the tactic.
     for diag in theorem_info.borrow_mut().diags.drain(..) {

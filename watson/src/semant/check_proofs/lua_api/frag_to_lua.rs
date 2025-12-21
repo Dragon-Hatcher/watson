@@ -1,7 +1,7 @@
 use crate::semant::{
     check_proofs::lua_api::{ctx_to_lua::LuaCtx, formal_to_lua::LuaFormalCat},
     fragment::{Fragment, FragmentId},
-    presentation::{Pres, PresFrag, PresId, instantiate_templates, match_presentation},
+    presentation::{Pres, PresFrag, PresId, instantiate_holes, instantiate_templates, match_presentation},
     theorems::PresFact,
 };
 use mlua::{FromLua, MetaMethod, UserData};
@@ -51,6 +51,15 @@ impl UserData for LuaPresFrag {
             |lua, this, templates: Vec<LuaPresFrag>| {
                 let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
                 let frag = instantiate_templates(this.out(), &|idx| templates[idx].out(), ctx);
+                Ok(LuaPresFrag::new(frag))
+            },
+        );
+
+        methods.add_method(
+            "instantiateHoles",
+            |lua, this, holes: Vec<LuaPresFrag>| {
+                let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+                let frag = instantiate_holes(this.out(), &|idx| holes[idx].out(), ctx);
                 Ok(LuaPresFrag::new(frag))
             },
         );

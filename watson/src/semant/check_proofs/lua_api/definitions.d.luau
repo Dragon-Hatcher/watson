@@ -99,6 +99,11 @@ declare class Frag
     --- @return A fact with this fragment as the conclusion
     function fact(self): Fact
 
+    --- Instantiates holes in this fragment with concrete fragments.
+    --- @param templates Array of fragments to substitute for the holes 
+    --- @return A new fragment with the holes substituted
+    function instantiateHoles(self, holes: {Frag}): Frag
+
     --- Instantiates template holes in this fragment with concrete fragments.
     --- @param templates Array of fragments to substitute for template holes 
     --- @return A new fragment with templates substituted

@@ -1,5 +1,5 @@
 use crate::semant::check_proofs::lua_api::frag_to_lua::{LuaPresFact, LuaPresFrag};
-use mlua::{FromLua, UserData};
+use mlua::{FromLua, MetaMethod, UserData};
 
 #[derive(Debug, Clone, FromLua)]
 struct LuaFragMap {
@@ -25,6 +25,22 @@ impl UserData for LuaFragMap {
         });
 
         methods.add_method("copy", |_, this, _: ()| Ok(this.clone()));
+
+        methods.add_meta_method(MetaMethod::Iter, |_, this, _: ()| {
+            Ok(LuaFragMapIter { iter: this.map.clone().into_iter() })
+        });
+    }
+}
+
+pub struct LuaFragMapIter {
+    iter: im::hashmap::ConsumingIter<(LuaPresFrag, mlua::Value)>
+}
+
+impl UserData for LuaFragMapIter {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_meta_method_mut(MetaMethod::Call, |_, this, _: ()| {
+            Ok(this.iter.next().unzip())
+        });
     }
 }
 
@@ -60,6 +76,22 @@ impl UserData for LuaFactMap {
         });
 
         methods.add_method("copy", |_, this, _: ()| Ok(this.clone()));
+
+        methods.add_meta_method(MetaMethod::Iter, |_, this, _: ()| {
+            Ok(LuaFactMapIter { iter: this.map.clone().into_iter() })
+        });
+    }
+}
+
+pub struct LuaFactMapIter {
+    iter: im::hashmap::ConsumingIter<(LuaPresFact, mlua::Value)>
+}
+
+impl UserData for LuaFactMapIter {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_meta_method_mut(MetaMethod::Call, |_, this, _: ()| {
+            Ok(this.iter.next().unzip())
+        });
     }
 }
 

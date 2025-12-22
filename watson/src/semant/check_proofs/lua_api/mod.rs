@@ -11,6 +11,7 @@ use crate::{
             frag_map_to_lua::{LuaFactMapMeta, LuaFragMapMeta},
             frag_to_lua::LuaPresFactMeta,
             notation_to_lua::LuaNotationBindingMeta,
+            scope_to_lua::LuaScopeMeta,
             tactic_to_lua::generate_luau_tactic_types,
             theorem_to_lua::LuaTheoremMeta,
             unresolved_to_lua::LuaUnResFragMeta,
@@ -109,6 +110,7 @@ pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
 
     // Set up metatables.
     lua.globals().set("UnResFrag", LuaUnResFragMeta).unwrap();
+    lua.globals().set("Scope", LuaScopeMeta).unwrap();
     lua.globals()
         .set("Binding", LuaNotationBindingMeta)
         .unwrap();

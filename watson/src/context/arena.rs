@@ -145,7 +145,7 @@ pub struct ScopeArena<'ctx> {
     scopes: Vec<Scope<'ctx>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScopeId(usize);
 
 impl<'ctx> ScopeArena<'ctx> {
@@ -159,7 +159,7 @@ impl<'ctx> ScopeArena<'ctx> {
         id
     }
 
-    pub fn _get(&self, id: ScopeId) -> Scope<'ctx> {
+    pub fn get(&self, id: ScopeId) -> Scope<'ctx> {
         self.scopes[id.0].clone()
     }
 }

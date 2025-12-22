@@ -230,6 +230,15 @@ declare class Scope
     function bindHole(self, binding: Binding, idx: number): Scope
 end
 
+declare class ScopeMeta
+    --- Get the active scope when the tactic with the given name was declared.
+    --- @param name the name of the tactic
+    --- @return the scope for that tactic or none if no tactic with that name exists
+    function atTactic(self, name: string): Scope?
+end
+
+declare Scope: ScopeMeta
+
 --- A template parameter for a theorem.
 --- Templates are instantiated when applying the theorem in a proof.
 declare class ThmTemplate

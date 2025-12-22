@@ -27,13 +27,15 @@ impl UserData for LuaFragMap {
         methods.add_method("copy", |_, this, _: ()| Ok(this.clone()));
 
         methods.add_meta_method(MetaMethod::Iter, |_, this, _: ()| {
-            Ok(LuaFragMapIter { iter: this.map.clone().into_iter() })
+            Ok(LuaFragMapIter {
+                iter: this.map.clone().into_iter(),
+            })
         });
     }
 }
 
 pub struct LuaFragMapIter {
-    iter: im::hashmap::ConsumingIter<(LuaPresFrag, mlua::Value)>
+    iter: im::hashmap::ConsumingIter<(LuaPresFrag, mlua::Value)>,
 }
 
 impl UserData for LuaFragMapIter {
@@ -78,13 +80,15 @@ impl UserData for LuaFactMap {
         methods.add_method("copy", |_, this, _: ()| Ok(this.clone()));
 
         methods.add_meta_method(MetaMethod::Iter, |_, this, _: ()| {
-            Ok(LuaFactMapIter { iter: this.map.clone().into_iter() })
+            Ok(LuaFactMapIter {
+                iter: this.map.clone().into_iter(),
+            })
         });
     }
 }
 
 pub struct LuaFactMapIter {
-    iter: im::hashmap::ConsumingIter<(LuaPresFact, mlua::Value)>
+    iter: im::hashmap::ConsumingIter<(LuaPresFact, mlua::Value)>,
 }
 
 impl UserData for LuaFactMapIter {

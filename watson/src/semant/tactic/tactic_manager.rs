@@ -43,4 +43,8 @@ impl<'ctx> TacticManager<'ctx> {
     pub fn rules_for_cat(&self, cat: TacticCatId<'ctx>) -> &[TacticRuleId<'ctx>] {
         &self.tactic_rules_by_cat[&cat]
     }
+
+    pub fn rule_by_name(&self, name: Ustr) -> Option<TacticRuleId<'ctx>> {
+        self.tactic_rules_by_name.get(&name).copied()
+    }
 }

@@ -1,5 +1,7 @@
 use crate::semant::{
-    check_proofs::lua_api::{frag_to_lua::LuaPresFrag, notation_to_lua::LuaNotationBinding},
+    check_proofs::lua_api::{
+        ctx_to_lua::LuaCtx, frag_to_lua::LuaPresFrag, notation_to_lua::LuaNotationBinding,
+    },
     scope::{Scope, ScopeEntry},
 };
 use mlua::{FromLua, UserData};
@@ -45,5 +47,18 @@ impl UserData for LuaScope {
                 Ok(LuaScope::new(new_scope))
             },
         );
+    }
+}
+
+pub struct LuaScopeMeta;
+
+impl UserData for LuaScopeMeta {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("atTactic", |lua, _, name: String| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let rule = ctx.tactic_manager.rule_by_name(name.into());
+            let scope = rule.map(|r| ctx.scopes.get(r.scope()));
+            Ok(scope.map(LuaScope::new))
+        });
     }
 }

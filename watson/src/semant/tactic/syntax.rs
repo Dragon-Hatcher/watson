@@ -1,4 +1,5 @@
 use crate::{
+    context::arena::ScopeId,
     generate_arena_handle,
     parse::parse_state::{Associativity, CategoryId, Precedence},
     util::name_to_lua,
@@ -36,11 +37,17 @@ pub struct TacticRule<'ctx> {
     name: Ustr,
     cat: TacticCatId<'ctx>,
     pat: TacticPat<'ctx>,
+    scope: ScopeId,
 }
 
 impl<'ctx> TacticRule<'ctx> {
-    pub fn new(name: Ustr, cat: TacticCatId<'ctx>, pat: TacticPat<'ctx>) -> Self {
-        Self { name, cat, pat }
+    pub fn new(name: Ustr, cat: TacticCatId<'ctx>, pat: TacticPat<'ctx>, scope: ScopeId) -> Self {
+        Self {
+            name,
+            cat,
+            pat,
+            scope,
+        }
     }
 
     pub fn name(&self) -> Ustr {
@@ -53,6 +60,10 @@ impl<'ctx> TacticRule<'ctx> {
 
     pub fn pattern(&self) -> &TacticPat<'ctx> {
         &self.pat
+    }
+
+    pub fn scope(&self) -> ScopeId {
+        self.scope
     }
 }
 

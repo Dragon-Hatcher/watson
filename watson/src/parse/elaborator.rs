@@ -144,7 +144,7 @@ pub fn elaborate_command<'ctx>(
             Ok(ElaborateAction::NewTacticCat(cat))
         },
         tactic_command ::= [tactic_cmd] => {
-            let rule = elaborate_tactic_def(tactic_cmd.as_node().unwrap(), ctx)?;
+            let rule = elaborate_tactic_def(tactic_cmd.as_node().unwrap(), scope, ctx)?;
             Ok(ElaborateAction::NewTacticRule(rule))
         },
     }
@@ -495,7 +495,8 @@ fn elaborate_tactic_category<'ctx>(
 
 fn elaborate_tactic_def<'ctx>(
     tactic: ParseTreeId<'ctx>,
-    ctx: &Ctx<'ctx>,
+    scope: &Scope<'ctx>,
+    ctx: &mut Ctx<'ctx>,
 ) -> WResult<'ctx, TacticRuleId<'ctx>> {
     // tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" tactic_pat kw"end"
 
@@ -518,7 +519,8 @@ fn elaborate_tactic_def<'ctx>(
                 return Diagnostic::err_duplicate_tactic_rule();
             }
 
-            let rule = TacticRule::new(rule_name, cat, pat);
+            let scope = ctx.scopes.alloc(scope.clone());
+            let rule = TacticRule::new(rule_name, cat, pat, scope);
             let rule_id = ctx.arenas.tactic_rules.alloc(rule_name, rule);
 
             Ok(rule_id)

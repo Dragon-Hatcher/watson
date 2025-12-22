@@ -66,7 +66,7 @@ impl UserData for LuaTheorem {
 
         fields.add_field_method_get("scope", |lua, this| {
             let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
-            let scope = ctx.scopes._get(this.out().scope());
+            let scope = ctx.scopes.get(this.out().scope());
             Ok(LuaScope::new(scope))
         });
     }

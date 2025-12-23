@@ -12,7 +12,7 @@ use crate::{
         fragment::{FragHead, FragRuleApplication, Fragment, hole_frag},
         notation::{
             NotationBinding, NotationBindingId, NotationPattern, NotationPatternId,
-            NotationPatternPart,
+            NotationPatternPart, NotationPatternSource,
         },
         presentation::{Pres, PresFrag, PresHead},
         scope::ScopeEntry,
@@ -727,6 +727,7 @@ pub fn formal_rule_to_notation<'ctx>(
             parts,
             rule.pattern().precedence(),
             rule.pattern().associativity(),
+            NotationPatternSource::UserDeclared(rule.span()),
         );
         ctx.arenas.notations.alloc(pattern)
     }

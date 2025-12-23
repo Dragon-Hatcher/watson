@@ -14,7 +14,7 @@ use crate::{
         },
         notation::{
             NotationBinding, NotationBindingId, NotationPattern, NotationPatternId,
-            NotationPatternPart,
+            NotationPatternPart, NotationPatternSource,
         },
         parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag, parse_fragment},
         presentation::PresFrag,
@@ -210,12 +210,12 @@ fn elaborate_syntax<'ctx>(
     // syntax_command ::= (syntax) kw"syntax" name name prec_assoc "::=" syntax_pat_list kw"end"
 
     match_rule! { (ctx, syntax) =>
-        syntax ::= [syntax_kw, rule_name, cat, prec_assoc, bnf_replace, pat_list, end_kw] => {
+        syntax ::= [syntax_kw, rule_name_node, cat, prec_assoc, bnf_replace, pat_list, end_kw] => {
             debug_assert!(syntax_kw.is_kw(*strings::SYNTAX));
             debug_assert!(bnf_replace.is_lit(*strings::BNF_REPLACE));
             debug_assert!(end_kw.is_kw(*strings::END));
 
-            let rule_name = elaborate_name(rule_name.as_node().unwrap(), ctx)?;
+            let rule_name = elaborate_name(rule_name_node.as_node().unwrap(), ctx)?;
             let cat_name = elaborate_name(cat.as_node().unwrap(), ctx)?;
             let (prec, assoc) = elaborate_prec_assoc(prec_assoc.as_node().unwrap(), ctx)?;
             let mut pat = elaborate_syntax_pat(pat_list.as_node().unwrap(), ctx)?;
@@ -230,7 +230,7 @@ fn elaborate_syntax<'ctx>(
                 return Diagnostic::err_duplicate_formal_syntax_rule();
             }
 
-            let rule = FormalSyntaxRule::new(rule_name, cat, pat);
+            let rule = FormalSyntaxRule::new(rule_name, cat, pat, rule_name_node.span());
             let rule_id = ctx.arenas.formal_rules.alloc(rule_name, rule);
 
             Ok(rule_id)
@@ -363,12 +363,12 @@ fn elaborate_notation<'ctx>(
     // notation_command ::= (notation) kw"notation" name name prec_assoc "::=" notation_pat kw"end"
 
     match_rule! { (ctx, notation) =>
-        notation ::= [notation_kw, rule_name, cat, prec_assoc, bnf_replace, pat_list, end_kw] => {
+        notation ::= [notation_kw, rule_name_node, cat, prec_assoc, bnf_replace, pat_list, end_kw] => {
             debug_assert!(notation_kw.is_kw(*strings::NOTATION));
             debug_assert!(bnf_replace.is_lit(*strings::BNF_REPLACE));
             debug_assert!(end_kw.is_kw(*strings::END));
 
-            let rule_name = elaborate_name(rule_name.as_node().unwrap(), ctx)?;
+            let rule_name = elaborate_name(rule_name_node.as_node().unwrap(), ctx)?;
             let cat_name = elaborate_name(cat.as_node().unwrap(), ctx)?;
             let (prec, assoc) = elaborate_prec_assoc(prec_assoc.as_node().unwrap(), ctx)?;
             let pat = elaborate_notation_pat(pat_list.as_node().unwrap(), ctx)?;
@@ -377,7 +377,14 @@ fn elaborate_notation<'ctx>(
                 return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat.span());
             };
 
-            let pat = NotationPattern::new(rule_name, cat, pat, prec, assoc);
+            let pat = NotationPattern::new(
+                rule_name,
+                cat,
+                pat,
+                prec,
+                assoc,
+                NotationPatternSource::UserDeclared(rule_name_node.span()),
+            );
             Ok(ctx.arenas.notations.alloc(pat))
         }
     }
@@ -799,11 +806,15 @@ fn elaborate_notation_binding_with_cat<'ctx>(
     let solutions = by_cat.get(cat);
 
     if solutions.is_empty() {
-        todo!("Error: No solutions to binding");
+        return Diagnostic::err_no_matching_notation_binding(cat.name(), notation_binding.span());
     }
 
     if solutions.len() > 1 {
-        todo!("Error: ambiguous solution to binding");
+        return Diagnostic::err_ambiguous_notation_binding(
+            cat.name(),
+            solutions,
+            notation_binding.span(),
+        );
     }
 
     Ok(solutions[0].clone())

@@ -61,24 +61,25 @@ impl<'ctx> Deref for WLua<'ctx> {
 
 impl<'ctx> Diagnostic<'ctx> {
     pub fn err_lua_load_error<T>(error: mlua::Error) -> WResult<'ctx, T> {
-        let diag = Diagnostic::new(&format!("lua error while loading:\n {error}."));
-
+        let diag = Diagnostic::new(&format!("lua error while loading:\n {error}."), vec![]);
         Err(vec![diag])
     }
 
     pub fn err_bad_module_ret<T>(got: &mlua::Value) -> WResult<'ctx, T> {
-        let diag = Diagnostic::new(&format!(
-            "bad return value from main lua module.
+        let diag = Diagnostic::new(
+            &format!(
+                "bad return value from main lua module.
 Expected main module to return a lua table with field `handleTactic`.
 Instead it returned:
 {got:#?}"
-        ));
-
+            ),
+            vec![],
+        );
         Err(vec![diag])
     }
 
     pub fn err_lua_execution_error<T>(lua_ctx: &str, error: mlua::Error) -> WResult<'ctx, T> {
-        let diag = Diagnostic::new(&format!("lua error executing {lua_ctx}:\n{error}"));
+        let diag = Diagnostic::new(&format!("lua error executing {lua_ctx}:\n{error}"), vec![]);
 
         Err(vec![diag])
     }

@@ -1,6 +1,6 @@
 use crate::{
     context::Ctx,
-    diagnostics::{Diagnostic, WResult},
+    diagnostics::{Diagnostic, DiagnosticSpan, WResult},
     parse::{
         ParseEntry, ParseReport, Span,
         parse_state::ParseRuleSource,
@@ -93,8 +93,10 @@ pub fn build_book<'ctx>(
 
 impl<'ctx> Diagnostic<'ctx> {
     pub fn err_content_outside_chapter<T>(span: Span) -> WResult<'ctx, T> {
-        let diag = Diagnostic::new("content must be inside a chapter").with_error("", span);
-
+        let diag = Diagnostic::new(
+            "content must be inside a chapter",
+            vec![DiagnosticSpan::new_error("", span)],
+        );
         Err(vec![diag])
     }
 }
@@ -172,7 +174,8 @@ impl DocState {
         self.close_section();
 
         let Some(chapter_num) = self.chapter else {
-            return Err(vec![Diagnostic::new("section must be inside a chapter")]);
+            // TODO
+            return Ok(());
         };
         let next_section_num = self.section.unwrap_or(0) + 1;
         self.current_chapter_content += &format!("<section id=\"section-{}\">\n", next_section_num);

@@ -30,13 +30,17 @@ impl LuaDiagnostic {
 impl UserData for LuaDiagnostic {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("withError", |_, this, (msg, span): (String, LuaSpan)| {
-            let new_diag = this.clone().out().with_error(&msg, span.out());
-            Ok(LuaDiagnostic::new(new_diag))
+            // let new_diag = this.clone().out().with_error_span(&msg, span.out());
+            // Ok(LuaDiagnostic::new(new_diag))
+            todo!();
+            Ok(())
         });
 
         methods.add_method("withInfo", |_, this, (msg, span): (String, LuaSpan)| {
-            let new_diag = this.clone().out().with_info(&msg, span.out());
-            Ok(LuaDiagnostic::new(new_diag))
+            // let new_diag = this.clone().out().with_info_span(&msg, span.out());
+            // Ok(LuaDiagnostic::new(new_diag))
+            todo!();
+            Ok(())
         });
 
         methods.add_method("withTacticInfo", |lua, this, tactic_info: LuaTacticInfo| {
@@ -60,8 +64,10 @@ pub struct LuaDiagnosticMeta;
 impl UserData for LuaDiagnosticMeta {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("new", |_, _, title: String| {
-            let diag = Diagnostic::new(&title);
-            Ok(LuaDiagnostic::new(diag))
+            // let diag = Diagnostic::new(&title);
+            // Ok(LuaDiagnostic::new(diag))
+            todo!();
+            Ok(())
         });
     }
 }

@@ -22,7 +22,7 @@ use crate::{
     },
     semant::{
         formal_syntax::FormalSyntaxCatId,
-        notation::{NotationPattern, NotationPatternPart},
+        notation::{NotationPattern, NotationPatternPart, NotationPatternSource},
         scope::Scope,
         tactic::unresolved_proof::UnresolvedProof,
         theorems::TheoremId,
@@ -198,7 +198,15 @@ pub fn add_formal_cat<'ctx>(cat: FormalSyntaxCatId<'ctx>, ctx: &mut Ctx<'ctx>) {
     let parts = vec![NotationPatternPart::Name];
     let prec = Precedence::default();
     let assoc = Associativity::default();
-    let notation = NotationPattern::new(name, cat, parts, prec, assoc);
+
+    let notation = NotationPattern::new(
+        name,
+        cat,
+        parts,
+        prec,
+        assoc,
+        NotationPatternSource::Builtin,
+    );
     let notation = ctx.arenas.notations.alloc(notation);
     grammar::add_parse_rules_for_notation(notation, ctx);
 

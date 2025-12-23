@@ -1,6 +1,6 @@
 use crate::{
     context::Ctx,
-    diagnostics::{Diagnostic, WResult},
+    diagnostics::{Diagnostic, DiagnosticSpan, WResult},
     parse::Span,
     semant::{
         check_proofs::lua_api::{
@@ -59,9 +59,10 @@ pub fn check_proofs<'ctx>(
 
 impl<'ctx> Diagnostic<'ctx> {
     pub fn err_tactic_did_not_prove<T>(thm: Ustr, span: Span) -> WResult<'ctx, T> {
-        let diag = Diagnostic::new(&format!("tactic for theorem `{thm}` did not prove goal"))
-            .with_error("", span);
-
+        let diag = Diagnostic::new(
+            &format!("tactic for theorem `{thm}` did not prove goal"),
+            vec![DiagnosticSpan::new_error("", span)],
+        );
         Err(vec![diag])
     }
 }

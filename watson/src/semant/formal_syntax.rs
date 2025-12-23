@@ -3,7 +3,10 @@ use ustr::Ustr;
 
 use crate::{
     generate_arena_handle,
-    parse::parse_state::{Associativity, Precedence},
+    parse::{
+        Span,
+        parse_state::{Associativity, Precedence},
+    },
 };
 
 generate_arena_handle! { FormalSyntaxCatId => FormalSyntaxCat }
@@ -29,11 +32,22 @@ pub struct FormalSyntaxRule<'ctx> {
     name: Ustr,
     cat: FormalSyntaxCatId<'ctx>,
     pat: FormalSyntaxPat<'ctx>,
+    span: Span,
 }
 
 impl<'ctx> FormalSyntaxRule<'ctx> {
-    pub fn new(name: Ustr, cat: FormalSyntaxCatId<'ctx>, pat: FormalSyntaxPat<'ctx>) -> Self {
-        Self { name, cat, pat }
+    pub fn new(
+        name: Ustr,
+        cat: FormalSyntaxCatId<'ctx>,
+        pat: FormalSyntaxPat<'ctx>,
+        span: Span,
+    ) -> Self {
+        Self {
+            name,
+            cat,
+            pat,
+            span,
+        }
     }
 
     pub fn name(&self) -> Ustr {
@@ -46,6 +60,10 @@ impl<'ctx> FormalSyntaxRule<'ctx> {
 
     pub fn pattern(&self) -> &FormalSyntaxPat<'ctx> {
         &self.pat
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
     }
 }
 

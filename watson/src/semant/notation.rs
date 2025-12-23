@@ -1,11 +1,20 @@
 use crate::{
     generate_arena_handle,
-    parse::parse_state::{Associativity, Precedence},
+    parse::{
+        Span,
+        parse_state::{Associativity, Precedence},
+    },
     semant::formal_syntax::FormalSyntaxCatId,
 };
 use ustr::Ustr;
 
 generate_arena_handle!(NotationPatternId<'ctx> => NotationPattern<'ctx>);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotationPatternSource {
+    UserDeclared(Span),
+    Builtin,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotationPattern<'ctx> {
@@ -14,6 +23,7 @@ pub struct NotationPattern<'ctx> {
     parts: Vec<NotationPatternPart<'ctx>>,
     prec: Precedence,
     assoc: Associativity,
+    source: NotationPatternSource,
 }
 
 impl<'ctx> NotationPattern<'ctx> {
@@ -23,6 +33,7 @@ impl<'ctx> NotationPattern<'ctx> {
         parts: Vec<NotationPatternPart<'ctx>>,
         prec: Precedence,
         assoc: Associativity,
+        source: NotationPatternSource,
     ) -> Self {
         Self {
             name,
@@ -30,6 +41,7 @@ impl<'ctx> NotationPattern<'ctx> {
             parts,
             prec,
             assoc,
+            source,
         }
     }
 
@@ -51,6 +63,10 @@ impl<'ctx> NotationPattern<'ctx> {
 
     pub fn assoc(&self) -> Associativity {
         self.assoc
+    }
+
+    pub fn source(&self) -> NotationPatternSource {
+        self.source
     }
 }
 

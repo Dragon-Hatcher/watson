@@ -291,80 +291,85 @@ pub fn add_builtin_rules<'ctx>(
     let sentence_cat = categories.alloc(*strings::SENTENCE, sentence_cat);
     state.use_cat(sentence_cat);
 
-    let mut rule = |name: &str, cat, parts| {
-        let rule = rules.alloc(Rule::new(
-            name,
-            cat,
-            ParseRuleSource::Builtin,
-            RulePattern::new(parts, Precedence::default(), Associativity::default()),
-        ));
-        state.use_rule(rule);
-        rule
-    };
+    macro_rules! rule {
+        ($name:expr, $cat:expr, $parts:expr $(,)?) => {
+            rule!($name, $cat, $parts, Associativity::default())
+        };
+        ($name:expr, $cat:expr, $parts:expr, $assoc:expr $(,)?) => {{
+            let rule = rules.alloc(Rule::new(
+                $name,
+                $cat,
+                ParseRuleSource::Builtin,
+                RulePattern::new($parts, Precedence::default(), $assoc),
+            ));
+            state.use_rule(rule);
+            rule
+        }};
+    }
 
     let rules = BuiltinRules {
-        name: rule(
+        name: rule!(
             "name",
             cats.name,
             vec![RulePatternPart::Atom(ParseAtomPattern::Name)],
         ),
-        str: rule(
+        str: rule!(
             "str",
             cats.str,
             vec![RulePatternPart::Atom(ParseAtomPattern::Str)],
         ),
-        module_command: rule(
+        module_command: rule!(
             "module_command",
             cats.command,
             vec![cat(cats.module_command)],
         ),
-        syntax_cat_command: rule(
+        syntax_cat_command: rule!(
             "syntax_cat_command",
             cats.command,
             vec![cat(cats.syntax_cat_command)],
         ),
-        syntax_command: rule(
+        syntax_command: rule!(
             "syntax_command",
             cats.command,
             vec![cat(cats.syntax_command)],
         ),
-        notation_command: rule(
+        notation_command: rule!(
             "notation_command",
             cats.command,
             vec![cat(cats.notation_command)],
         ),
-        definition_command: rule(
+        definition_command: rule!(
             "definition_command",
             cats.command,
             vec![cat(cats.definition_command)],
         ),
-        axiom_command: rule("axiom_command", cats.command, vec![cat(cats.axiom_command)]),
-        theorem_command: rule(
+        axiom_command: rule!("axiom_command", cats.command, vec![cat(cats.axiom_command)]),
+        theorem_command: rule!(
             "theorem_command",
             cats.command,
             vec![cat(cats.theorem_command)],
         ),
-        tactic_category_command: rule(
+        tactic_category_command: rule!(
             "tactic_category_command",
             cats.command,
             vec![cat(cats.tactic_category_command)],
         ),
-        tactic_command: rule(
+        tactic_command: rule!(
             "tactic_command",
             cats.command,
             vec![cat(cats.tactic_command)],
         ),
-        module: rule(
+        module: rule!(
             "module",
             cats.module_command,
             vec![kw(*strings::MODULE), cat(cats.name)],
         ),
-        syntax_cat: rule(
+        syntax_cat: rule!(
             "syntax_cat",
             cats.syntax_cat_command,
             vec![kw(*strings::SYNTAX_CAT), cat(cats.name)],
         ),
-        syntax: rule(
+        syntax: rule!(
             "syntax",
             cats.syntax_command,
             vec![
@@ -377,12 +382,12 @@ pub fn add_builtin_rules<'ctx>(
                 kw(*strings::END),
             ],
         ),
-        tactic_category: rule(
+        tactic_category: rule!(
             "tactic_category",
             cats.tactic_category_command,
             vec![kw(*strings::TACTIC_CATEGORY), cat(cats.name)],
         ),
-        tactic: rule(
+        tactic: rule!(
             "tactic",
             cats.tactic_command,
             vec![
@@ -395,7 +400,7 @@ pub fn add_builtin_rules<'ctx>(
                 kw(*strings::END),
             ],
         ),
-        notation: rule(
+        notation: rule!(
             "notation",
             cats.notation_command,
             vec![
@@ -408,7 +413,7 @@ pub fn add_builtin_rules<'ctx>(
                 kw(*strings::END),
             ],
         ),
-        definition: rule(
+        definition: rule!(
             "definition",
             cats.definition_command,
             vec![
@@ -419,7 +424,7 @@ pub fn add_builtin_rules<'ctx>(
                 kw(*strings::END),
             ],
         ),
-        axiom: rule(
+        axiom: rule!(
             "axiom",
             cats.axiom_command,
             vec![
@@ -433,7 +438,7 @@ pub fn add_builtin_rules<'ctx>(
                 kw(*strings::END),
             ],
         ),
-        theorem: rule(
+        theorem: rule!(
             "theorem",
             cats.theorem_command,
             vec![
@@ -450,8 +455,8 @@ pub fn add_builtin_rules<'ctx>(
             ],
         ),
 
-        prec_assoc_none: rule("prec_assoc_none", cats.prec_assoc, vec![]),
-        prec_assoc_some: rule(
+        prec_assoc_none: rule!("prec_assoc_none", cats.prec_assoc, vec![]),
+        prec_assoc_some: rule!(
             "prec_assoc_some",
             cats.prec_assoc,
             vec![
@@ -461,37 +466,37 @@ pub fn add_builtin_rules<'ctx>(
                 lit(*strings::RIGHT_PAREN),
             ],
         ),
-        prec_none: rule("prec_none", cats.maybe_prec, vec![]),
-        prec_some: rule("prec_some", cats.maybe_prec, vec![num()]),
-        assoc_none: rule("assoc_none", cats.maybe_assoc, vec![]),
-        assoc_left: rule(
+        prec_none: rule!("prec_none", cats.maybe_prec, vec![]),
+        prec_some: rule!("prec_some", cats.maybe_prec, vec![num()]),
+        assoc_none: rule!("assoc_none", cats.maybe_assoc, vec![]),
+        assoc_left: rule!(
             "assoc_left",
             cats.maybe_assoc,
             vec![lit(*strings::LEFT_ARROW)],
         ),
-        assoc_right: rule(
+        assoc_right: rule!(
             "assoc_left",
             cats.maybe_assoc,
             vec![lit(*strings::RIGHT_ARROW)],
         ),
 
-        syntax_pat_one: rule(
+        syntax_pat_one: rule!(
             "syntax_pat_one",
             cats.syntax_pat,
             vec![cat(cats.syntax_pat_part)],
         ),
-        syntax_pat_many: rule(
+        syntax_pat_many: rule!(
             "syntax_pat_many",
             cats.syntax_pat,
             vec![cat(cats.syntax_pat_part), cat(cats.syntax_pat)],
         ),
 
-        syntax_pat_part_cat: rule(
+        syntax_pat_part_cat: rule!(
             "syntax_pat_part_cat",
             cats.syntax_pat_part,
             vec![cat(cats.name)],
         ),
-        syntax_pat_part_binding: rule(
+        syntax_pat_part_binding: rule!(
             "syntax_pat_part_binding",
             cats.syntax_pat_part,
             vec![
@@ -502,7 +507,7 @@ pub fn add_builtin_rules<'ctx>(
                 lit(*strings::RIGHT_PAREN),
             ],
         ),
-        syntax_pat_part_var: rule(
+        syntax_pat_part_var: rule!(
             "syntax_pat_part_var",
             cats.syntax_pat_part,
             vec![
@@ -513,43 +518,43 @@ pub fn add_builtin_rules<'ctx>(
                 lit(*strings::RIGHT_PAREN),
             ],
         ),
-        syntax_pat_part_lit: rule(
+        syntax_pat_part_lit: rule!(
             "syntax_pat_part_lit",
             cats.syntax_pat_part,
             vec![cat(cats.str)],
         ),
 
-        notation_pat_one: rule(
+        notation_pat_one: rule!(
             "notation_pat_one",
             cats.notation_pat,
             vec![cat(cats.notation_pat_part)],
         ),
-        notation_pat_many: rule(
+        notation_pat_many: rule!(
             "notation_pat_many",
             cats.notation_pat,
             vec![cat(cats.notation_pat_part), cat(cats.notation_pat)],
         ),
-        notation_pat_lit: rule(
+        notation_pat_lit: rule!(
             "notation_pat_lit",
             cats.notation_pat_part,
             vec![cat(cats.str)],
         ),
-        notation_pat_kw: rule(
+        notation_pat_kw: rule!(
             "notation_pat_kw",
             cats.notation_pat_part,
             vec![lit(*strings::AT), kw(*strings::KW), cat(cats.str)],
         ),
-        notation_pat_name: rule(
+        notation_pat_name: rule!(
             "notation_pat_name",
             cats.notation_pat_part,
             vec![lit(*strings::AT), kw(*strings::NAME)],
         ),
-        notation_pat_cat: rule(
+        notation_pat_cat: rule!(
             "notation_pat_cat",
             cats.notation_pat_part,
             vec![cat(cats.name)],
         ),
-        notation_pat_binding: rule(
+        notation_pat_binding: rule!(
             "notation_pat_binding",
             cats.notation_pat_part,
             vec![
@@ -561,38 +566,38 @@ pub fn add_builtin_rules<'ctx>(
             ],
         ),
 
-        tactic_pat_none: rule("tactic_pat_none", cats.tactic_pat, vec![]),
-        tactic_pat_many: rule(
+        tactic_pat_none: rule!("tactic_pat_none", cats.tactic_pat, vec![]),
+        tactic_pat_many: rule!(
             "tactic_pat_many",
             cats.tactic_pat,
             vec![cat(cats.tactic_pat_part), cat(cats.tactic_pat)],
         ),
-        tactic_pat_part: rule(
+        tactic_pat_part: rule!(
             "tactic_pat_part",
             cats.tactic_pat_part,
             vec![cat(cats.maybe_label), cat(cats.tactic_pat_part_core)],
         ),
 
-        label_none: rule("label_none", cats.maybe_label, vec![]),
-        label_some: rule(
+        label_none: rule!("label_none", cats.maybe_label, vec![]),
+        label_some: rule!(
             "label_some",
             cats.maybe_label,
             vec![cat(cats.name), lit(*strings::COLON)],
         ),
 
-        core_lit: rule("core_lit", cats.tactic_pat_part_core, vec![cat(cats.str)]),
-        core_kw: rule(
+        core_lit: rule!("core_lit", cats.tactic_pat_part_core, vec![cat(cats.str)]),
+        core_kw: rule!(
             "core_kw",
             cats.tactic_pat_part_core,
             vec![lit(*strings::AT), kw(*strings::KW), cat(cats.str)],
         ),
-        core_name: rule(
+        core_name: rule!(
             "core_name",
             cats.tactic_pat_part_core,
             vec![lit(*strings::AT), kw(*strings::NAME)],
         ),
-        core_cat: rule("core_cat", cats.tactic_pat_part_core, vec![cat(cats.name)]),
-        core_fragment: rule(
+        core_cat: rule!("core_cat", cats.tactic_pat_part_core, vec![cat(cats.name)]),
+        core_fragment: rule!(
             "core_fragment",
             cats.tactic_pat_part_core,
             vec![
@@ -603,25 +608,25 @@ pub fn add_builtin_rules<'ctx>(
                 lit(*strings::RIGHT_PAREN),
             ],
         ),
-        core_any_fragment: rule(
+        core_any_fragment: rule!(
             "core_any_fragment",
             cats.tactic_pat_part_core,
             vec![lit(*strings::AT), kw(*strings::ANY_FRAGMENT)],
         ),
-        core_fact: rule(
+        core_fact: rule!(
             "core_fact",
             cats.tactic_pat_part_core,
             vec![lit(*strings::AT), kw(*strings::FACT)],
         ),
 
-        template_none: rule("template_none", cats.templates, vec![]),
-        template_many: rule(
+        template_none: rule!("template_none", cats.templates, vec![]),
+        template_many: rule!(
             "template_many",
             cats.templates,
             vec![cat(cats.template), cat(cats.templates)],
         ),
 
-        template: rule(
+        template: rule!(
             "template",
             cats.template,
             vec![
@@ -633,21 +638,22 @@ pub fn add_builtin_rules<'ctx>(
             ],
         ),
 
-        template_bindings_none: rule("template_bindings_none", cats.template_bindings, vec![]),
-        template_bindings_many: rule(
+        template_bindings_none: rule!("template_bindings_none", cats.template_bindings, vec![]),
+        template_bindings_many: rule!(
             "template_bindings_many",
             cats.template_bindings,
             vec![cat(cats.notation_binding), cat(cats.template_bindings)],
+            Associativity::Left,
         ),
 
-        hypotheses_none: rule("hypotheses_none", cats.hypotheses, vec![]),
-        hypotheses_many: rule(
+        hypotheses_none: rule!("hypotheses_none", cats.hypotheses, vec![]),
+        hypotheses_many: rule!(
             "hypotheses_many",
             cats.hypotheses,
             vec![cat(cats.hypothesis), cat(cats.hypotheses)],
         ),
 
-        hypothesis: rule(
+        hypothesis: rule!(
             "hypothesis",
             cats.hypothesis,
             vec![
@@ -657,7 +663,7 @@ pub fn add_builtin_rules<'ctx>(
             ],
         ),
 
-        fact_assumption: rule(
+        fact_assumption: rule!(
             "fact_assumption",
             cats.fact,
             vec![
@@ -667,7 +673,7 @@ pub fn add_builtin_rules<'ctx>(
                 cat(sentence_cat),
             ],
         ),
-        fact_sentence: rule("fact_sentence", cats.fact, vec![cat(sentence_cat)]),
+        fact_sentence: rule!("fact_sentence", cats.fact, vec![cat(sentence_cat)]),
     };
     state.recompute_initial_atoms();
     rules

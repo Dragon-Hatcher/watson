@@ -735,6 +735,17 @@ fn elaborate_any_fragment<'ctx>(
     })
 }
 
+fn elaborate_annotated_name<'ctx>(name: ParseTreeId<'ctx>, ctx: &Ctx<'ctx>) -> WResult<'ctx, Ustr> {
+    // annotated_name ::= name
+    //                  | name ":" @kw"category_name"
+
+    // This is a little hacky but it works and it would be annoying to try to
+    // do it more properly. Just take the first element of the children list.
+    let name = expect_unambiguous(name)?;
+    let name = name.children()[0].as_node().unwrap();
+    elaborate_name(name, ctx)
+}
+
 fn elaborate_notation_binding<'ctx>(
     notation_binding: ParseTreeId<'ctx>,
     ctx: &Ctx<'ctx>,
@@ -765,7 +776,7 @@ fn elaborate_notation_binding<'ctx>(
                     name_instantiations.push(name);
                 }
                 NotationPatternPart::Cat(cat) => {
-                    let name = elaborate_name(child.as_node().unwrap(), ctx).unwrap();
+                    let name = elaborate_annotated_name(child.as_node().unwrap(), ctx).unwrap();
                     hole_names.push((*cat, name));
                 }
                 _ => {}

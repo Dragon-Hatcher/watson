@@ -696,6 +696,48 @@ pub fn add_parse_rules_for_formal_cat<'ctx>(
         ),
     ));
     ctx.parse_state.use_rule(rule);
+
+    // Create an annotated_name category for this formal category to support
+    // optional category annotations like `x:term` for disambiguation.
+    let annotated_name_cat_name = Ustr::from(&format!("annotated_name_{}", formal_cat.name()));
+    let annotated_name_cat = Category::new(annotated_name_cat_name, SyntaxCategorySource::Builtin);
+    let annotated_name_cat = ctx
+        .arenas
+        .parse_cats
+        .alloc(annotated_name_cat_name, annotated_name_cat);
+    ctx.parse_state.use_cat(annotated_name_cat);
+    ctx.annotated_name_cats
+        .insert(formal_cat, annotated_name_cat);
+
+    // Rule 1: annotated_name_<cat> ::= name (no annotation)
+    let plain_rule = ctx.arenas.parse_rules.alloc(Rule::new(
+        format!("annotated_name_{}_plain", formal_cat.name()),
+        annotated_name_cat,
+        ParseRuleSource::Builtin,
+        RulePattern::new(
+            vec![cat(ctx.builtin_cats.name)],
+            Precedence::default(),
+            Associativity::default(),
+        ),
+    ));
+    ctx.parse_state.use_rule(plain_rule);
+
+    // Rule 2: annotated_name_<cat> ::= name ":" kw"<cat>" (with annotation)
+    let annotated_rule = ctx.arenas.parse_rules.alloc(Rule::new(
+        format!("annotated_name_{}_annotated", formal_cat.name()),
+        annotated_name_cat,
+        ParseRuleSource::Builtin,
+        RulePattern::new(
+            vec![
+                cat(ctx.builtin_cats.name),
+                lit(*strings::COLON),
+                kw(formal_cat.name()),
+            ],
+            Precedence::default(),
+            Associativity::default(),
+        ),
+    ));
+    ctx.parse_state.use_rule(annotated_rule);
 }
 
 pub fn formal_rule_to_notation<'ctx>(
@@ -820,9 +862,11 @@ fn binding_parse_rule_for_notation<'ctx>(
                 lit(trimmed)
             }
             NotationPatternPart::Kw(kw_str) => kw(*kw_str),
-            NotationPatternPart::Name
-            | NotationPatternPart::Cat(_)
-            | NotationPatternPart::Binding(_) => cat(ctx.builtin_cats.name),
+            NotationPatternPart::Name => cat(ctx.builtin_cats.name),
+            NotationPatternPart::Cat(formal_cat) | NotationPatternPart::Binding(formal_cat) => {
+                // Use the formal category's annotated_name category to allow optional `:formal_cat` disambiguation
+                cat(ctx.annotated_name_cats[formal_cat])
+            }
         };
         parts.push(part)
     }

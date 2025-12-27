@@ -7,7 +7,7 @@ use crate::{
     parse::{
         SourceCache, add_formal_cat,
         grammar::{BuiltinCats, BuiltinRules, add_builtin_rules},
-        parse_state::{Category, CategoryId, ParseState, Rule, RuleId},
+        parse_state::{self, Category, CategoryId, ParseState, Rule, RuleId},
         parse_tree::{ParseTree, ParseTreeId},
     },
     semant::{
@@ -49,6 +49,7 @@ pub struct Ctx<'ctx> {
     pub builtin_cats: BuiltinCats<'ctx>,
     pub builtin_rules: BuiltinRules<'ctx>,
     pub single_name_notations: FxHashMap<FormalSyntaxCatId<'ctx>, NotationPatternId<'ctx>>,
+    pub annotated_name_cats: FxHashMap<FormalSyntaxCatId<'ctx>, parse_state::CategoryId<'ctx>>,
 }
 
 impl<'ctx> Ctx<'ctx> {
@@ -97,6 +98,7 @@ impl<'ctx> Ctx<'ctx> {
             builtin_cats,
             builtin_rules,
             single_name_notations: FxHashMap::default(),
+            annotated_name_cats: FxHashMap::default(),
         };
 
         add_formal_cat(sentence_formal_cat, &mut ctx);

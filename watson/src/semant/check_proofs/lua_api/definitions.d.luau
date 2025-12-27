@@ -6,6 +6,15 @@ declare function log(...: any)
 --- Represents a source location range (span) in the input text.
 --- Used to attach source position information to fragments and diagnostics.
 declare class Span
+    --- Create an error DiagnosticSpan with the given message.
+    --- @param msg The message to attach to the span
+    --- @return The new DiagnosticSpan
+    function label(self, msg: string): DiagnosticSpan
+
+    --- Create an info DiagnosticSpan with the given message.
+    --- @param msg The message to attach to the span
+    --- @return The new DiagnosticSpan
+    function labelInfo(self, msg: string): DiagnosticSpan
 end
 
 --- A string value paired with its source location.
@@ -331,20 +340,24 @@ declare class TacticInfo
     function withGoal(self, f: Frag): TacticInfo
 end
 
+--- A span of text with an attached message.
+declare class DiagnosticSpan
+end
+
 --- A diagnostic (error or warning) with source annotations.
 --- Diagnostics are built up by adding error/info annotations, then reported.
 declare class Diagnostic
     --- Adds an error annotation at the given source location.
     --- @param msg The error message
-    --- @param span The source location to highlight
+    --- @param spans List of source locations to highlight
     --- @return A new diagnostic with the annotation added
-    function withError(self, msg: string, span: Span): Diagnostic
+    function withError(self, msg: string, ...: DiagnosticSpan): Diagnostic
 
     --- Adds an informational annotation at the given source location.
     --- @param msg The informational message
-    --- @param span The source location to highlight
+    --- @param spans List of source locations to highlight
     --- @return A new diagnostic with the annotation added
-    function withInfo(self, msg: string, span: Span): Diagnostic
+    function withInfo(self, msg: string, ...: DiagnosticSpan): Diagnostic
 
     --- Adds the reasoning chain given by the TacticInfo.
     --- @param info The TacticInfo to add
@@ -358,9 +371,10 @@ end
 
 declare class DiagnosticMeta
     --- Creates a new diagnostic with the given title.
-    --- @param title The main error message
+    --- @param msg The main error message
+    --- @param spans List of source locations to highlight
     --- @return A new diagnostic
-    function new(self, title: string): Diagnostic
+    function new(self, msg: string, ...: DiagnosticSpan): Diagnostic
 end
 
 declare Diagnostic: DiagnosticMeta

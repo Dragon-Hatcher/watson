@@ -1,11 +1,25 @@
 use crate::{
-    diagnostics::Diagnostic,
-    semant::check_proofs::{
-        LuaTheoremInfo,
-        lua_api::{span_to_lua::LuaSpan, tactic_info_to_lua::LuaTacticInfo},
-    },
+    diagnostics::{Diagnostic, DiagnosticSpan},
+    semant::check_proofs::{LuaTheoremInfo, lua_api::tactic_info_to_lua::LuaTacticInfo},
 };
-use mlua::{FromLua, UserData};
+use mlua::{FromLua, UserData, Variadic};
+
+#[derive(Debug, Clone, Copy, FromLua)]
+pub struct LuaDiagnosticSpan {
+    span: DiagnosticSpan,
+}
+
+impl LuaDiagnosticSpan {
+    pub fn new(span: DiagnosticSpan) -> Self {
+        Self { span }
+    }
+
+    pub fn out(self) -> DiagnosticSpan {
+        self.span
+    }
+}
+
+impl UserData for LuaDiagnosticSpan {}
 
 #[derive(Debug, Clone, FromLua)]
 pub struct LuaDiagnostic {
@@ -29,19 +43,27 @@ impl LuaDiagnostic {
 
 impl UserData for LuaDiagnostic {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("withError", |_, this, (msg, span): (String, LuaSpan)| {
-            // let new_diag = this.clone().out().with_error_span(&msg, span.out());
-            // Ok(LuaDiagnostic::new(new_diag))
-            todo!();
-            Ok(())
-        });
+        methods.add_method(
+            "withError",
+            |_, this, (msg, spans): (String, Variadic<LuaDiagnosticSpan>)| {
+                let diag = this
+                    .clone()
+                    .out()
+                    .with_error(&msg, spans.iter().map(|s| s.out()).collect());
+                Ok(LuaDiagnostic::new(diag))
+            },
+        );
 
-        methods.add_method("withInfo", |_, this, (msg, span): (String, LuaSpan)| {
-            // let new_diag = this.clone().out().with_info_span(&msg, span.out());
-            // Ok(LuaDiagnostic::new(new_diag))
-            todo!();
-            Ok(())
-        });
+        methods.add_method(
+            "withInfo",
+            |_, this, (msg, spans): (String, Variadic<LuaDiagnosticSpan>)| {
+                let diag = this
+                    .clone()
+                    .out()
+                    .with_info(&msg, spans.iter().map(|s| s.out()).collect());
+                Ok(LuaDiagnostic::new(diag))
+            },
+        );
 
         methods.add_method("withTacticInfo", |lua, this, tactic_info: LuaTacticInfo| {
             let info = lua.app_data_ref::<LuaTheoremInfo>().unwrap();
@@ -63,11 +85,12 @@ pub struct LuaDiagnosticMeta;
 
 impl UserData for LuaDiagnosticMeta {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("new", |_, _, title: String| {
-            // let diag = Diagnostic::new(&title);
-            // Ok(LuaDiagnostic::new(diag))
-            todo!();
-            Ok(())
-        });
+        methods.add_method(
+            "new",
+            |_, _, (msg, spans): (String, Variadic<LuaDiagnosticSpan>)| {
+                let diag = Diagnostic::new(&msg, spans.iter().map(|s| s.out()).collect());
+                Ok(LuaDiagnostic::new(diag))
+            },
+        );
     }
 }

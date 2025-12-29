@@ -325,6 +325,24 @@ impl<'ctx> Diagnostic<'ctx> {
         Err(vec![diag])
     }
 
+    pub fn err_duplicate_pattern_binding<T>(name: Ustr, span: Span) -> WResult<'ctx, T> {
+        let diag: Diagnostic<'_> = Diagnostic::new(
+            &format!("duplicate pattern binding `{name}`"),
+            vec![DiagnosticSpan::new_error("", span)],
+        );
+
+        Err(vec![diag])
+    }
+
+    pub fn err_unknown_pattern_binding<T>(name: Ustr, span: Span) -> WResult<'ctx, T> {
+        let diag = Diagnostic::new(
+            &format!("unknown pattern binding `{name}`"),
+            vec![DiagnosticSpan::new_error("", span)],
+        );
+
+        Err(vec![diag])
+    }
+
     pub fn err_duplicate_tactic_cat<T>() -> WResult<'ctx, T> {
         let diag = Diagnostic::new("err_duplicate_tactic_cat", vec![]);
 

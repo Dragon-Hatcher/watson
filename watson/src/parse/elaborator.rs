@@ -14,7 +14,7 @@ use crate::{
         },
         notation::{
             NotationBinding, NotationBindingId, NotationPattern, NotationPatternId,
-            NotationPatternPart, NotationPatternSource,
+            NotationPatternPart, NotationPatternPartCat, NotationPatternSource,
         },
         parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag, parse_fragment},
         presentation::PresFrag,
@@ -30,7 +30,7 @@ use crate::{
     },
     strings,
 };
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use ustr::Ustr;
 
 // Reserved Luau type names that cannot be used as tactic category names
@@ -402,30 +402,88 @@ fn elaborate_notation_pat<'ctx>(
     loop {
         match_rule! { (ctx, pat_list) =>
             notation_pat_one ::= [pat] => {
-                let pat = pat.as_node().unwrap();
-                parts.push(elaborate_notation_pat_part(pat, ctx)?);
+                parts.push(pat.as_node().unwrap());
                 break;
             },
             notation_pat_many ::= [pat, rest] => {
-                let pat = pat.as_node().unwrap();
-                parts.push(elaborate_notation_pat_part(pat, ctx)?);
+                parts.push(pat.as_node().unwrap());
                 pat_list = rest.as_node().unwrap();
             }
         }
     }
 
-    Ok(parts)
+    // Extract the list of bindings
+    let mut bindings = FxHashMap::default();
+    for &part in &parts {
+        let Some((name, cat)) = elaborate_notation_pat_binding(part, ctx)? else {
+            continue;
+        };
+
+        if bindings.insert(name, (bindings.len(), cat)).is_some() {
+            return Diagnostic::err_duplicate_pattern_binding(name, part.span());
+        }
+    }
+
+    let mut elaborated_parts = Vec::new();
+    for &part in &parts {
+        elaborated_parts.push(elaborate_notation_pat_part(part, &bindings, ctx)?);
+    }
+
+    Ok(elaborated_parts)
+}
+
+fn elaborate_notation_pat_binding<'ctx>(
+    pat: ParseTreeId<'ctx>,
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Option<(Ustr, FormalSyntaxCatId<'ctx>)>> {
+    // notation_pat ::= (notation_pat_lit)     str
+    //                | (notation_pat_kw)      "@" kw"kw" str
+    //                | (notation_pat_name)    "@" kw"name"
+    //                | (notation_pat_cat)     name maybe_notation_pat_term_args
+    //                | (notation_pat_binding) name ":" "@" kw"binding" "(" name ")"
+
+    match_rule! { (ctx, pat) =>
+        notation_pat_binding ::= [name_node, colon, at, binding_kw, l_paren, cat_name_node, r_paren] => {
+            debug_assert!(colon.is_lit(*strings::COLON));
+            debug_assert!(at.is_lit(*strings::AT));
+            debug_assert!(binding_kw.is_kw(*strings::BINDING));
+            debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
+            debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
+
+            let name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
+
+            let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
+            let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
+                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
+            };
+
+            Ok(Some((name, cat)))
+        },
+        notation_pat_lit ::= [_lit] => {
+            Ok(None)
+        },
+        notation_pat_kw ::= [_at, _kw_kw, _lit] => {
+            Ok(None)
+        },
+        notation_pat_name ::= [_at, _name_kw] => {
+            Ok(None)
+        },
+        notation_pat_cat ::= [_cat_name_node, _maybe_args] => {
+            Ok(None)
+        },
+    }
 }
 
 fn elaborate_notation_pat_part<'ctx>(
     pat: ParseTreeId<'ctx>,
+    bindings: &FxHashMap<Ustr, (usize, FormalSyntaxCatId<'ctx>)>,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, NotationPatternPart<'ctx>> {
     // notation_pat ::= (notation_pat_lit)     str
     //                | (notation_pat_kw)      "@" kw"kw" str
     //                | (notation_pat_name)    "@" kw"name"
-    //                | (notation_pat_cat)     name
-    //                | (notation_pat_binding) "@" kw"binding" "(" name ")"
+    //                | (notation_pat_cat)     name maybe_notation_pat_term_args
+    //                | (notation_pat_binding) @name ":" "@" kw"binding" "(" name ")"
 
     match_rule! { (ctx, pat) =>
         notation_pat_lit ::= [lit] => {
@@ -445,29 +503,86 @@ fn elaborate_notation_pat_part<'ctx>(
 
             Ok(NotationPatternPart::Name)
         },
-        notation_pat_cat ::= [cat_name_node] => {
+        notation_pat_cat ::= [cat_name_node, maybe_args] => {
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
 
             let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
                 return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
-            Ok(NotationPatternPart::Cat(cat))
+            let args = elaborate_maybe_notation_pat_args(maybe_args.as_node().unwrap(), bindings, ctx)?;
+
+            let cat_part = NotationPatternPartCat::new(cat, args);
+            Ok(NotationPatternPart::Cat(cat_part))
         },
-        notation_pat_binding ::= [at, binding_kw, l_paren, cat_name_node, r_paren] => {
+        notation_pat_binding ::= [_name, colon, at, binding_kw, l_paren, cat_name_node, r_paren] => {
+            debug_assert!(colon.is_lit(*strings::COLON));
             debug_assert!(at.is_lit(*strings::AT));
             debug_assert!(binding_kw.is_kw(*strings::BINDING));
             debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
             debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
 
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
-            let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
-                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
-            };
+            let cat = ctx.arenas.formal_cats.get(cat_name).expect("checked previously");
 
             Ok(NotationPatternPart::Binding(cat))
         }
     }
+}
+
+fn elaborate_maybe_notation_pat_args<'ctx>(
+    maybe_args: ParseTreeId<'ctx>,
+    bindings: &FxHashMap<Ustr, (usize, FormalSyntaxCatId<'ctx>)>,
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Vec<(usize, FormalSyntaxCatId<'ctx>)>> {
+    // maybe_notation_pat_term_args ::= (maybe_notation_pat_term_args_none)
+    //                                | (maybe_notation_pat_term_args_some) "(" notation_pat_term_args ")"
+
+    match_rule! { (ctx, maybe_args) =>
+        maybe_notation_pat_term_args_none ::= [] => {
+            Ok(Vec::new())
+        },
+        maybe_notation_pat_term_args_some ::= [l_paren, args, r_paren] => {
+            debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
+            debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
+            elaborate_notation_pat_args(args.as_node().unwrap(), bindings, ctx)
+        }
+    }
+}
+
+fn elaborate_notation_pat_args<'ctx>(
+    mut args: ParseTreeId<'ctx>,
+    bindings: &FxHashMap<Ustr, (usize, FormalSyntaxCatId<'ctx>)>,
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Vec<(usize, FormalSyntaxCatId<'ctx>)>> {
+    // notation_pat_term_args ::= (notation_pat_term_args_one)  @name
+    //                          | (notation_pat_term_args_many) @name notation_pat_term_args
+
+    let mut elaborated_args = Vec::new();
+
+    loop {
+        let (name_node, rest) = match_rule! { (ctx, args) =>
+            notation_pat_term_args_one ::= [name] => {
+                (name.as_node().unwrap(), None)
+            },
+            notation_pat_term_args_many ::= [name, rest] => {
+                (name.as_node().unwrap(), Some(rest.as_node().unwrap()))
+            }
+        };
+
+        let name = elaborate_name(name_node, ctx)?;
+        match bindings.get(&name) {
+            Some(arg) => elaborated_args.push(*arg),
+            None => return Diagnostic::err_unknown_pattern_binding(name, name_node.span()),
+        }
+
+        match rest {
+            Some(rest) => args = rest,
+            None => break,
+        }
+    }
+
+    Ok(elaborated_args)
 }
 
 fn elaborate_tactic_category<'ctx>(
@@ -775,9 +890,9 @@ fn elaborate_notation_binding<'ctx>(
                     let name = elaborate_name(child.as_node().unwrap(), ctx).unwrap();
                     name_instantiations.push(name);
                 }
-                NotationPatternPart::Cat(cat) => {
+                NotationPatternPart::Cat(part_cat) => {
                     let name = elaborate_annotated_name(child.as_node().unwrap(), ctx).unwrap();
-                    hole_names.push((*cat, name));
+                    hole_names.push((part_cat.cat(), name));
                 }
                 _ => {}
             }

@@ -70,13 +70,35 @@ impl<'ctx> NotationPattern<'ctx> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NotationPatternPart<'ctx> {
     Lit(Ustr),
     Kw(Ustr),
     Name,
-    Cat(FormalSyntaxCatId<'ctx>),
+    Cat(NotationPatternPartCat<'ctx>),
     Binding(FormalSyntaxCatId<'ctx>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NotationPatternPartCat<'ctx> {
+    /// The category of this child part.
+    cat: FormalSyntaxCatId<'ctx>,
+    /// List of arguments to this fragment. Each is the nth binding and its category.
+    args: Vec<(usize, FormalSyntaxCatId<'ctx>)>,
+}
+
+impl<'ctx> NotationPatternPartCat<'ctx> {
+    pub fn new(cat: FormalSyntaxCatId<'ctx>, args: Vec<(usize, FormalSyntaxCatId<'ctx>)>) -> Self {
+        Self { cat, args }
+    }
+
+    pub fn cat(&self) -> FormalSyntaxCatId<'ctx> {
+        self.cat
+    }
+
+    pub fn args(&self) -> &[(usize, FormalSyntaxCatId<'ctx>)] {
+        &self.args
+    }
 }
 
 generate_arena_handle!(NotationBindingId<'ctx> => NotationBinding<'ctx>);
@@ -123,8 +145,8 @@ pub fn _debug_binding<'ctx>(binding: NotationBindingId<'ctx>) -> String {
                 out.push_str(name.as_str());
                 names += 1;
             }
-            NotationPatternPart::Cat(cat) => {
-                out.push_str(&format!("<{}>", cat.name()));
+            NotationPatternPart::Cat(part_cat) => {
+                out.push_str(&format!("<{}>", part_cat.cat().name()));
             }
             NotationPatternPart::Binding(binding) => {
                 out.push_str(&format!("?{}", binding.name()));

@@ -12,7 +12,7 @@ use crate::{
         fragment::{FragHead, FragRuleApplication, Fragment, hole_frag},
         notation::{
             NotationBinding, NotationBindingId, NotationPattern, NotationPatternId,
-            NotationPatternPart, NotationPatternSource,
+            NotationPatternPart, NotationPatternPartCat, NotationPatternSource,
         },
         presentation::{Pres, PresFrag, PresHead},
         scope::ScopeEntry,
@@ -95,11 +95,17 @@ notation_command ::= (notation) kw"notation" name name prec_assoc "::=" notation
 notation_pat ::= (notation_pat_one)  notation_pat_part
                | (notation_pat_many) notation_pat_part notation_pat
 
-notation_pat ::= (notation_pat_lit)     str
-               | (notation_pat_kw)      "@" kw"kw" str
-               | (notation_pat_name)    "@" kw"name"
-               | (notation_pat_cat)     name
-               | (notation_pat_binding) "@" kw"binding" "(" name ")"
+notation_pat_part ::= (notation_pat_lit)     str
+                    | (notation_pat_kw)      "@" kw"kw" str
+                    | (notation_pat_name)    "@" kw"name"
+                    | (notation_pat_cat)     name maybe_notation_pat_term_args
+                    | (notation_pat_binding) name ":" "@" kw"binding" "(" name ")"
+
+maybe_notation_pat_term_args ::= (maybe_notation_pat_term_args_none)
+                               | (maybe_notation_pat_term_args_some) "(" notation_pat_term_args ")"
+
+notation_pat_term_args ::= (notation_pat_term_args_one)  @name
+                         | (notation_pat_term_args_many) @name notation_pat_term_args
 
 tactic_category_command ::= (tactic_category) kw"tactic_category" name
 tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" tactic_pat kw"end"
@@ -176,6 +182,8 @@ builtin_cats! {
         syntax_pat_part,
         notation_pat,
         notation_pat_part,
+        maybe_notation_pat_term_args,
+        notation_pat_term_args,
         tactic_pat,
         tactic_pat_part,
         maybe_label,
@@ -232,6 +240,10 @@ builtin_rules! {
         notation_pat_cat,
         notation_pat_name,
         notation_pat_binding,
+        maybe_notation_pat_term_args_none,
+        maybe_notation_pat_term_args_some,
+        notation_pat_term_args_one,
+        notation_pat_term_args_many,
         tactic_pat_none,
         tactic_pat_many,
         tactic_pat_part,
@@ -552,18 +564,44 @@ pub fn add_builtin_rules<'ctx>(
         notation_pat_cat: rule!(
             "notation_pat_cat",
             cats.notation_pat_part,
-            vec![cat(cats.name)],
+            vec![cat(cats.name), cat(cats.maybe_notation_pat_term_args)],
         ),
         notation_pat_binding: rule!(
             "notation_pat_binding",
             cats.notation_pat_part,
             vec![
+                cat(cats.name),
+                lit(*strings::COLON),
                 lit(*strings::AT),
                 kw(*strings::BINDING),
                 lit(*strings::LEFT_PAREN),
                 cat(cats.name),
                 lit(*strings::RIGHT_PAREN),
             ],
+        ),
+        maybe_notation_pat_term_args_none: rule!(
+            "maybe_notation_pat_term_args_none",
+            cats.maybe_notation_pat_term_args,
+            vec![],
+        ),
+        maybe_notation_pat_term_args_some: rule!(
+            "maybe_notation_pat_term_args_some",
+            cats.maybe_notation_pat_term_args,
+            vec![
+                lit(*strings::LEFT_PAREN),
+                cat(cats.notation_pat_term_args),
+                lit(*strings::RIGHT_PAREN)
+            ],
+        ),
+        notation_pat_term_args_one: rule!(
+            "notation_pat_term_args_one",
+            cats.notation_pat_term_args,
+            vec![cat(cats.name)],
+        ),
+        notation_pat_term_args_many: rule!(
+            "notation_pat_term_args_many",
+            cats.notation_pat_term_args,
+            vec![cat(cats.name), cat(cats.notation_pat_term_args)],
         ),
 
         tactic_pat_none: rule!("tactic_pat_none", cats.tactic_pat, vec![]),
@@ -756,7 +794,9 @@ pub fn formal_rule_to_notation<'ctx>(
 
         for formal_part in rule.pattern().parts() {
             let part = match formal_part {
-                FormalSyntaxPatPart::Cat(cat) => NotationPatternPart::Cat(*cat),
+                FormalSyntaxPatPart::Cat(cat) => {
+                    NotationPatternPart::Cat(NotationPatternPartCat::new(*cat, Vec::new()))
+                }
                 FormalSyntaxPatPart::Binding(cat) => NotationPatternPart::Binding(*cat),
                 FormalSyntaxPatPart::Lit(lit) => NotationPatternPart::Lit(*lit),
             };
@@ -819,17 +859,17 @@ fn fragment_parse_rule_for_notation<'ctx>(
     ctx: &Ctx<'ctx>,
 ) -> RuleId<'ctx> {
     let mut parts = Vec::new();
-    for &notation_part in notation.0.parts() {
+    for notation_part in notation.0.parts() {
         let part = match notation_part {
             NotationPatternPart::Lit(lit_str) => {
                 // Trim whitespace from literals for parsing, but preserve in presentation
                 let trimmed = Ustr::from(lit_str.trim());
                 lit(trimmed)
             }
-            NotationPatternPart::Kw(kw_str) => kw(kw_str),
+            NotationPatternPart::Kw(kw_str) => kw(*kw_str),
             NotationPatternPart::Name => cat(ctx.builtin_cats.name),
-            NotationPatternPart::Cat(formal_cat) => {
-                let cat = ctx.parse_state.cat_for_formal_cat(formal_cat);
+            NotationPatternPart::Cat(part_cat) => {
+                let cat = ctx.parse_state.cat_for_formal_cat(part_cat.cat());
                 RulePatternPart::Cat(cat)
             }
             NotationPatternPart::Binding(_) => cat(ctx.builtin_cats.name),
@@ -863,7 +903,11 @@ fn binding_parse_rule_for_notation<'ctx>(
             }
             NotationPatternPart::Kw(kw_str) => kw(*kw_str),
             NotationPatternPart::Name => cat(ctx.builtin_cats.name),
-            NotationPatternPart::Cat(formal_cat) | NotationPatternPart::Binding(formal_cat) => {
+            NotationPatternPart::Cat(part_cat) => {
+                // Use the formal category's annotated_name category to allow optional `:formal_cat` disambiguation
+                cat(ctx.annotated_name_cats[&part_cat.cat()])
+            }
+            NotationPatternPart::Binding(formal_cat) => {
                 // Use the formal category's annotated_name category to allow optional `:formal_cat` disambiguation
                 cat(ctx.annotated_name_cats[formal_cat])
             }

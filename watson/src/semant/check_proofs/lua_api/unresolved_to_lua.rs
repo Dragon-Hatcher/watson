@@ -87,7 +87,7 @@ impl UserData for LuaUnResFragMeta {
             ctx.sources.add(source_id, text, SourceDecl::LuaSnippet);
 
             // Now parse the snippet.
-            let sentence_syntax_cat = ctx.parse_state.cat_for_formal_cat(ctx.sentence_cat);
+            let sentence_syntax_cat = ctx.parse_state.cat_for_formal_cat(cat.out());
             let parse = earley::parse(source_id.start_loc(), sentence_syntax_cat, ctx);
 
             match parse {

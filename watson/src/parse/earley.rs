@@ -322,7 +322,13 @@ fn read_chart<'ctx>(
         // For the parse tree don't include any whitespace in the span.
         let start = skip_ws_and_comments(text, span.start().offset());
         let start = Location::new(span.source(), start);
-        let span = Span::new(start, span.end());
+        // If the span is empty skipping the whitespace might put us past the end.
+        let end = if start.byte_offset() < span.end().byte_offset() {
+            span.end()
+        }  else {
+            start
+        };
+        let span = Span::new(start, end);
 
         let tree = ParseTree::new(span, cat, possibilities);
         Ok(ctx.arenas.parse_forest.intern(tree))

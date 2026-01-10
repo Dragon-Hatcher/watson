@@ -325,7 +325,7 @@ fn read_chart<'ctx>(
         // If the span is empty skipping the whitespace might put us past the end.
         let end = if start.byte_offset() < span.end().byte_offset() {
             span.end()
-        }  else {
+        } else {
             start
         };
         let span = Span::new(start, end);

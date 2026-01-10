@@ -113,6 +113,7 @@ impl DiagnosticSpan {
             msg,
         }
     }
+    
     pub fn to_snippet<'a>(&self, sources: &'a SourceCache) -> Snippet<'a> {
         let anno = self
             .level

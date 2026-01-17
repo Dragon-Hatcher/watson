@@ -892,7 +892,7 @@ fn fragment_parse_rule_for_notation<'ctx>(
 fn binding_parse_rule_for_notation<'ctx>(
     notation: NotationPatternId<'ctx>,
     ctx: &Ctx<'ctx>,
-) -> RuleId<'ctx> {
+) -> (RuleId<'ctx>, RuleId<'ctx>) {
     let mut parts = Vec::new();
     for notation_part in notation.0.parts() {
         let part = match notation_part {
@@ -903,9 +903,9 @@ fn binding_parse_rule_for_notation<'ctx>(
             }
             NotationPatternPart::Kw(kw_str) => kw(*kw_str),
             NotationPatternPart::Name => cat(ctx.builtin_cats.name),
-            NotationPatternPart::Cat(part_cat) => {
+            NotationPatternPart::Cat(_part_cat) => {
                 // Use the formal category's annotated_name category to allow optional `:formal_cat` disambiguation
-                cat(ctx.annotated_name_cats[&part_cat.cat()])
+                cat(ctx.builtin_cats.notation_binding)
             }
             NotationPatternPart::Binding(formal_cat) => {
                 // Use the formal category's annotated_name category to allow optional `:formal_cat` disambiguation
@@ -915,24 +915,37 @@ fn binding_parse_rule_for_notation<'ctx>(
         parts.push(part)
     }
 
-    let parse_pat = RulePattern::new(parts, Precedence::default(), Associativity::default());
+    let rule = |parts| {
+        let parse_pat = RulePattern::new(parts, Precedence::default(), Associativity::default());
 
-    let parse_rule = Rule::new(
-        "notation_binding",
-        ctx.builtin_cats.notation_binding,
-        ParseRuleSource::Notation(notation),
-        parse_pat,
-    );
+        let parse_rule = Rule::new(
+            "notation_binding",
+            ctx.builtin_cats.notation_binding,
+            ParseRuleSource::Notation(notation),
+            parse_pat,
+        );
 
-    ctx.arenas.parse_rules.alloc(parse_rule)
+        ctx.arenas.parse_rules.alloc(parse_rule)
+    };
+
+    // Binding without the : cat at the end
+    let unannotated = rule(parts.clone());
+
+    // or with the : cat
+    parts.push(lit(*strings::COLON));
+    parts.push(kw(notation.cat().name()));
+    let annotated = rule(parts);
+
+    (unannotated, annotated)
 }
 
 pub fn add_parse_rules_for_notation<'ctx>(notation: NotationPatternId<'ctx>, ctx: &mut Ctx<'ctx>) {
     let fragment_rule = fragment_parse_rule_for_notation(notation, ctx);
     ctx.parse_state.use_rule(fragment_rule);
 
-    let binding_rule = binding_parse_rule_for_notation(notation, ctx);
-    ctx.parse_state.use_rule(binding_rule);
+    let (binding_rule1, binding_rule2) = binding_parse_rule_for_notation(notation, ctx);
+    ctx.parse_state.use_rule(binding_rule1);
+    ctx.parse_state.use_rule(binding_rule2);
 }
 
 fn tactic_rule_to_parse_rule<'ctx>(

@@ -24,9 +24,28 @@ pub struct NotationPattern<'ctx> {
     prec: Precedence,
     assoc: Associativity,
     source: NotationPatternSource,
+    signature: NotationSignature<'ctx>,
 }
 
 impl<'ctx> NotationPattern<'ctx> {
+    fn make_signature(
+        cat: FormalSyntaxCatId<'ctx>,
+        parts: &[NotationPatternPart<'ctx>],
+    ) -> NotationSignature<'ctx> {
+        let holes = parts
+            .iter()
+            .filter_map(|part| match part {
+                NotationPatternPart::Cat(part) => {
+                    let args = part.args().iter().map(|p| p.1).collect();
+                    let hole = NotationSignatureHole::new(part.cat(), args);
+                    Some(hole)
+                }
+                _ => None,
+            })
+            .collect();
+        NotationSignature::new(cat, holes)
+    }
+
     pub fn new(
         name: Ustr,
         cat: FormalSyntaxCatId<'ctx>,
@@ -35,6 +54,8 @@ impl<'ctx> NotationPattern<'ctx> {
         assoc: Associativity,
         source: NotationPatternSource,
     ) -> Self {
+        let signature = Self::make_signature(cat, &parts);
+
         Self {
             name,
             cat,
@@ -42,6 +63,7 @@ impl<'ctx> NotationPattern<'ctx> {
             prec,
             assoc,
             source,
+            signature,
         }
     }
 
@@ -67,6 +89,10 @@ impl<'ctx> NotationPattern<'ctx> {
 
     pub fn source(&self) -> NotationPatternSource {
         self.source
+    }
+
+    pub fn signature(&self) -> &NotationSignature<'ctx> {
+        &self.signature
     }
 }
 
@@ -97,6 +123,46 @@ impl<'ctx> NotationPatternPartCat<'ctx> {
     }
 
     pub fn args(&self) -> &[(usize, FormalSyntaxCatId<'ctx>)] {
+        &self.args
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NotationSignature<'ctx> {
+    cat: FormalSyntaxCatId<'ctx>,
+    holes: Vec<NotationSignatureHole<'ctx>>,
+}
+
+impl<'ctx> NotationSignature<'ctx> {
+    fn new(cat: FormalSyntaxCatId<'ctx>, holes: Vec<NotationSignatureHole<'ctx>>) -> Self {
+        Self { cat, holes }
+    }
+
+    pub fn cat(&self) -> FormalSyntaxCatId<'ctx> {
+        self.cat
+    }
+
+    pub fn holes(&self) -> &[NotationSignatureHole<'ctx>] {
+        &self.holes
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct NotationSignatureHole<'ctx> {
+    cat: FormalSyntaxCatId<'ctx>,
+    args: Vec<FormalSyntaxCatId<'ctx>>,
+}
+
+impl<'ctx> NotationSignatureHole<'ctx> {
+    pub fn new(cat: FormalSyntaxCatId<'ctx>, args: Vec<FormalSyntaxCatId<'ctx>>) -> Self {
+        Self { cat, args }
+    }
+
+    pub fn cat(&self) -> FormalSyntaxCatId<'ctx> {
+        self.cat
+    }
+
+    pub fn args(&self) -> &[FormalSyntaxCatId<'ctx>] {
         &self.args
     }
 }

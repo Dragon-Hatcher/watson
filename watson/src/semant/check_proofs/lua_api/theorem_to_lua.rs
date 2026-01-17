@@ -6,7 +6,6 @@ use crate::semant::{
         notation_to_lua::LuaNotationBinding,
         scope_to_lua::LuaScope,
     },
-    notation::NotationBinding,
     theorems::{Template, TheoremId, TheoremStatement},
 };
 use itertools::Itertools;
@@ -116,18 +115,12 @@ impl UserData for LuaTemplate {
             Ok(LuaNotationBinding::new(binding))
         });
 
-        fields.add_field_method_get("holes", |lua, this| {
-            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+        fields.add_field_method_get("holes", |_, this| {
             let bindings = this
                 .out_ref()
                 .holes()
                 .iter()
-                .map(|(cat, name)| {
-                    let pattern = ctx.single_name_notations[cat];
-                    let binding = NotationBinding::new(pattern, vec![*name]);
-                    let binding = ctx.arenas.notation_bindings.intern(binding);
-                    LuaNotationBinding::new(binding)
-                })
+                .map(|&binding| LuaNotationBinding::new(binding))
                 .collect_vec();
             Ok(bindings)
         });

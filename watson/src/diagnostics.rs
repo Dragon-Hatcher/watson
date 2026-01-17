@@ -1,4 +1,5 @@
 use crate::context::Ctx;
+use crate::parse::elaborator::BindingResolution;
 use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
@@ -113,7 +114,7 @@ impl DiagnosticSpan {
             msg,
         }
     }
-    
+
     pub fn to_snippet<'a>(&self, sources: &'a SourceCache) -> Snippet<'a> {
         let anno = self
             .level
@@ -405,13 +406,7 @@ impl<'ctx> Diagnostic<'ctx> {
 
     pub fn err_ambiguous_notation_binding<T>(
         cat_name: ustr::Ustr,
-        matching_notations: &[(
-            crate::semant::notation::NotationBindingId<'ctx>,
-            Vec<(
-                crate::semant::formal_syntax::FormalSyntaxCatId<'ctx>,
-                ustr::Ustr,
-            )>,
-        )],
+        matching_notations: &[BindingResolution<'ctx>],
         span: Span,
     ) -> WResult<'ctx, T> {
         let count = matching_notations.len();
@@ -422,8 +417,8 @@ impl<'ctx> Diagnostic<'ctx> {
             vec![DiagnosticSpan::new_error("", span)],
         );
 
-        for (binding, _) in matching_notations {
-            let pattern = binding.pattern();
+        for resolution in matching_notations {
+            let pattern = resolution.binding.pattern();
             match pattern.source() {
                 NotationPatternSource::UserDeclared(decl_span) => {
                     diag = diag.with_info(

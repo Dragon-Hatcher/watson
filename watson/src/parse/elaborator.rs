@@ -824,12 +824,12 @@ fn elaborate_definition<'ctx>(
             }
 
             match solutions.as_slice() {
-                [] => todo!("error: no matching notation bindings"),
+                [] => Diagnostic::_err_TODO_real_error_later(notation_binding.span(), "no matching notation bindings"),
                 [(binding, frag)] => {
                     let entry = ScopeEntry::new(*frag);
                     Ok(scope.child_with(*binding, entry))
                 },
-                [..] => todo!("error: multiple matching notation bindings"),
+                [..] => Diagnostic::_err_TODO_real_error_later(notation_binding.span(), "multiple matching notation bindings"),
             }
         }
     }
@@ -852,72 +852,6 @@ fn elaborate_any_fragment<'ctx>(
         })
         .collect()
 }
-
-fn elaborate_annotated_name<'ctx>(name: ParseTreeId<'ctx>, ctx: &Ctx<'ctx>) -> WResult<'ctx, Ustr> {
-    // annotated_name ::= name
-    //                  | name ":" @kw"category_name"
-
-    // This is a little hacky but it works and it would be annoying to try to
-    // do it more properly. Just take the first element of the children list.
-    let name = expect_unambiguous(name)?;
-    let name = name.children()[0].as_node().unwrap();
-    elaborate_name(name, ctx)
-}
-
-// fn elaborate_notation_binding<'ctx>(
-//     notation_binding: ParseTreeId<'ctx>,
-//     ctx: &Ctx<'ctx>,
-// ) -> WResult<
-//     'ctx,
-//     CatMap<
-//         'ctx,
-//         (
-//             NotationBindingId<'ctx>,
-//             Vec<(FormalSyntaxCatId<'ctx>, Ustr)>,
-//         ),
-//     >,
-// > {
-//     todo!();
-//     fn children_to_binding<'ctx>(
-//         children: &ParseTreeChildren<'ctx>,
-//         pattern: NotationPatternId<'ctx>,
-//         ctx: &Ctx<'ctx>,
-//     ) -> (NotationBindingId<'ctx>, Vec<NotationBindingId<'ctx>>) {
-//         todo!()
-//         //     let mut name_instantiations = Vec::new();
-//         //     let mut hole_names = Vec::new();
-//         //     for (child, part) in children.children().iter().zip(pattern.parts()) {
-//         //         match part {
-//         //             NotationPatternPart::Name => {
-//         //                 let name = elaborate_name(child.as_node().unwrap(), ctx).unwrap();
-//         //                 name_instantiations.push(name);
-//         //             }
-//         //             NotationPatternPart::Cat(part_cat) => {
-//         //                 let name = elaborate_annotated_name(child.as_node().unwrap(), ctx).unwrap();
-//         //                 hole_names.push((part_cat.cat(), name));
-//         //             }
-//         //             _ => {}
-//         //         }
-//         //     }
-//         //     let binding = NotationBinding::new(pattern, name_instantiations);
-//         //     let binding = ctx.arenas.notation_bindings.intern(binding);
-//         //     (binding, hole_names)
-//     }
-
-//     // let mut solution = CatMap::new();
-
-//     // for possibility in notation_binding.possibilities() {
-//     //     let rule = possibility.rule();
-//     //     let &ParseRuleSource::Notation(notation) = rule.source() else {
-//     //         unreachable!();
-//     //     };
-
-//     //     let (binding, hole_names) = children_to_binding(possibility, notation, ctx);
-//     //     solution.insert(notation.cat(), (binding, hole_names));
-//     // }
-
-//     // Ok(solution)
-// }
 
 #[derive(Debug, Clone)]
 pub struct BindingResolution<'ctx> {

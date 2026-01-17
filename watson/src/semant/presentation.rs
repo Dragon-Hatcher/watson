@@ -85,7 +85,6 @@ impl<'ctx> Pres<'ctx> {
                 }
                 format!("${idx}")
             }
-            PresHead::FormalFrag(FragHead::Variable(_, _)) => todo!(),
             PresHead::FormalFrag(FragHead::RuleApplication(rule_app)) => {
                 let mut out = String::new();
                 let mut children = self.children().iter();
@@ -164,7 +163,6 @@ fn instantiate_frag_holes<'ctx>(
             let frag = Fragment::new(frag.cat(), frag.head(), new_children);
             ctx.arenas.fragments.intern(frag)
         }
-        FragHead::Variable(_var, _) => todo!(),
         FragHead::Hole(idx) => holes(idx),
     };
     frag_cache.insert(frag, new_frag);
@@ -188,7 +186,6 @@ fn instantiate_pres_holes<'ctx>(
             PresInstTy::Normal => holes(idx).pres(),
             PresInstTy::Formal => holes(idx).formal_pres(),
         },
-        PresHead::FormalFrag(FragHead::Variable(_, _)) => todo!(),
         _ => {
             let new_children = pres
                 .children()
@@ -287,7 +284,6 @@ fn instantiate_frag_templates<'ctx>(
             let frag = Fragment::new(frag.cat(), frag.head(), new_children);
             ctx.arenas.fragments.intern(frag)
         }
-        FragHead::Variable(_var, _) => todo!(),
         FragHead::Hole(_) => frag,
     };
     frag_cache.insert(frag, new_frag);
@@ -331,7 +327,6 @@ fn instantiate_pres_templates<'ctx>(
                 &mut FxHashMap::default(),
             )
         }
-        PresHead::FormalFrag(FragHead::Variable(_, _)) => todo!(),
         PresHead::Notation(_, replacement) if replacement.frag().has_template() => {
             // If the replacement for this notation contains template params
             // then we need to expand the notation. The notation isn't accurate

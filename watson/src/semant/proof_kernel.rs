@@ -81,8 +81,6 @@ mod safe {
                 Err(ProofError::FragNotSentence)
             } else if frag.has_hole() {
                 Err(ProofError::FragHasHoles)
-            } else if frag.unclosed_count() > 0 {
-                Err(ProofError::FragUnclosed)
             } else {
                 Ok(Self(frag))
             }
@@ -266,7 +264,7 @@ fn instantiate_frag<'ctx>(
             let frag = Fragment::new(frag.cat(), frag.head(), new_children);
             ctx.arenas.fragments.intern(frag)
         }
-        FragHead::Variable(_, _) | FragHead::Hole(_) => frag,
+        FragHead::Hole(_) => frag,
         FragHead::TemplateRef(idx) => fill_holes(templates[idx], frag.children(), ctx),
     }
 }

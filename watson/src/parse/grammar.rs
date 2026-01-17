@@ -230,7 +230,6 @@ builtin_rules! {
         syntax_pat_many,
         syntax_pat_part_cat,
         syntax_pat_part_binding,
-        syntax_pat_part_var,
         syntax_pat_part_lit,
         notation,
         notation_pat_one,
@@ -514,17 +513,6 @@ pub fn add_builtin_rules<'ctx>(
             vec![
                 lit(*strings::AT),
                 kw(*strings::BINDING),
-                lit(*strings::LEFT_PAREN),
-                cat(cats.name),
-                lit(*strings::RIGHT_PAREN),
-            ],
-        ),
-        syntax_pat_part_var: rule!(
-            "syntax_pat_part_var",
-            cats.syntax_pat_part,
-            vec![
-                lit(*strings::AT),
-                kw(*strings::VARIABLE),
                 lit(*strings::LEFT_PAREN),
                 cat(cats.name),
                 lit(*strings::RIGHT_PAREN),

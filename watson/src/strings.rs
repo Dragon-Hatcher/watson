@@ -57,7 +57,6 @@ str_const! {
 str_const! {
     SENTENCE = "sentence";
     BINDING = "binding";
-    VARIABLE = "variable";
 }
 
 str_const! {

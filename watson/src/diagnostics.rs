@@ -256,15 +256,6 @@ impl<'ctx> Diagnostic<'ctx> {
         Err(vec![diag])
     }
 
-    pub fn _err_elaboration_infinite_recursion<T>(span: Span) -> WResult<'ctx, T> {
-        let diag = Diagnostic::new(
-            "infinite recursion while expanding",
-            vec![DiagnosticSpan::new_error("", span)],
-        );
-
-        Err(vec![diag])
-    }
-
     pub fn err_parse_failure<T>(
         location: Location,
         possible_atoms: &[ParseAtomPattern],
@@ -443,5 +434,14 @@ impl<'ctx> Diagnostic<'ctx> {
             &format!("failed to parse fragment because {err:?}"),
             vec![DiagnosticSpan::new_error("", span)],
         )
+    }
+
+    pub fn _err_TODO_real_error_later<T>(span: Span, msg: &str) -> WResult<'ctx, T> {
+        let diag = Diagnostic::new(
+            msg,
+            vec![DiagnosticSpan::new_error("", span)],
+        );
+
+        Err(vec![diag])
     }
 }

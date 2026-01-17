@@ -19,7 +19,6 @@ pub struct Fragment<'ctx> {
     // flags for efficient search:
     has_hole: bool,
     has_template: bool,
-    unclosed_count: usize,
 }
 
 impl<'ctx> Fragment<'ctx> {
@@ -32,24 +31,9 @@ impl<'ctx> Fragment<'ctx> {
             matches!(head, FragHead::TemplateRef(_)) || children.iter().any(|c| c.has_template);
         let has_hole = matches!(head, FragHead::Hole(_)) || children.iter().any(|c| c.has_hole);
 
-        if matches!(head, FragHead::Hole(_) | FragHead::Variable(_, _)) {
+        if matches!(head, FragHead::Hole(_)) {
             assert!(children.is_empty());
         }
-
-        let children_unclosed = children
-            .iter()
-            .map(|c| c.unclosed_count())
-            .max()
-            .unwrap_or(0);
-        let unclosed_count = match head {
-            FragHead::RuleApplication(rule_app) => {
-                // The rule application adds a certain number of bindings which
-                // closes that many of the unclosed bindings from the children.
-                children_unclosed.saturating_sub(rule_app.bindings_added)
-            }
-            FragHead::Variable(_cat, db_idx) => db_idx.max(children_unclosed),
-            _ => children_unclosed,
-        };
 
         Self {
             cat,
@@ -57,7 +41,6 @@ impl<'ctx> Fragment<'ctx> {
             children,
             has_hole,
             has_template,
-            unclosed_count,
         }
     }
 
@@ -80,16 +63,11 @@ impl<'ctx> Fragment<'ctx> {
     pub fn has_template(&self) -> bool {
         self.has_template
     }
-
-    pub fn unclosed_count(&self) -> usize {
-        self.unclosed_count
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FragHead<'ctx> {
     RuleApplication(FragRuleApplication<'ctx>),
-    Variable(FormalSyntaxCatId<'ctx>, usize), // Debruijn index
     TemplateRef(usize),
     Hole(usize),
 }
@@ -188,7 +166,6 @@ pub fn _debug_fragment<'ctx>(frag: FragmentId<'ctx>) -> String {
             out.push(')');
             out
         }
-        FragHead::Variable(_cat, idx) => format!("?{}", idx),
         FragHead::TemplateRef(idx) => format!("${}", idx),
         FragHead::Hole(idx) => format!("_{}", idx),
     }

@@ -18,6 +18,7 @@ pub struct Fragment<'ctx> {
 
     // flags for efficient search:
     has_hole: bool,
+    has_var_hole: bool,
     has_template: bool,
 }
 
@@ -30,8 +31,10 @@ impl<'ctx> Fragment<'ctx> {
         let has_template =
             matches!(head, FragHead::TemplateRef(_)) || children.iter().any(|c| c.has_template);
         let has_hole = matches!(head, FragHead::Hole(_)) || children.iter().any(|c| c.has_hole);
+        let has_var_hole =
+            matches!(head, FragHead::VarHole(_)) || children.iter().any(|c| c.has_var_hole);
 
-        if matches!(head, FragHead::Hole(_)) {
+        if matches!(head, FragHead::Var(_) | FragHead::VarHole(_)) {
             assert!(children.is_empty());
         }
 
@@ -40,6 +43,7 @@ impl<'ctx> Fragment<'ctx> {
             head,
             children,
             has_hole,
+            has_var_hole,
             has_template,
         }
     }
@@ -60,6 +64,10 @@ impl<'ctx> Fragment<'ctx> {
         self.has_hole
     }
 
+    pub fn has_var_hole(&self) -> bool {
+        self.has_hole
+    }
+
     pub fn has_template(&self) -> bool {
         self.has_template
     }
@@ -68,8 +76,10 @@ impl<'ctx> Fragment<'ctx> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FragHead<'ctx> {
     RuleApplication(FragRuleApplication<'ctx>),
+    Var(usize),
     TemplateRef(usize),
     Hole(usize),
+    VarHole(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -121,9 +131,22 @@ impl<'ctx> Fact<'ctx> {
 pub fn hole_frag<'ctx>(
     idx: usize,
     cat: FormalSyntaxCatId<'ctx>,
+    children: Vec<PresFrag<'ctx>>,
     ctx: &Ctx<'ctx>,
 ) -> PresFrag<'ctx> {
-    let frag = Fragment::new(cat, FragHead::Hole(idx), Vec::new());
+    let frag_children = children.iter().map(|c| c.frag()).collect();
+    let frag = Fragment::new(cat, FragHead::Hole(idx), frag_children);
+    let frag = ctx.arenas.fragments.intern(frag);
+    let pres = Pres::new(PresHead::FormalFrag(frag.head()), children);
+    let pres = ctx.arenas.presentations.intern(pres);
+
+    // The presentation is already formal so we can pass the pres as the
+    // formal pres.
+    PresFrag::new(frag, pres, pres)
+}
+
+pub fn var_frag<'ctx>(idx: usize, cat: FormalSyntaxCatId<'ctx>, ctx: &Ctx<'ctx>) -> PresFrag<'ctx> {
+    let frag = Fragment::new(cat, FragHead::Var(idx), Vec::new());
     let frag = ctx.arenas.fragments.intern(frag);
     let pres = Pres::new(PresHead::FormalFrag(frag.head()), Vec::new());
     let pres = ctx.arenas.presentations.intern(pres);
@@ -166,7 +189,9 @@ pub fn _debug_fragment<'ctx>(frag: FragmentId<'ctx>) -> String {
             out.push(')');
             out
         }
+        FragHead::Var(idx) => format!("'{}", idx),
         FragHead::TemplateRef(idx) => format!("${}", idx),
         FragHead::Hole(idx) => format!("_{}", idx),
+        FragHead::VarHole(idx) => format!("\"{}", idx),
     }
 }

@@ -9,7 +9,7 @@ use crate::{
     },
     semant::{
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
-        fragment::{FragHead, FragRuleApplication, Fragment, hole_frag},
+        fragment::{FragHead, FragRuleApplication, Fragment, hole_frag, var_frag},
         notation::{
             NotationBinding, NotationBindingId, NotationPattern, NotationPatternId,
             NotationPatternPart, NotationPatternPartCat, NotationPatternSource,
@@ -778,12 +778,19 @@ pub fn formal_rule_to_notation<'ctx>(
         rule: FormalSyntaxRuleId<'ctx>,
         ctx: &Ctx<'ctx>,
     ) -> NotationPatternId<'ctx> {
+        let mut args = Vec::new();
+        for formal_part in rule.pattern().parts() {
+            if let FormalSyntaxPatPart::Binding(cat) = *formal_part {
+                args.push((args.len(), cat));
+            }
+        }
+
         let mut parts = Vec::new();
 
         for formal_part in rule.pattern().parts() {
             let part = match formal_part {
                 FormalSyntaxPatPart::Cat(cat) => {
-                    NotationPatternPart::Cat(NotationPatternPartCat::new(*cat, Vec::new()))
+                    NotationPatternPart::Cat(NotationPatternPartCat::new(*cat, args.clone()))
                 }
                 FormalSyntaxPatPart::Binding(cat) => NotationPatternPart::Binding(*cat),
                 FormalSyntaxPatPart::Lit(lit) => NotationPatternPart::Lit(*lit),
@@ -803,20 +810,22 @@ pub fn formal_rule_to_notation<'ctx>(
     }
 
     fn to_frag<'ctx>(rule: FormalSyntaxRuleId<'ctx>, ctx: &Ctx<'ctx>) -> PresFrag<'ctx> {
-        let mut children = Vec::new();
-        let mut bindings_added = 0;
+        let mut args = Vec::new();
         for formal_part in rule.pattern().parts() {
-            match formal_part {
-                FormalSyntaxPatPart::Cat(cat) => {
-                    children.push(hole_frag(children.len(), *cat, ctx));
-                }
-                FormalSyntaxPatPart::Binding(_) => bindings_added += 1,
-                FormalSyntaxPatPart::Lit(_) => continue,
-            };
+            if let FormalSyntaxPatPart::Binding(cat) = *formal_part {
+                args.push(var_frag(args.len(), cat, ctx));
+            }
+        }
+
+        let mut children = Vec::new();
+        for formal_part in rule.pattern().parts() {
+            if let FormalSyntaxPatPart::Cat(cat) = *formal_part {
+                children.push(hole_frag(children.len(), cat, args.clone(), ctx));
+            }
         }
 
         let frag_children = children.iter().map(|f| f.frag()).collect();
-        let rule_app = FragRuleApplication::new(rule, bindings_added);
+        let rule_app = FragRuleApplication::new(rule, args.len());
         let frag = Fragment::new(
             rule.cat(),
             FragHead::RuleApplication(rule_app),

@@ -1,13 +1,15 @@
+use ustr::Ustr;
+
 use crate::{
     context::Ctx,
     diagnostics::WResult,
     parse::{elaborator::elaborate_name, parse_state::ParseRuleSource, parse_tree::ParseTreeId},
     semant::{
         formal_syntax::FormalSyntaxCatId,
-        fragment::hole_frag,
-        notation::{NotationBinding, NotationPatternPart},
+        fragment::{FragHead, Fragment, hole_frag},
+        notation::{_debug_binding, NotationBinding, NotationPatternPart},
         presentation::{Pres, PresFrag, PresHead, instantiate_holes},
-        scope::{Scope, ScopeReplacement},
+        scope::{Scope, ScopeEntry, ScopeReplacement},
     },
 };
 
@@ -51,7 +53,7 @@ pub fn parse_fragment<'ctx>(
     scope: &Scope<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, Result<PresFrag<'ctx>, ParseResultErr>> {
-    parse_fragment_impl(frag.0, scope, ctx)
+    parse_fragment_impl(frag.0, 0, scope, ctx)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,6 +65,7 @@ pub enum ParseResultErr {
 
 fn parse_fragment_impl<'ctx>(
     frag: ParseTreeId<'ctx>,
+    binding_depth: usize,
     scope: &Scope<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, Result<PresFrag<'ctx>, ParseResultErr>> {
@@ -75,10 +78,14 @@ fn parse_fragment_impl<'ctx>(
         // First let's create the binding that this syntax represented and
         // look it up in our scope. If it doesn't exist we can move on.
         let mut name_instantiations = Vec::new();
+        let mut binder_names = Vec::new();
         for (child, part) in possibility.children().iter().zip(notation.parts()) {
             if let NotationPatternPart::Name = part {
                 let name = elaborate_name(child.as_node().unwrap(), ctx)?;
                 name_instantiations.push(name);
+            } else if let NotationPatternPart::Binding(_) = part {
+                let name = elaborate_name(child.as_node().unwrap(), ctx)?;
+                binder_names.push(name);
             }
         }
         let binding = NotationBinding::new(notation, name_instantiations);
@@ -90,19 +97,25 @@ fn parse_fragment_impl<'ctx>(
             continue;
         };
 
-        // Next we want to create a scope we can parse our children with that
-        // contains the binders this notation introduced.
-        // TODO: implement
-        let new_scope = scope.clone();
-
         // Now we want to evaluate each of the child nodes in the context of
         // the new scope that we created.
         let mut children = Vec::new();
         let mut multiple_solutions = false;
         for (child, part) in possibility.children().iter().zip(notation.parts()) {
-            if let NotationPatternPart::Cat(_child_cat) = part {
+            if let NotationPatternPart::Cat(child_cat) = part {
+                // Extend the scope with any binders that are passed to this child.
+                let new_scope = extend_scope_with_args(
+                    scope,
+                    binding_depth,
+                    child_cat.args(),
+                    &binder_names,
+                    ctx,
+                );
+                let new_binding_depth = binding_depth + child_cat.args().len();
+
                 let child_node = child.as_node().unwrap();
-                let child_parse = parse_fragment_impl(child_node, &new_scope, ctx)?;
+                let child_parse =
+                    parse_fragment_impl(child_node, new_binding_depth, &new_scope, ctx)?;
                 match child_parse {
                     Ok(parse) => children.push(parse),
                     Err(ParseResultErr::NoSolutions) => {
@@ -132,7 +145,7 @@ fn parse_fragment_impl<'ctx>(
                     instantiated_replacement.formal_pres(),
                 )
             }
-            ScopeReplacement::Hole(cat, idx) => hole_frag(idx, cat, ctx),
+            ScopeReplacement::Hole(cat, idx) => hole_frag(idx, cat, children, ctx),
         };
 
         if let Ok(_alternate) = solution {
@@ -143,4 +156,38 @@ fn parse_fragment_impl<'ctx>(
     }
 
     Ok(solution)
+}
+
+fn extend_scope_with_args<'ctx>(
+    scope: &Scope<'ctx>,
+    binding_depth: usize,
+    args: &[(usize, FormalSyntaxCatId<'ctx>)],
+    binder_names: &[Ustr],
+    ctx: &Ctx<'ctx>,
+) -> Scope<'ctx> {
+    let mut scope = scope.clone();
+    let mut var_hole_idx = binding_depth;
+
+    for (binder_idx, cat) in args {
+        let head = FragHead::VarHole(var_hole_idx);
+        var_hole_idx += 1;
+
+        let frag = Fragment::new(*cat, head, Vec::new());
+        let frag = ctx.arenas.fragments.intern(frag);
+
+        let formal_pres_head = PresHead::FormalFrag(frag.head());
+        let formal_pres = Pres::new(formal_pres_head, Vec::new());
+        let formal_pres = ctx.arenas.presentations.intern(formal_pres);
+        let formal_pres_frag = PresFrag::new(frag, formal_pres, formal_pres);
+
+        let name = binder_names[*binder_idx];
+        let single_name_notation = ctx.single_name_notations[cat];
+        let single_name_binding = NotationBinding::new(single_name_notation, vec![name]);
+        let single_name_binding = ctx.arenas.notation_bindings.intern(single_name_binding);
+
+        let scope_entry = ScopeEntry::new(formal_pres_frag);
+        scope = scope.child_with(single_name_binding, scope_entry);
+    }
+
+    scope
 }

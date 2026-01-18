@@ -36,9 +36,6 @@ impl<'ctx> Scope<'ctx> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScopeEntry<'ctx> {
     replacement: ScopeReplacement<'ctx>,
-    /// How many bindings exist above the fragment.
-    binding_depth: usize,
-    source: (), // TODO
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,30 +46,18 @@ pub enum ScopeReplacement<'ctx> {
 
 impl<'ctx> ScopeEntry<'ctx> {
     pub fn new(frag: PresFrag<'ctx>) -> Self {
-        Self::new_with_depth(frag, 0)
+        Self {
+            replacement: ScopeReplacement::Frag(frag),
+        }
     }
 
     pub fn new_hole(cat: FormalSyntaxCatId<'ctx>, idx: usize) -> Self {
         Self {
             replacement: ScopeReplacement::Hole(cat, idx),
-            binding_depth: 0,
-            source: (),
-        }
-    }
-
-    pub fn new_with_depth(frag: PresFrag<'ctx>, binding_depth: usize) -> Self {
-        Self {
-            replacement: ScopeReplacement::Frag(frag),
-            binding_depth,
-            source: (),
         }
     }
 
     pub fn replacement(&self) -> ScopeReplacement<'ctx> {
         self.replacement
-    }
-
-    pub fn binding_depth(&self) -> usize {
-        self.binding_depth
     }
 }

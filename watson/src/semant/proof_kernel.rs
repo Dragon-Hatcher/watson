@@ -62,6 +62,7 @@ pub struct ProofState<'ctx> {
 pub enum ProofError {
     FragNotSentence,
     FragHasHoles,
+    FragHasVarHoles,
     FragUnclosed,
     NoAssumption,
     ProofIncomplete,
@@ -81,6 +82,8 @@ mod safe {
                 Err(ProofError::FragNotSentence)
             } else if frag.has_hole() {
                 Err(ProofError::FragHasHoles)
+            } else if frag.has_var_hole() {
+                Err(ProofError::FragHasVarHoles)
             } else {
                 Ok(Self(frag))
             }
@@ -265,6 +268,8 @@ fn instantiate_frag<'ctx>(
             ctx.arenas.fragments.intern(frag)
         }
         FragHead::Hole(_) => frag,
+        FragHead::VarHole(_) => todo!(),
+        FragHead::Var(_) => todo!(),
         FragHead::TemplateRef(idx) => fill_holes(templates[idx], frag.children(), ctx),
     }
 }

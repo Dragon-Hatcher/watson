@@ -437,10 +437,7 @@ impl<'ctx> Diagnostic<'ctx> {
     }
 
     pub fn _err_TODO_real_error_later<T>(span: Span, msg: &str) -> WResult<'ctx, T> {
-        let diag = Diagnostic::new(
-            msg,
-            vec![DiagnosticSpan::new_error("", span)],
-        );
+        let diag = Diagnostic::new(msg, vec![DiagnosticSpan::new_error("", span)]);
 
         Err(vec![diag])
     }

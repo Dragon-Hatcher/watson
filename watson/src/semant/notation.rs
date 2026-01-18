@@ -195,10 +195,7 @@ impl<'ctx> NotationBinding<'ctx> {
 pub fn _debug_binding<'ctx>(binding: NotationBindingId<'ctx>) -> String {
     let mut out = String::new();
     let mut names = 0;
-    for (i, part) in binding.pattern().parts().iter().enumerate() {
-        if i != 0 {
-            out.push(' ');
-        }
+    for part in binding.pattern().parts() {
         match part {
             NotationPatternPart::Lit(lit) => {
                 out.push_str(lit.as_str());

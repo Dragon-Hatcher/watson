@@ -78,12 +78,31 @@ impl<'ctx> Pres<'ctx> {
 
     pub fn print(&self) -> String {
         match self.head() {
-            PresHead::FormalFrag(FragHead::Hole(idx)) => format!("_{idx}"),
+            PresHead::FormalFrag(FragHead::Hole(idx)) => {
+                if !self.children().is_empty() {
+                    format!(
+                        "_{idx}({})",
+                        self.children().iter().map(|c| c.print()).join(", ")
+                    )
+                } else {
+                    format!("_{idx}")
+                }
+            }
+            PresHead::FormalFrag(FragHead::VarHole(idx)) => {
+                format!("\"{idx}")
+            }
+            PresHead::FormalFrag(FragHead::Var(idx)) => {
+                format!("'{idx}")
+            }
             PresHead::FormalFrag(FragHead::TemplateRef(idx)) => {
                 if !self.children().is_empty() {
-                    todo!()
+                    format!(
+                        "${idx}({})",
+                        self.children().iter().map(|c| c.print()).join(", ")
+                    )
+                } else {
+                    format!("${idx}")
                 }
-                format!("${idx}")
             }
             PresHead::FormalFrag(FragHead::RuleApplication(rule_app)) => {
                 let mut out = String::new();
@@ -114,7 +133,10 @@ impl<'ctx> Pres<'ctx> {
                         P::Kw(kw) => out.push_str(kw),
                         P::Name => out.push_str(name_instantiations.next().unwrap()),
                         P::Cat(_) => out.push_str(&children.next().unwrap().print()),
-                        P::Binding(_) => todo!(),
+                        P::Binding(_) => {
+                            // TODO
+                            out.push_str("?");
+                        }
                     }
                 }
 
@@ -164,6 +186,8 @@ fn instantiate_frag_holes<'ctx>(
             ctx.arenas.fragments.intern(frag)
         }
         FragHead::Hole(idx) => holes(idx),
+        FragHead::VarHole(_) => todo!(),
+        FragHead::Var(_) => todo!(),
     };
     frag_cache.insert(frag, new_frag);
     new_frag
@@ -285,6 +309,8 @@ fn instantiate_frag_templates<'ctx>(
             ctx.arenas.fragments.intern(frag)
         }
         FragHead::Hole(_) => frag,
+        FragHead::VarHole(_) => todo!(),
+        FragHead::Var(_) => todo!(),
     };
     frag_cache.insert(frag, new_frag);
     new_frag

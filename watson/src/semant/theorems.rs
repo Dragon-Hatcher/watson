@@ -106,7 +106,7 @@ pub fn add_templates_to_scope<'ctx>(
     ) -> PresFrag<'ctx> {
         let holes = template.holes().iter().enumerate();
         let hole_pres_frags = holes
-            .map(|(i, binding)| hole_frag(i, binding.pattern().cat(), ctx))
+            .map(|(i, binding)| hole_frag(i, binding.pattern().cat(), Vec::new(), ctx))
             .collect_vec();
         let hole_frags = hole_pres_frags.iter().map(|f| f.frag()).collect();
 

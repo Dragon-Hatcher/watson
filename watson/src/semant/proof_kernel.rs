@@ -6,7 +6,6 @@ use crate::{
         theorems::TheoremId,
     },
 };
-use itertools::Itertools;
 
 pub struct ProofCertificate<'ctx> {
     proof: ProofState<'ctx>,

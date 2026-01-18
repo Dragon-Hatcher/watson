@@ -85,6 +85,8 @@ mod safe {
                 Err(ProofError::FragHasHoles)
             } else if frag.has_var_hole() {
                 Err(ProofError::FragHasVarHoles)
+            } else if !frag.is_closed() {
+                Err(ProofError::FragUnclosed)
             } else {
                 Ok(Self(frag))
             }
@@ -182,6 +184,12 @@ impl<'ctx> ProofState<'ctx> {
         templates: &[FragmentId<'ctx>],
         ctx: &Ctx<'ctx>,
     ) -> Result<Self, ProofError> {
+        for template in templates {
+            if !template.is_closed() {
+                return Err(ProofError::FragUnclosed);
+            }
+        }
+
         let hypotheses: Result<Vec<_>, _> = theorem
             .hypotheses()
             .iter()
@@ -262,26 +270,28 @@ fn instantiate_frag<'ctx>(
         return frag;
     }
 
+    let new_children = || {
+        frag.children()
+            .iter()
+            .map(|&c| instantiate_frag(c, templates, ctx))
+            .collect()
+    };
+
     match frag.head() {
-        FragHead::RuleApplication(_) => {
-            let new_children = frag
-                .children()
-                .iter()
-                .map(|&c| instantiate_frag(c, templates, ctx))
-                .collect();
+        FragHead::RuleApplication(_) | FragHead::Hole(_) => {
+            let new_children = new_children();
             let frag = Fragment::new(frag.cat(), frag.head(), new_children);
             ctx.arenas.fragments.intern(frag)
         }
-        FragHead::Hole(_) => frag,
-        FragHead::VarHole(_) => todo!(),
-        FragHead::Var(_) => todo!(),
         FragHead::TemplateRef(idx) => {
-            let new_children = frag
-                .children()
-                .iter()
-                .map(|&c| instantiate_frag(c, templates, ctx))
-                .collect_vec();
-            fill_holes(templates[idx], &new_children, ctx)
+            let new_children = new_children();
+            // template substitutions are closed terms so we don't need to worry
+            // about shifting here.
+            fill_holes(templates[idx], &new_children, 0, ctx)
+        }
+        FragHead::VarHole(_) | FragHead::Var(_) => {
+            debug_assert!(frag.children().is_empty());
+            frag
         }
     }
 }
@@ -289,6 +299,7 @@ fn instantiate_frag<'ctx>(
 fn fill_holes<'ctx>(
     frag: FragmentId<'ctx>,
     children: &[FragmentId<'ctx>],
+    binding_depth: usize,
     ctx: &Ctx<'ctx>,
 ) -> FragmentId<'ctx> {
     if !frag.has_hole() {
@@ -296,15 +307,64 @@ fn fill_holes<'ctx>(
     }
 
     match frag.head() {
-        FragHead::Hole(idx) => children[idx],
+        FragHead::Hole(idx) => {
+            // it is possible this hole was instantiated with unclosed terms.
+            // so we need to shift the open variables in this instantiation by
+            // the numbers of binders we have encountered.
+            shift(children[idx], binding_depth, ctx)
+        }
         _ => {
+            // This head might add new binders to the children.
+            let binding_depth = binding_depth + frag.head().bindings_added();
+
             let new_children = frag
                 .children()
                 .iter()
-                .map(|&c| fill_holes(c, children, ctx))
+                .map(|&c| fill_holes(c, children, binding_depth, ctx))
                 .collect();
             let frag = Fragment::new(frag.cat(), frag.head(), new_children);
             ctx.arenas.fragments.intern(frag)
         }
     }
+}
+
+fn shift<'ctx>(frag: FragmentId<'ctx>, shift: usize, ctx: &Ctx<'ctx>) -> FragmentId<'ctx> {
+    fn inner<'ctx>(
+        frag: FragmentId<'ctx>,
+        shift: usize,
+        closed_count: usize,
+        ctx: &Ctx<'ctx>,
+    ) -> FragmentId<'ctx> {
+        // If this condition holds all the remaining variables refer to binders
+        // inside the original fragment and so shouldn't be shifted.
+        if frag.unclosed_vars() <= closed_count {
+            return frag;
+        }
+
+        match frag.head() {
+            FragHead::Var(idx) => {
+                // The condition above ensures that this variables should be
+                // shifted. So we do it unconditionally here.
+                let head = FragHead::Var(idx + shift);
+                let frag = Fragment::new(frag.cat(), head, Vec::new());
+                ctx.arenas.fragments.intern(frag)
+            }
+            _ => {
+                // This head might add new binders to the children.
+                let closed_count = closed_count + frag.head().bindings_added();
+
+                let new_children = frag
+                    .children()
+                    .iter()
+                    .map(|&c| inner(c, shift, closed_count, ctx))
+                    .collect();
+                let frag = Fragment::new(frag.cat(), frag.head(), new_children);
+                ctx.arenas.fragments.intern(frag)
+            }
+        }
+    }
+
+    // We keep track of binders internally because variables that refer to
+    // bindings inside the terms are closed and shouldn't be shifted.
+    inner(frag, shift, 0, ctx)
 }

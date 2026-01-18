@@ -7,7 +7,7 @@ use crate::{
     semant::{
         formal_syntax::FormalSyntaxCatId,
         fragment::{FragHead, Fragment, hole_frag},
-        notation::{_debug_binding, NotationBinding, NotationPatternPart},
+        notation::{NotationBinding, NotationPatternPart},
         presentation::{Pres, PresFrag, PresHead, instantiate_holes},
         scope::{Scope, ScopeEntry, ScopeReplacement},
     },

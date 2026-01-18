@@ -21,6 +21,7 @@ pub struct Fragment<'ctx> {
     has_hole: bool,
     has_var_hole: bool,
     has_template: bool,
+    unclosed_vars: usize,
 }
 
 impl<'ctx> Fragment<'ctx> {
@@ -34,6 +35,20 @@ impl<'ctx> Fragment<'ctx> {
         let has_hole = matches!(head, FragHead::Hole(_)) || children.iter().any(|c| c.has_hole);
         let has_var_hole =
             matches!(head, FragHead::VarHole(_)) || children.iter().any(|c| c.has_var_hole);
+        let unclosed_vars = match head {
+            FragHead::Var(idx) => idx + 1, // zero indexed
+            _ => {
+                // The max unclosed var of our children
+                let children = children
+                    .iter()
+                    .map(|c| c.unclosed_vars())
+                    .max()
+                    .unwrap_or(0);
+                // Minus however many bindings we introduced here
+                let bindings = head.bindings_added();
+                children.saturating_sub(bindings)
+            }
+        };
 
         if matches!(head, FragHead::Var(_) | FragHead::VarHole(_)) {
             assert!(children.is_empty());
@@ -46,6 +61,7 @@ impl<'ctx> Fragment<'ctx> {
             has_hole,
             has_var_hole,
             has_template,
+            unclosed_vars,
         }
     }
 
@@ -66,11 +82,19 @@ impl<'ctx> Fragment<'ctx> {
     }
 
     pub fn has_var_hole(&self) -> bool {
-        self.has_hole
+        self.has_var_hole
     }
 
     pub fn has_template(&self) -> bool {
         self.has_template
+    }
+
+    pub fn unclosed_vars(&self) -> usize {
+        self.unclosed_vars
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.unclosed_vars() == 0
     }
 }
 
@@ -81,6 +105,18 @@ pub enum FragHead<'ctx> {
     TemplateRef(usize),
     Hole(usize),
     VarHole(usize),
+}
+
+impl<'ctx> FragHead<'ctx> {
+    pub fn bindings_added(&self) -> usize {
+        match self {
+            FragHead::RuleApplication(app) => app.bindings_added(),
+            FragHead::Var(_) => 0,
+            FragHead::TemplateRef(_) => 0,
+            FragHead::Hole(_) => 0,
+            FragHead::VarHole(_) => 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -101,7 +137,7 @@ impl<'ctx> FragRuleApplication<'ctx> {
         self.rule
     }
 
-    pub fn _bindings_added(&self) -> usize {
+    pub fn bindings_added(&self) -> usize {
         self.bindings_added
     }
 }

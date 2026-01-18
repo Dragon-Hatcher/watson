@@ -6,6 +6,7 @@ use crate::{
         theorems::TheoremId,
     },
 };
+use itertools::Itertools;
 
 pub struct ProofCertificate<'ctx> {
     proof: ProofState<'ctx>,
@@ -118,6 +119,10 @@ mod safe {
                 assumption: None,
                 conclusion,
             }
+        }
+
+        pub fn _fact(&self) -> Fact<'ctx> {
+            Fact::new(self.assumption.map(|a| a.frag()), self.conclusion.frag())
         }
     }
 }
@@ -270,7 +275,14 @@ fn instantiate_frag<'ctx>(
         FragHead::Hole(_) => frag,
         FragHead::VarHole(_) => todo!(),
         FragHead::Var(_) => todo!(),
-        FragHead::TemplateRef(idx) => fill_holes(templates[idx], frag.children(), ctx),
+        FragHead::TemplateRef(idx) => {
+            let new_children = frag
+                .children()
+                .iter()
+                .map(|&c| instantiate_frag(c, templates, ctx))
+                .collect_vec();
+            fill_holes(templates[idx], &new_children, ctx)
+        }
     }
 }
 

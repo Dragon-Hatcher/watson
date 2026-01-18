@@ -113,7 +113,10 @@ impl<'ctx> Pres<'ctx> {
 
                     match part {
                         P::Lit(lit) => out.push_str(lit),
-                        P::Binding(_) => todo!(),
+                        P::Binding(_) => {
+                            // TODO
+                            out.push_str("?");
+                        }
                         P::Cat(_) => out.push_str(&children.next().unwrap().print()),
                     }
                 }
@@ -291,10 +294,14 @@ fn instantiate_frag_templates<'ctx>(
     let new_frag = match frag.head() {
         FragHead::TemplateRef(idx) => {
             let replacement = templates(idx);
-            let children = frag.children();
+            let new_children = frag
+                .children()
+                .iter()
+                .map(|&child| instantiate_frag_templates(child, templates, ctx, frag_cache))
+                .collect_vec();
             instantiate_frag_holes(
                 replacement.frag(),
-                &|idx| children[idx],
+                &|idx| new_children[idx],
                 ctx,
                 &mut FxHashMap::default(),
             )
@@ -357,8 +364,17 @@ fn instantiate_pres_templates<'ctx>(
             // If the replacement for this notation contains template params
             // then we need to expand the notation. The notation isn't accurate
             // any more.
-            instantiate_pres_templates(
+            let instantiated_replacement = instantiate_pres_holes(
                 replacement.pres(),
+                ty,
+                &|idx| pres.children()[idx],
+                ctx,
+                &mut FxHashMap::default(),
+                &mut FxHashMap::default(),
+            );
+
+            instantiate_pres_templates(
+                instantiated_replacement,
                 ty,
                 templates,
                 ctx,

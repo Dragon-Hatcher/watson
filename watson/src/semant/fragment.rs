@@ -7,6 +7,7 @@ use crate::{
         theorems::PresFact,
     },
 };
+use itertools::Itertools;
 
 generate_arena_handle! { FragmentId<'ctx> => Fragment<'ctx> }
 
@@ -168,30 +169,47 @@ pub fn _debug_fragment<'ctx>(frag: FragmentId<'ctx>) -> String {
     match frag.head() {
         FragHead::RuleApplication(rule) => {
             let mut out = String::new();
-            out.push('(');
 
             let mut child_idx = 0;
-            for (i, part) in rule.rule().pattern().parts().iter().enumerate() {
-                if i != 0 {
-                    out.push(' ');
-                }
+            for part in rule.rule().pattern().parts() {
                 match part {
                     FormalSyntaxPatPart::Cat(_) => {
                         let child = &frag.children()[child_idx];
                         out.push_str(&_debug_fragment(*child));
                         child_idx += 1;
                     }
-                    FormalSyntaxPatPart::Binding(_) => out.push_str("??"),
+                    FormalSyntaxPatPart::Binding(_) => out.push_str("?"),
                     FormalSyntaxPatPart::Lit(str) => out.push_str(str),
                 }
             }
 
-            out.push(')');
             out
         }
         FragHead::Var(idx) => format!("'{}", idx),
-        FragHead::TemplateRef(idx) => format!("${}", idx),
-        FragHead::Hole(idx) => format!("_{}", idx),
+        FragHead::TemplateRef(idx) => {
+            if frag.children().len() > 0 {
+                let children = frag
+                    .children()
+                    .iter()
+                    .map(|&c| _debug_fragment(c))
+                    .join(", ");
+                format!("${}({})", idx, children)
+            } else {
+                format!("${}", idx)
+            }
+        }
+        FragHead::Hole(idx) => {
+            if frag.children().len() > 0 {
+                let children = frag
+                    .children()
+                    .iter()
+                    .map(|&c| _debug_fragment(c))
+                    .join(", ");
+                format!("_{}({})", idx, children)
+            } else {
+                format!("_{}", idx)
+            }
+        }
         FragHead::VarHole(idx) => format!("\"{}", idx),
     }
 }

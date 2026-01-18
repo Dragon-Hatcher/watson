@@ -12,9 +12,8 @@ use crate::{
             FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxPat, FormalSyntaxPatPart,
             FormalSyntaxRule, FormalSyntaxRuleId,
         },
-        fragment::_debug_fragment,
         notation::{
-            _debug_binding, NotationBinding, NotationBindingId, NotationPattern, NotationPatternId,
+            NotationBinding, NotationBindingId, NotationPattern, NotationPatternId,
             NotationPatternPart, NotationPatternPartCat, NotationPatternSource,
             NotationSignatureHole,
         },
@@ -827,7 +826,6 @@ fn elaborate_definition<'ctx>(
             match solutions.as_slice() {
                 [] => Diagnostic::_err_TODO_real_error_later(notation_binding.span(), "no matching notation bindings"),
                 [(binding, frag)] => {
-                    println!("{} => {}", _debug_binding(*binding), frag.print());
                     let entry = ScopeEntry::new(*frag);
                     Ok(scope.child_with(*binding, entry))
                 },

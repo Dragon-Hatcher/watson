@@ -214,7 +214,7 @@ pub fn _debug_fragment<'ctx>(frag: FragmentId<'ctx>) -> String {
                         out.push_str(&_debug_fragment(*child));
                         child_idx += 1;
                     }
-                    FormalSyntaxPatPart::Binding(_) => out.push_str("?"),
+                    FormalSyntaxPatPart::Binding(_) => out.push_str("_"),
                     FormalSyntaxPatPart::Lit(str) => out.push_str(str),
                 }
             }

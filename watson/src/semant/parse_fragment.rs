@@ -136,7 +136,7 @@ fn parse_fragment_impl<'ctx>(
         let instantiated = match replacement.replacement() {
             ScopeReplacement::Frag(replacement) => {
                 let instantiated_replacement =
-                    instantiate_holes(replacement, &|idx| children[idx], ctx);
+                    instantiate_holes(replacement, &|idx| children[idx], binding_depth, ctx);
                 let my_pres = Pres::new(PresHead::Notation(binding, replacement), children);
                 let my_pres = ctx.arenas.presentations.intern(my_pres);
                 PresFrag::new(

@@ -307,6 +307,9 @@ fn fill_holes<'ctx>(
 
     match frag.head() {
         FragHead::Hole(idx) => {
+            // We should have instantiated any children with holes by now.
+            assert!(frag.children().is_empty());
+
             // it is possible this hole was instantiated with unclosed terms.
             // so we need to shift the open variables in this instantiation by
             // the numbers of binders we have encountered.

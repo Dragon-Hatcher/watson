@@ -3,7 +3,7 @@ use crate::{
     generate_arena_handle,
     semant::{
         formal_syntax::FormalSyntaxPatPart,
-        fragment::{FragHead, Fragment, FragmentId},
+        fragment::{_debug_fragment, FragHead, Fragment, FragmentId},
         notation::{NotationBindingId, NotationPatternPart},
     },
 };
@@ -88,9 +88,6 @@ impl<'ctx> Pres<'ctx> {
                     format!("_{idx}")
                 }
             }
-            PresHead::FormalFrag(FragHead::VarHole(idx)) => {
-                format!("\"{idx}")
-            }
             PresHead::FormalFrag(FragHead::Var(idx)) => {
                 format!("'{idx}")
             }
@@ -106,6 +103,7 @@ impl<'ctx> Pres<'ctx> {
             }
             PresHead::FormalFrag(FragHead::RuleApplication(rule_app)) => {
                 let mut out = String::new();
+                out.push('{');
                 let mut children = self.children().iter();
 
                 for part in rule_app.rule().pattern().parts() {
@@ -118,6 +116,7 @@ impl<'ctx> Pres<'ctx> {
                     }
                 }
 
+                out.push('}');
                 out
             }
             PresHead::Notation(binding, _) => {
@@ -156,10 +155,12 @@ pub enum PresHead<'ctx> {
 }
 
 impl<'ctx> PresHead<'ctx> {
-    fn bindings_added(&self) -> usize {
+    fn bindings_added(&self, child: usize) -> usize {
         match self {
             PresHead::FormalFrag(head) => head.bindings_added(),
-            PresHead::Notation(_, _) => 0,
+            PresHead::Notation(binding, _) => {
+                binding.pattern().signature().holes()[child].args().len()
+            }
         }
     }
 }
@@ -225,10 +226,21 @@ fn shift_pres<'ctx>(
         return *cached;
     }
 
-    let mut new_children = |cc: usize| {
+    let mut new_children = || {
         pres.children()
             .iter()
-            .map(|&child| shift_pres_frag_impl(child, shift, cc, ty, ctx, frag_cache, pres_cache))
+            .enumerate()
+            .map(|(i, child)| {
+                shift_pres_frag_impl(
+                    *child,
+                    shift,
+                    closed_count + pres.head().bindings_added(i),
+                    ty,
+                    ctx,
+                    frag_cache,
+                    pres_cache,
+                )
+            })
             .collect_vec()
     };
 
@@ -268,8 +280,7 @@ fn shift_pres<'ctx>(
             )
         }
         _ => {
-            let closed_count = closed_count + pres.head().bindings_added();
-            let new_children = new_children(closed_count);
+            let new_children = new_children();
             let pres = Pres::new(pres.head(), new_children);
             ctx.arenas.presentations.intern(pres)
         }
@@ -287,6 +298,10 @@ fn shift_pres_frag_impl<'ctx>(
     frag_cache: &mut FxHashMap<(FragmentId<'ctx>, usize), FragmentId<'ctx>>,
     pres_cache: &mut FxHashMap<(PresId<'ctx>, usize, PresInstTy), PresId<'ctx>>,
 ) -> PresFrag<'ctx> {
+    if shift == 0 {
+        return pres_frag;
+    }
+
     let normal = shift_pres(
         pres_frag.pres(),
         shift,
@@ -297,7 +312,7 @@ fn shift_pres_frag_impl<'ctx>(
         pres_cache,
     );
     let formal = shift_pres(
-        pres_frag.pres(),
+        pres_frag.formal_pres(),
         shift,
         closed_count,
         PresInstTy::Formal,
@@ -332,93 +347,75 @@ pub fn shift_pres_frag<'ctx>(
     )
 }
 
-fn instantiate_frag_var_holes<'ctx>(
+fn instantiate_frag_vars<'ctx>(
     frag: FragmentId<'ctx>,
-    binding_depth: usize,
-    hole_arg_offset: usize,
-    hole_count: usize,
-    holes: &impl Fn(usize) -> FragmentId<'ctx>,
+    closed_count: usize,
+    vars: &impl Fn(usize) -> FragmentId<'ctx>,
+    var_count: usize,
     ctx: &Ctx<'ctx>,
     frag_cache: &mut FxHashMap<(FragmentId<'ctx>, usize), FragmentId<'ctx>>,
 ) -> FragmentId<'ctx> {
-    if !frag.has_var_hole() {
+    if frag.unclosed_vars() <= closed_count {
         return frag;
     }
 
-    if let Some(cached) = frag_cache.get(&(frag, binding_depth)) {
+    if let Some(cached) = frag_cache.get(&(frag, closed_count)) {
         return *cached;
     }
 
     let new_frag = match frag.head() {
-        FragHead::VarHole(idx) => {
-            if hole_arg_offset <= idx && idx < hole_arg_offset + hole_count {
-                let replacement = holes(idx - hole_arg_offset);
-                shift_frag(
-                    replacement,
-                    binding_depth,
-                    0,
-                    ctx,
-                    &mut FxHashMap::default(),
-                )
+        FragHead::Var(idx) => {
+            if closed_count <= idx && idx < closed_count + var_count {
+                let replacement = vars(idx - closed_count);
+                shift_frag(replacement, closed_count, 0, ctx, &mut FxHashMap::default())
             } else {
+                // This wasn't a free var or we weren't replacing it.
                 frag
             }
         }
-        FragHead::RuleApplication(_) | FragHead::TemplateRef(_) | FragHead::Hole { .. } => {
-            let binding_depth = binding_depth + frag.head().bindings_added();
+        FragHead::RuleApplication(_) | FragHead::TemplateRef(_) | FragHead::Hole(_) => {
+            // TODO: closed count per child.
+            let closed_count = closed_count + frag.head().bindings_added();
             let new_children = frag
                 .children()
                 .iter()
                 .map(|&child| {
-                    instantiate_frag_var_holes(
-                        child,
-                        binding_depth,
-                        hole_arg_offset,
-                        hole_count,
-                        holes,
-                        ctx,
-                        frag_cache,
-                    )
+                    instantiate_frag_vars(child, closed_count, vars, var_count, ctx, frag_cache)
                 })
                 .collect();
             let frag = Fragment::new(frag.cat(), frag.head(), new_children);
             ctx.arenas.fragments.intern(frag)
         }
-        FragHead::Var(_) => {
-            debug_assert!(frag.children().is_empty());
-            frag
-        }
     };
-    frag_cache.insert((frag, binding_depth), new_frag);
+    frag_cache.insert((frag, closed_count), new_frag);
     new_frag
 }
 
-fn instantiate_pres_var_holes<'ctx>(
+fn instantiate_pres_vars<'ctx>(
     pres: PresId<'ctx>,
-    binding_depth: usize,
+    closed_count: usize,
     ty: PresInstTy,
-    hole_arg_offset: usize,
-    hole_count: usize,
-    holes: &dyn Fn(usize) -> PresFrag<'ctx>,
+    vars: &dyn Fn(usize) -> PresFrag<'ctx>,
+    var_count: usize,
     ctx: &Ctx<'ctx>,
     frag_cache: &mut FxHashMap<(FragmentId<'ctx>, usize), FragmentId<'ctx>>,
     pres_cache: &mut FxHashMap<(PresId<'ctx>, usize, PresInstTy), PresId<'ctx>>,
 ) -> PresId<'ctx> {
-    if let Some(cached) = pres_cache.get(&(pres, binding_depth, ty)) {
+    if let Some(cached) = pres_cache.get(&(pres, closed_count, ty)) {
         return *cached;
     }
 
     let new_pres = match pres.head() {
-        PresHead::FormalFrag(FragHead::VarHole(idx)) => {
-            if hole_arg_offset <= idx && idx < hole_arg_offset + hole_count {
-                let replacement = holes(idx - hole_arg_offset);
+        PresHead::FormalFrag(FragHead::Var(idx)) => {
+            if closed_count <= idx && idx < closed_count + var_count {
+                let replacement = vars(idx - closed_count);
                 let pres = match ty {
                     PresInstTy::Normal => replacement.pres(),
                     PresInstTy::Formal => replacement.formal_pres(),
                 };
                 shift_pres(
                     pres,
-                    binding_depth,
+                    closed_count,
                     0,
                     ty,
                     ctx,
@@ -429,8 +426,8 @@ fn instantiate_pres_var_holes<'ctx>(
                 pres
             }
         }
-        PresHead::Notation(_, replacement) if replacement.frag().has_var_hole() => {
-            // If the replacement for this notation contains var holes
+        PresHead::Notation(_, replacement) if replacement.frag().unclosed_vars() > closed_count => {
+            // If the replacement for this notation contains free variables
             // then we need to expand the notation. The notation isn't accurate
             // any more.
             let instantiated_replacement = instantiate_pres_holes(
@@ -444,31 +441,29 @@ fn instantiate_pres_var_holes<'ctx>(
                 &mut FxHashMap::default(),
             );
 
-            instantiate_pres_var_holes(
+            instantiate_pres_vars(
                 instantiated_replacement,
-                binding_depth,
+                closed_count,
                 ty,
-                hole_arg_offset,
-                hole_count,
-                holes,
+                vars,
+                var_count,
                 ctx,
                 frag_cache,
                 pres_cache,
             )
         }
         _ => {
-            let binding_depth = binding_depth + pres.head().bindings_added();
             let new_children = pres
                 .children()
                 .iter()
-                .map(|&child| {
-                    instantiate_var_holes_impl(
-                        child,
-                        binding_depth,
+                .enumerate()
+                .map(|(i, child)| {
+                    instantiate_vars_impl(
+                        *child,
+                        closed_count + pres.head().bindings_added(i),
                         ty,
-                        hole_arg_offset,
-                        hole_count,
-                        holes,
+                        vars,
+                        var_count,
                         ctx,
                         frag_cache,
                         pres_cache,
@@ -479,51 +474,47 @@ fn instantiate_pres_var_holes<'ctx>(
             ctx.arenas.presentations.intern(pres)
         }
     };
-    pres_cache.insert((pres, binding_depth, ty), new_pres);
+    pres_cache.insert((pres, closed_count, ty), new_pres);
     new_pres
 }
 
-fn instantiate_var_holes_impl<'ctx>(
+fn instantiate_vars_impl<'ctx>(
     pres_frag: PresFrag<'ctx>,
-    binding_depth: usize,
+    closed_count: usize,
     ty: PresInstTy,
-    hole_arg_offset: usize,
-    hole_count: usize,
-    holes: &dyn Fn(usize) -> PresFrag<'ctx>,
+    vars: &dyn Fn(usize) -> PresFrag<'ctx>,
+    var_count: usize,
     ctx: &Ctx<'ctx>,
     frag_cache: &mut FxHashMap<(FragmentId<'ctx>, usize), FragmentId<'ctx>>,
     pres_cache: &mut FxHashMap<(PresId<'ctx>, usize, PresInstTy), PresId<'ctx>>,
 ) -> PresFrag<'ctx> {
-    let normal = instantiate_pres_var_holes(
+    let normal = instantiate_pres_vars(
         pres_frag.pres(),
-        binding_depth,
+        closed_count,
         PresInstTy::Normal,
-        hole_arg_offset,
-        hole_count,
-        holes,
+        vars,
+        var_count,
         ctx,
         frag_cache,
         pres_cache,
     );
-    let formal = instantiate_pres_var_holes(
-        pres_frag.pres(),
-        binding_depth,
+    let formal = instantiate_pres_vars(
+        pres_frag.formal_pres(),
+        closed_count,
         PresInstTy::Formal,
-        hole_arg_offset,
-        hole_count,
-        holes,
+        vars,
+        var_count,
         ctx,
         frag_cache,
         pres_cache,
     );
 
     PresFrag::new(
-        instantiate_frag_var_holes(
+        instantiate_frag_vars(
             pres_frag.frag(),
-            binding_depth,
-            hole_arg_offset,
-            hole_count,
-            &|idx| holes(idx).frag(),
+            closed_count,
+            &|idx| vars(idx).frag(),
+            var_count,
             ctx,
             frag_cache,
         ),
@@ -535,20 +526,18 @@ fn instantiate_var_holes_impl<'ctx>(
     )
 }
 
-pub fn instantiate_var_holes<'ctx>(
+pub fn instantiate_vars<'ctx>(
     frag: PresFrag<'ctx>,
-    holes: &impl Fn(usize) -> PresFrag<'ctx>,
-    hole_count: usize,
-    hole_arg_offset: usize,
+    vars: &dyn Fn(usize) -> PresFrag<'ctx>,
+    var_count: usize,
     ctx: &Ctx<'ctx>,
 ) -> PresFrag<'ctx> {
-    instantiate_var_holes_impl(
+    instantiate_vars_impl(
         frag,
         0,
         PresInstTy::Normal,
-        hole_arg_offset,
-        hole_count,
-        holes,
+        vars,
+        var_count,
         ctx,
         &mut FxHashMap::default(),
         &mut FxHashMap::default(),
@@ -582,21 +571,14 @@ fn instantiate_frag_holes<'ctx>(
 
     let new_frag = match frag.head() {
         FragHead::Hole(idx) => {
+            // No shift
             let replacement = holes(idx);
-            let replacement = shift_frag(
-                replacement,
-                binding_depth,
-                0,
-                ctx,
-                &mut FxHashMap::default(),
-            );
             let new_children = new_children(binding_depth);
-            instantiate_frag_var_holes(
+            instantiate_frag_vars(
                 replacement,
                 0,
-                hole_arg_offset,
-                new_children.len(),
                 &|idx| new_children[idx],
+                new_children.len(),
                 ctx,
                 &mut FxHashMap::default(),
             )
@@ -607,7 +589,7 @@ fn instantiate_frag_holes<'ctx>(
             let frag = Fragment::new(frag.cat(), frag.head(), new_children);
             ctx.arenas.fragments.intern(frag)
         }
-        FragHead::VarHole(_) | FragHead::Var(_) => {
+        FragHead::Var(_) => {
             debug_assert!(frag.children().is_empty());
             frag
         }
@@ -630,13 +612,14 @@ fn instantiate_pres_holes<'ctx>(
         return *cached;
     }
 
-    let mut new_children = |bd: usize| {
+    let mut new_children = || {
         pres.children()
             .iter()
-            .map(|&child| {
+            .enumerate()
+            .map(|(i, child)| {
                 instantiate_holes_impl(
-                    child,
-                    bd,
+                    *child,
+                    binding_depth + pres.head().bindings_added(i),
                     ty,
                     holes,
                     hole_arg_offset,
@@ -650,27 +633,18 @@ fn instantiate_pres_holes<'ctx>(
 
     let new_pres = match pres.head() {
         PresHead::FormalFrag(FragHead::Hole(idx)) => {
-            let pres = match ty {
+            // No shift
+            let replacement = match ty {
                 PresInstTy::Normal => holes(idx).pres(),
                 PresInstTy::Formal => holes(idx).formal_pres(),
             };
-            let pres = shift_pres(
-                pres,
-                binding_depth,
+            let new_children = new_children();
+            instantiate_pres_vars(
+                replacement,
                 0,
                 ty,
-                ctx,
-                &mut FxHashMap::default(),
-                &mut FxHashMap::default(),
-            );
-            let new_children = new_children(binding_depth);
-            instantiate_pres_var_holes(
-                pres,
-                0,
-                ty,
-                hole_arg_offset,
-                new_children.len(),
                 &|idx| new_children[idx],
+                new_children.len(),
                 ctx,
                 &mut FxHashMap::default(),
                 &mut FxHashMap::default(),
@@ -679,8 +653,7 @@ fn instantiate_pres_holes<'ctx>(
         // TODO: holes in the replacement when using notation? not easy to
         // detect though. makes me wonder if that is even working correctly.
         _ => {
-            let binding_depth = binding_depth + pres.head().bindings_added();
-            let new_children = new_children(binding_depth);
+            let new_children = new_children();
             let pres = Pres::new(pres.head(), new_children);
             ctx.arenas.presentations.intern(pres)
         }
@@ -805,7 +778,7 @@ fn instantiate_frag_templates<'ctx>(
             let frag = Fragment::new(frag.cat(), frag.head(), new_children);
             ctx.arenas.fragments.intern(frag)
         }
-        FragHead::VarHole(_) | FragHead::Var(_) => {
+        FragHead::Var(_) => {
             debug_assert!(frag.children().is_empty());
             frag
         }
@@ -827,11 +800,20 @@ fn instantiate_pres_templates<'ctx>(
         return *cached;
     }
 
-    let mut new_children = |bd: usize| {
+    let mut new_children = || {
         pres.children()
             .iter()
-            .map(|&child| {
-                instantiate_templates_impl(child, bd, ty, templates, ctx, frag_cache, pres_cache)
+            .enumerate()
+            .map(|(i, child)| {
+                instantiate_templates_impl(
+                    *child,
+                    binding_depth + pres.head().bindings_added(i),
+                    ty,
+                    templates,
+                    ctx,
+                    frag_cache,
+                    pres_cache,
+                )
             })
             .collect_vec()
     };
@@ -851,7 +833,7 @@ fn instantiate_pres_templates<'ctx>(
                 &mut FxHashMap::default(),
                 &mut FxHashMap::default(),
             );
-            let new_children = new_children(binding_depth);
+            let new_children = new_children();
             instantiate_pres_holes(
                 replacement,
                 0,
@@ -889,8 +871,7 @@ fn instantiate_pres_templates<'ctx>(
             )
         }
         _ => {
-            let binding_depth = binding_depth + pres.head().bindings_added();
-            let new_children = new_children(binding_depth);
+            let new_children = new_children();
             let pres = Pres::new(pres.head(), new_children);
             ctx.arenas.presentations.intern(pres)
         }
@@ -969,11 +950,6 @@ pub fn match_presentation<'ctx>(
         }
 
         if let PresHead::FormalFrag(FragHead::Hole(idx)) = pattern.pres().head() {
-            if !pattern.frag().children().is_empty() {
-                // Don't handle holes with children for now.
-                return false;
-            }
-
             // Insert the haystack as the solution for this hole or get the
             // previous solution.
             let previous = found_holes.entry(idx).or_insert(haystack);

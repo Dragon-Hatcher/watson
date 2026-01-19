@@ -1,8 +1,9 @@
 use crate::semant::{
     check_proofs::lua_api::{ctx_to_lua::LuaCtx, formal_to_lua::LuaFormalCat},
-    fragment::{Fragment, FragmentId},
+    fragment::{_debug_fragment, Fragment, FragmentId, hole_frag, var_frag},
     presentation::{
-        Pres, PresFrag, PresId, instantiate_holes, instantiate_templates, match_presentation,
+        Pres, PresFrag, PresId, instantiate_holes, instantiate_templates, instantiate_vars,
+        match_presentation,
     },
     theorems::PresFact,
 };
@@ -40,6 +41,8 @@ impl UserData for LuaPresFrag {
         fields.add_field_method_get("formal", |_, this| {
             Ok(LuaPresFrag::new(this.out().formal()))
         });
+
+        fields.add_field_method_get("debug", |_, this| Ok(_debug_fragment(this.out().frag())));
     }
 
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
@@ -56,6 +59,12 @@ impl UserData for LuaPresFrag {
                 Ok(LuaPresFrag::new(frag))
             },
         );
+
+        methods.add_method("instantiateVars", |lua, this, vars: Vec<LuaPresFrag>| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let frag = instantiate_vars(this.out(), &|idx| vars[idx].out(), vars.len(), ctx);
+            Ok(LuaPresFrag::new(frag))
+        });
 
         methods.add_method("instantiateHoles", |lua, this, holes: Vec<LuaPresFrag>| {
             let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
@@ -83,6 +92,24 @@ impl UserData for LuaPresFrag {
 
         methods.add_meta_method(MetaMethod::Eq, |_, this, other: Self| {
             Ok(this.out() == other.out())
+        });
+    }
+}
+
+pub struct LuaPresFragMeta;
+
+impl UserData for LuaPresFragMeta {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("var", |lua, _, (cat, idx): (LuaFormalCat, usize)| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let frag = var_frag(idx, cat.out(), ctx);
+            Ok(LuaPresFrag::new(frag))
+        });
+
+        methods.add_method("hole", |lua, _, (cat, idx): (LuaFormalCat, usize)| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let frag = hole_frag(idx, cat.out(), Vec::new(), ctx);
+            Ok(LuaPresFrag::new(frag))
         });
     }
 }

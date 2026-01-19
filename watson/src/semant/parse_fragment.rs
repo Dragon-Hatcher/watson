@@ -8,7 +8,7 @@ use crate::{
         formal_syntax::FormalSyntaxCatId,
         fragment::{FragHead, Fragment, hole_frag},
         notation::{NotationBinding, NotationPatternPart},
-        presentation::{Pres, PresFrag, PresHead, instantiate_holes},
+        presentation::{Pres, PresFrag, PresHead, instantiate_holes, shift_pres_frag},
         scope::{Scope, ScopeEntry, ScopeReplacement},
     },
 };
@@ -53,6 +53,10 @@ pub fn parse_fragment<'ctx>(
     scope: &Scope<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, Result<PresFrag<'ctx>, ParseResultErr>> {
+    // println!();
+    // println!("=======================");
+    // println!("{:?}", frag.0.span());
+    // println!("=======================");
     parse_fragment_impl(frag.0, 0, scope, ctx)
 }
 
@@ -134,7 +138,9 @@ fn parse_fragment_impl<'ctx>(
 
         // Now we perform the replacement using the children we have parsed.
         let instantiated = match replacement.replacement() {
-            ScopeReplacement::Frag(replacement) => {
+            ScopeReplacement::Frag(replacement_frag) => {
+                let shift = binding_depth - replacement.binding_depth();
+                let replacement = shift_pres_frag(replacement_frag, shift, ctx);
                 let instantiated_replacement =
                     instantiate_holes(replacement, &|idx| children[idx], binding_depth, ctx);
                 let my_pres = Pres::new(PresHead::Notation(binding, replacement), children);
@@ -166,11 +172,9 @@ fn extend_scope_with_args<'ctx>(
     ctx: &Ctx<'ctx>,
 ) -> Scope<'ctx> {
     let mut scope = scope.clone();
-    let mut var_hole_idx = binding_depth;
 
-    for (binder_idx, cat) in args {
-        let head = FragHead::VarHole(var_hole_idx);
-        var_hole_idx += 1;
+    for (idx, (binder_idx, cat)) in args.iter().enumerate() {
+        let head = FragHead::Var(idx);
 
         let frag = Fragment::new(*cat, head, Vec::new());
         let frag = ctx.arenas.fragments.intern(frag);
@@ -185,7 +189,9 @@ fn extend_scope_with_args<'ctx>(
         let single_name_binding = NotationBinding::new(single_name_notation, vec![name]);
         let single_name_binding = ctx.arenas.notation_bindings.intern(single_name_binding);
 
-        let scope_entry = ScopeEntry::new(formal_pres_frag);
+        // Add the # of args to the binding depth because the vars go inside
+        // the new bindings.
+        let scope_entry = ScopeEntry::new(formal_pres_frag).with_depth(binding_depth + args.len());
         scope = scope.child_with(single_name_binding, scope_entry);
     }
 

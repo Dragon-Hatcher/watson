@@ -35,5 +35,11 @@ impl UserData for LuaFormalCatMeta {
             let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
             Ok(LuaFormalCat::new(ctx.sentence_cat))
         });
+
+        methods.add_method("get", |lua, _, name: String| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let cat = ctx.arenas.formal_cats.get(name.into());
+            Ok(cat.map(LuaFormalCat::new))
+        });
     }
 }

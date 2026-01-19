@@ -1,7 +1,7 @@
 use crate::{
     context::Ctx,
     semant::{
-        fragment::{Fact, FragHead, Fragment, FragmentId},
+        fragment::{_debug_fact, _debug_fragment, Fact, FragHead, Fragment, FragmentId},
         proof_kernel::safe::{SafeFact, SafeFrag},
         theorems::TheoremId,
     },
@@ -62,7 +62,6 @@ pub struct ProofState<'ctx> {
 pub enum ProofError {
     FragNotSentence,
     FragHasHoles,
-    FragHasVarHoles,
     FragUnclosed,
     NoAssumption,
     ProofIncomplete,
@@ -71,6 +70,8 @@ pub enum ProofError {
 }
 
 mod safe {
+    use crate::semant::fragment::_debug_fragment;
+
     use super::*;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -82,9 +83,8 @@ mod safe {
                 Err(ProofError::FragNotSentence)
             } else if frag.has_hole() {
                 Err(ProofError::FragHasHoles)
-            } else if frag.has_var_hole() {
-                Err(ProofError::FragHasVarHoles)
             } else if !frag.is_closed() {
+                dbg!(_debug_fragment(frag));
                 Err(ProofError::FragUnclosed)
             } else {
                 Ok(Self(frag))
@@ -288,7 +288,7 @@ fn instantiate_frag<'ctx>(
             // about shifting here.
             fill_holes(templates[idx], &new_children, 0, ctx)
         }
-        FragHead::VarHole(_) | FragHead::Var(_) => {
+        FragHead::Var(_) => {
             debug_assert!(frag.children().is_empty());
             frag
         }

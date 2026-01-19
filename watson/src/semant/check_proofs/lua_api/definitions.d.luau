@@ -91,6 +91,11 @@ declare class FormalCatMeta
     --- Get the formal category of sentences
     --- @return the formal cat for sentences
     function sentence(self): FormalCat
+
+    --- Get the formal category with the given name
+    --- @param name
+    --- @return the formal cat with that name or nil if it doesn't exist
+    function sentence(self, name: string): FormalCat?
 end
 
 declare FormalCat: FormalCatMeta
@@ -118,6 +123,12 @@ declare class Frag
     --- @return A new fragment with templates substituted
     function instantiateTemplates(self, templates: {Frag}): Frag
 
+    --- Instantiates variables in this fragment with concrete fragments.
+    --- When an n argument array is passed the first n variables are substituted
+    --- @param templates Array of fragments to substitute for variables 
+    --- @return A new fragment with variables substituted
+    function instantiateVars(self, templates: {Frag}): Frag
+
     --- Attempt to match this fragment to the provided pattern. If the pattern
     --- contains holes the corresponding subfragments of this fragment are 
     --- returned as a map.
@@ -125,6 +136,24 @@ declare class Frag
     --- @return a map from hole indexes to the matched fragments or nil if no match
     function match(self, pattern: Frag): {[number]: Frag}?
 end
+
+declare class FragMeta
+    --- Construct a variable with the given category and index
+    --- @param the formal category of the variable
+    --- @param the debruijn index of the variable
+    --- @return the fragment for the variable 
+    function var(self, cat: FormalCat, idx: number): Frag
+
+    --- Construct a hole with the given category and index
+    --- @param the formal category of the holes
+    --- @param the index of the holes
+    --- @return the fragment for the hole 
+    function hole(self, cat: FormalCat, idx: number): Frag
+end
+
+--- Metatable for constructing frags.
+declare Frag: FragMeta
+
 
 --- Metatable for creating fragment maps.
 declare FragMap : {

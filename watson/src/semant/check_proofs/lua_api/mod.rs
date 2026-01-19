@@ -9,7 +9,7 @@ use crate::{
             file_loader::LuaFileRequirer,
             formal_to_lua::LuaFormalCatMeta,
             frag_map_to_lua::{LuaFactMapMeta, LuaFragMapMeta},
-            frag_to_lua::LuaPresFactMeta,
+            frag_to_lua::{LuaPresFactMeta, LuaPresFragMeta},
             notation_to_lua::LuaNotationBindingMeta,
             scope_to_lua::LuaScopeMeta,
             tactic_to_lua::generate_luau_tactic_types,
@@ -116,6 +116,7 @@ pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
         .set("Binding", LuaNotationBindingMeta)
         .unwrap();
     lua.globals().set("Diagnostic", LuaDiagnosticMeta).unwrap();
+    lua.globals().set("Frag", LuaPresFragMeta).unwrap();
     lua.globals().set("Fact", LuaPresFactMeta).unwrap();
     lua.globals().set("FragMap", LuaFragMapMeta).unwrap();
     lua.globals().set("FactMap", LuaFactMapMeta).unwrap();

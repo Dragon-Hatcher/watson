@@ -36,6 +36,7 @@ impl<'ctx> Scope<'ctx> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScopeEntry<'ctx> {
     replacement: ScopeReplacement<'ctx>,
+    binding_depth: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,16 +49,27 @@ impl<'ctx> ScopeEntry<'ctx> {
     pub fn new(frag: PresFrag<'ctx>) -> Self {
         Self {
             replacement: ScopeReplacement::Frag(frag),
+            binding_depth: 0,
         }
     }
 
     pub fn new_hole(cat: FormalSyntaxCatId<'ctx>, idx: usize) -> Self {
         Self {
             replacement: ScopeReplacement::Hole(cat, idx),
+            binding_depth: 0,
         }
+    }
+
+    pub fn with_depth(mut self, depth: usize) -> Self {
+        self.binding_depth = depth;
+        self
     }
 
     pub fn replacement(&self) -> ScopeReplacement<'ctx> {
         self.replacement
+    }
+
+    pub fn binding_depth(&self) -> usize {
+        self.binding_depth
     }
 }

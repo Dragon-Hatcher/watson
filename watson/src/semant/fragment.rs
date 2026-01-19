@@ -19,7 +19,6 @@ pub struct Fragment<'ctx> {
 
     // flags for efficient search:
     has_hole: bool,
-    has_var_hole: bool,
     has_template: bool,
     unclosed_vars: usize,
 }
@@ -33,8 +32,6 @@ impl<'ctx> Fragment<'ctx> {
         let has_template =
             matches!(head, FragHead::TemplateRef(_)) || children.iter().any(|c| c.has_template);
         let has_hole = matches!(head, FragHead::Hole(_)) || children.iter().any(|c| c.has_hole);
-        let has_var_hole =
-            matches!(head, FragHead::VarHole(_)) || children.iter().any(|c| c.has_var_hole);
         let unclosed_vars = match head {
             FragHead::Var(idx) => idx + 1, // zero indexed
             _ => {
@@ -50,7 +47,7 @@ impl<'ctx> Fragment<'ctx> {
             }
         };
 
-        if matches!(head, FragHead::Var(_) | FragHead::VarHole(_)) {
+        if matches!(head, FragHead::Var(_)) {
             assert!(children.is_empty());
         }
 
@@ -59,7 +56,6 @@ impl<'ctx> Fragment<'ctx> {
             head,
             children,
             has_hole,
-            has_var_hole,
             has_template,
             unclosed_vars,
         }
@@ -81,10 +77,6 @@ impl<'ctx> Fragment<'ctx> {
         self.has_hole
     }
 
-    pub fn has_var_hole(&self) -> bool {
-        self.has_var_hole
-    }
-
     pub fn has_template(&self) -> bool {
         self.has_template
     }
@@ -104,7 +96,6 @@ pub enum FragHead<'ctx> {
     Var(usize),
     TemplateRef(usize),
     Hole(usize),
-    VarHole(usize),
 }
 
 impl<'ctx> FragHead<'ctx> {
@@ -114,7 +105,6 @@ impl<'ctx> FragHead<'ctx> {
             FragHead::Var(_) => 0,
             FragHead::TemplateRef(_) => 0,
             FragHead::Hole(_) => 0,
-            FragHead::VarHole(_) => 0,
         }
     }
 }
@@ -246,6 +236,5 @@ pub fn _debug_fragment<'ctx>(frag: FragmentId<'ctx>) -> String {
                 format!("_{}", idx)
             }
         }
-        FragHead::VarHole(idx) => format!("\"{}", idx),
     }
 }

@@ -9,6 +9,7 @@ use crate::{
 };
 use itertools::Itertools;
 use rustc_hash::{FxHashMap, FxHashSet};
+use ustr::Ustr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PresFrag<'ctx> {
@@ -103,7 +104,6 @@ impl<'ctx> Pres<'ctx> {
             }
             PresHead::FormalFrag(FragHead::RuleApplication(rule_app)) => {
                 let mut out = String::new();
-                out.push('{');
                 let mut children = self.children().iter();
 
                 for part in rule_app.rule().pattern().parts() {
@@ -116,13 +116,17 @@ impl<'ctx> Pres<'ctx> {
                     }
                 }
 
-                out.push('}');
                 out
             }
-            PresHead::Notation(binding, _) => {
+            PresHead::Notation {
+                binding,
+                binding_names,
+                replacement: _,
+            } => {
                 let mut out = String::new();
                 let mut children = self.children().iter();
                 let mut name_instantiations = binding.name_instantiations().iter();
+                let mut binding_names = binding_names.names().iter();
 
                 for part in binding.pattern().parts() {
                     use NotationPatternPart as P;
@@ -133,8 +137,8 @@ impl<'ctx> Pres<'ctx> {
                         P::Name => out.push_str(name_instantiations.next().unwrap()),
                         P::Cat(_) => out.push_str(&children.next().unwrap().print()),
                         P::Binding(_) => {
-                            // TODO
-                            out.push_str("?");
+                            let name = binding_names.next().map(|s| s.as_str()).unwrap_or("?");
+                            out.push_str(name);
                         }
                     }
                 }
@@ -151,14 +155,33 @@ pub enum PresHead<'ctx> {
     FormalFrag(FragHead<'ctx>),
     /// The notation for the fragment is a notation binding which is replaced
     /// by the given PresFrag when instantiated.
-    Notation(NotationBindingId<'ctx>, PresFrag<'ctx>),
+    Notation {
+        binding: NotationBindingId<'ctx>,
+        binding_names: BindingNameHintsId<'ctx>,
+        replacement: PresFrag<'ctx>,
+    },
+}
+
+generate_arena_handle! {BindingNameHintsId<'ctx> => BindingNameHints}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BindingNameHints(Vec<Ustr>);
+
+impl BindingNameHints {
+    pub fn new(names: Vec<Ustr>) -> Self {
+        Self(names)
+    }
+
+    pub fn names(&self) -> &[Ustr] {
+        &self.0
+    }
 }
 
 impl<'ctx> PresHead<'ctx> {
     fn bindings_added(&self, child: usize) -> usize {
         match self {
             PresHead::FormalFrag(head) => head.bindings_added(),
-            PresHead::Notation(binding, _) => {
+            PresHead::Notation { binding, .. } => {
                 binding.pattern().signature().holes()[child].args().len()
             }
         }
@@ -169,6 +192,30 @@ impl<'ctx> PresHead<'ctx> {
 enum PresInstTy {
     Normal,
     Formal,
+}
+
+pub fn drop_top_name<'ctx>(frag: PresFrag<'ctx>, ctx: &Ctx<'ctx>) -> PresFrag<'ctx> {
+    let normal = frag.pres();
+    let head = match normal.head() {
+        PresHead::FormalFrag(_) => normal.head(),
+        PresHead::Notation {
+            binding,
+            replacement,
+            ..
+        } => {
+            let binding_names = BindingNameHints::new(Vec::new());
+            let binding_names = ctx.arenas.binding_name_hints.intern(binding_names);
+            PresHead::Notation {
+                binding,
+                binding_names,
+                replacement,
+            }
+        }
+    };
+    let normal = Pres::new(head, normal.children().to_vec());
+    let normal = ctx.arenas.presentations.intern(normal);
+
+    PresFrag::new(frag.frag(), normal, frag.formal_pres())
 }
 
 fn shift_frag<'ctx>(
@@ -254,7 +301,9 @@ fn shift_pres<'ctx>(
                 pres
             }
         }
-        PresHead::Notation(_, replacement) if replacement.frag().unclosed_vars() > closed_count => {
+        PresHead::Notation { replacement, .. }
+            if replacement.frag().unclosed_vars() > closed_count =>
+        {
             // If the replacement for this notation contains unclosed vars
             // then we need to expand the notation. The notation isn't accurate
             // any more.
@@ -426,7 +475,9 @@ fn instantiate_pres_vars<'ctx>(
                 pres
             }
         }
-        PresHead::Notation(_, replacement) if replacement.frag().unclosed_vars() > closed_count => {
+        PresHead::Notation { replacement, .. }
+            if replacement.frag().unclosed_vars() > closed_count =>
+        {
             // If the replacement for this notation contains free variables
             // then we need to expand the notation. The notation isn't accurate
             // any more.
@@ -845,7 +896,7 @@ fn instantiate_pres_templates<'ctx>(
                 &mut FxHashMap::default(),
             )
         }
-        PresHead::Notation(_, replacement) if replacement.frag().has_template() => {
+        PresHead::Notation { replacement, .. } if replacement.frag().has_template() => {
             // If the replacement for this notation contains template params
             // then we need to expand the notation. The notation isn't accurate
             // any more.

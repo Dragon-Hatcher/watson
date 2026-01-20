@@ -8,7 +8,9 @@ use crate::{
         formal_syntax::FormalSyntaxCatId,
         fragment::{FragHead, Fragment, hole_frag},
         notation::{NotationBinding, NotationPatternPart},
-        presentation::{Pres, PresFrag, PresHead, instantiate_holes, shift_pres_frag},
+        presentation::{
+            BindingNameHints, Pres, PresFrag, PresHead, instantiate_holes, shift_pres_frag,
+        },
         scope::{Scope, ScopeEntry, ScopeReplacement},
     },
 };
@@ -143,7 +145,18 @@ fn parse_fragment_impl<'ctx>(
                 let replacement = shift_pres_frag(replacement_frag, shift, ctx);
                 let instantiated_replacement =
                     instantiate_holes(replacement, &|idx| children[idx], binding_depth, ctx);
-                let my_pres = Pres::new(PresHead::Notation(binding, replacement), children);
+
+                let binding_names = BindingNameHints::new(binder_names);
+                let binding_names = ctx.arenas.binding_name_hints.intern(binding_names);
+
+                let my_pres = Pres::new(
+                    PresHead::Notation {
+                        binding,
+                        replacement,
+                        binding_names,
+                    },
+                    children,
+                );
                 let my_pres = ctx.arenas.presentations.intern(my_pres);
                 PresFrag::new(
                     instantiated_replacement.frag(),

@@ -105,9 +105,14 @@ declare FormalCat: FormalCatMeta
 declare class Frag
     --- The formal syntax category this fragment belongs to
     cat: FormalCat
+
     --- The formal (canonical) representation of this fragment reduced to only
     --- syntax from the formal language with no user defined notation
     formal: Frag
+
+    --- This same fragment but with the names removed from the bindings at the
+    --- top layer. This is useful to make matching work better.
+    noName: Frag
 
     --- Converts this fragment to a fact with no assumption (a standalone statement).
     --- @return A fact with this fragment as the conclusion

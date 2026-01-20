@@ -2,8 +2,8 @@ use crate::semant::{
     check_proofs::lua_api::{ctx_to_lua::LuaCtx, formal_to_lua::LuaFormalCat},
     fragment::{_debug_fragment, Fragment, FragmentId, hole_frag, var_frag},
     presentation::{
-        Pres, PresFrag, PresId, instantiate_holes, instantiate_templates, instantiate_vars,
-        match_presentation,
+        Pres, PresFrag, PresId, drop_top_name, instantiate_holes, instantiate_templates,
+        instantiate_vars, match_presentation,
     },
     theorems::PresFact,
 };
@@ -40,6 +40,12 @@ impl UserData for LuaPresFrag {
 
         fields.add_field_method_get("formal", |_, this| {
             Ok(LuaPresFrag::new(this.out().formal()))
+        });
+
+        fields.add_field_method_get("noName", |lua, this| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let frag = drop_top_name(this.out(), ctx);
+            Ok(LuaPresFrag::new(frag))
         });
 
         fields.add_field_method_get("debug", |_, this| Ok(_debug_fragment(this.out().frag())));

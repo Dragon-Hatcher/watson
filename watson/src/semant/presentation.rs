@@ -3,8 +3,8 @@ use crate::{
     generate_arena_handle,
     semant::{
         formal_syntax::FormalSyntaxPatPart,
-        fragment::{_debug_fragment, FragHead, Fragment, FragmentId},
-        notation::{NotationBindingId, NotationPatternPart},
+        fragment::{FragHead, Fragment, FragmentId},
+        notation::{NotationBinding, NotationBindingId, NotationPatternPart},
     },
 };
 use itertools::Itertools;
@@ -216,6 +216,29 @@ pub fn drop_top_name<'ctx>(frag: PresFrag<'ctx>, ctx: &Ctx<'ctx>) -> PresFrag<'c
     let normal = ctx.arenas.presentations.intern(normal);
 
     PresFrag::new(frag.frag(), normal, frag.formal_pres())
+}
+
+pub fn wrap_frag_with_name<'ctx>(
+    frag: PresFrag<'ctx>,
+    name: Ustr,
+    ctx: &Ctx<'ctx>,
+) -> PresFrag<'ctx> {
+    let binding_names = BindingNameHints::new(Vec::new());
+    let binding_names = ctx.arenas.binding_name_hints.intern(binding_names);
+
+    let binding = ctx.single_name_notations[&frag.frag().cat()];
+    let binding = NotationBinding::new(binding, vec![name]);
+    let binding = ctx.arenas.notation_bindings.intern(binding);
+
+    let head = PresHead::Notation {
+        binding,
+        binding_names,
+        replacement: frag,
+    };
+    let pres = Pres::new(head, Vec::new());
+    let pres = ctx.arenas.presentations.intern(pres);
+
+    PresFrag::new(frag.frag(), pres, frag.formal_pres())
 }
 
 fn shift_frag<'ctx>(

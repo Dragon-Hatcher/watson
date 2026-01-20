@@ -118,6 +118,12 @@ declare class Frag
     --- @return A fact with this fragment as the conclusion
     function fact(self): Fact
 
+    --- Returns a new fragment with the same formal meaning but whose notation
+    --- is just the single given name.
+    --- @param name the name for the notation
+    --- @return the new fragment
+    function named(self, name: string): Frag
+
     --- Instantiates holes in this fragment with concrete fragments.
     --- @param templates Array of fragments to substitute for the holes 
     --- @return A new fragment with the holes substituted
@@ -367,6 +373,12 @@ declare class TacticInfo
     --- @param f the fact that was deduced
     --- @return a new TacticInfo containing the deduction
     function withDeduce(self, f: Fact): TacticInfo
+
+    --- Add a let binding to the reasoning chain
+    --- @param binding the binding being added
+    --- @param replacement what is bound to that binding or nil if we want it hidden
+    --- @return a new TacticInfo containing the let binding
+    function withLet(self, binding: Binding, replacement: Frag?): TacticInfo
 
     --- Change the goal of this TacticInfo.
     --- @param f the new goal

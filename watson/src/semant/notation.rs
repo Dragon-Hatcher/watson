@@ -190,6 +190,33 @@ impl<'ctx> NotationBinding<'ctx> {
     pub fn name_instantiations(&self) -> &[Ustr] {
         &self.name_instantiations
     }
+
+    pub fn print(&self) -> String {
+        let mut out = String::new();
+        let mut names = 0;
+        for part in self.pattern().parts() {
+            match part {
+                NotationPatternPart::Lit(lit) => {
+                    out.push_str(lit.as_str());
+                }
+                NotationPatternPart::Kw(kw) => {
+                    out.push_str(kw.as_str());
+                }
+                NotationPatternPart::Name => {
+                    let name = self.name_instantiations()[names];
+                    out.push_str(name.as_str());
+                    names += 1;
+                }
+                NotationPatternPart::Cat(part_cat) => {
+                    out.push_str(&format!("{}", part_cat.cat().name()));
+                }
+                NotationPatternPart::Binding(binding) => {
+                    out.push_str(&format!("?{}", binding.name()));
+                }
+            }
+        }
+        out
+    }
 }
 
 pub fn _debug_binding<'ctx>(binding: NotationBindingId<'ctx>) -> String {

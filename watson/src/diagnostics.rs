@@ -215,6 +215,20 @@ fn render_tactic_info<'ctx>(tactic: &TacticInfo<'ctx>) -> String {
                 res += "  ";
                 res += &f.print()
             }
+            TacticInfoStep::Let(binding, replacement) => {
+                res += "  ";
+                res += &binding.print();
+                res += ANSI_GRAY;
+                res += " : ";
+                res += &binding.pattern().cat().name();
+                res += ANSI_RESET;
+                if let Some(replacement) = replacement {
+                    res += ANSI_GRAY;
+                    res += " := ";
+                    res += ANSI_RESET;
+                    res += &replacement.print();
+                }
+            }
         }
 
         res += "\n";

@@ -3,7 +3,7 @@ use crate::semant::{
     fragment::{_debug_fragment, Fragment, FragmentId, hole_frag, var_frag},
     presentation::{
         Pres, PresFrag, PresId, drop_top_name, instantiate_holes, instantiate_templates,
-        instantiate_vars, match_presentation,
+        instantiate_vars, match_presentation, wrap_frag_with_name,
     },
     theorems::PresFact,
 };
@@ -55,6 +55,12 @@ impl UserData for LuaPresFrag {
         methods.add_method("fact", |_, this, _: ()| {
             let fact = PresFact::new(None, this.out());
             Ok(LuaPresFact::new(fact))
+        });
+
+        methods.add_method("named", |lua, this, name: String| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let frag = wrap_frag_with_name(this.out(), name.into(), ctx);
+            Ok(LuaPresFrag::new(frag))
         });
 
         methods.add_method(

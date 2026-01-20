@@ -1,5 +1,8 @@
 use crate::semant::{
-    check_proofs::lua_api::frag_to_lua::{LuaPresFact, LuaPresFrag},
+    check_proofs::lua_api::{
+        frag_to_lua::{LuaPresFact, LuaPresFrag},
+        notation_to_lua::LuaNotationBinding,
+    },
     tactic::tactic_info::TacticInfo,
 };
 use mlua::{FromLua, UserData};
@@ -35,6 +38,17 @@ impl UserData for LuaTacticInfo {
             let new_info = this.out_ref().clone().with_deduce(f.out());
             Ok(LuaTacticInfo::new(new_info))
         });
+
+        methods.add_method(
+            "withLet",
+            |_, this, (binding, replacement): (LuaNotationBinding, Option<LuaPresFrag>)| {
+                let new_info = this
+                    .out_ref()
+                    .clone()
+                    .with_let(binding.out(), replacement.map(|r| r.out()));
+                Ok(LuaTacticInfo::new(new_info))
+            },
+        );
 
         methods.add_method("withGoal", |_, this, f: LuaPresFrag| {
             let new_info = this.out_ref().clone().with_goal(f.out());

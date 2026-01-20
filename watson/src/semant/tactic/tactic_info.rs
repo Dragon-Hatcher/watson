@@ -1,4 +1,5 @@
 use crate::semant::{
+    notation::NotationBindingId,
     presentation::PresFrag,
     theorems::{PresFact, TheoremId},
 };
@@ -46,6 +47,14 @@ impl<'ctx> TacticInfo<'ctx> {
         self.add_step(TacticInfoStep::Deduce(f))
     }
 
+    pub fn with_let(
+        &self,
+        binding: NotationBindingId<'ctx>,
+        replacement: Option<PresFrag<'ctx>>,
+    ) -> Self {
+        self.add_step(TacticInfoStep::Let(binding, replacement))
+    }
+
     pub fn with_goal(&self, f: PresFrag<'ctx>) -> Self {
         Self {
             steps: self.steps.clone(),
@@ -59,4 +68,5 @@ pub enum TacticInfoStep<'ctx> {
     Hypothesis(PresFact<'ctx>),
     Assume(PresFrag<'ctx>),
     Deduce(PresFact<'ctx>),
+    Let(NotationBindingId<'ctx>, Option<PresFrag<'ctx>>),
 }

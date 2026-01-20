@@ -93,9 +93,9 @@ declare class FormalCatMeta
     function sentence(self): FormalCat
 
     --- Get the formal category with the given name
-    --- @param name
+    --- @param name the name of the formal cat
     --- @return the formal cat with that name or nil if it doesn't exist
-    function sentence(self, name: string): FormalCat?
+    function get(self, name: string): FormalCat?
 end
 
 declare FormalCat: FormalCatMeta

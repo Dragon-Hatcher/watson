@@ -336,6 +336,7 @@ fn shift_pres<'ctx>(
                 ty,
                 &|idx| pres.children()[idx],
                 0, // these holes should have no bindings so no need for an offset.
+                true,
                 ctx,
                 &mut FxHashMap::default(),
                 &mut FxHashMap::default(),
@@ -510,6 +511,7 @@ fn instantiate_pres_vars<'ctx>(
                 ty,
                 &|idx| pres.children()[idx],
                 0, // these holes should have no bindings so no need for an offset.
+                true,
                 ctx,
                 &mut FxHashMap::default(),
                 &mut FxHashMap::default(),
@@ -623,6 +625,7 @@ fn instantiate_frag_holes<'ctx>(
     binding_depth: usize,
     holes: &impl Fn(usize) -> FragmentId<'ctx>,
     hole_arg_offset: usize,
+    shift: bool,
     ctx: &Ctx<'ctx>,
     frag_cache: &mut FxHashMap<(FragmentId<'ctx>, usize), FragmentId<'ctx>>,
 ) -> FragmentId<'ctx> {
@@ -638,15 +641,23 @@ fn instantiate_frag_holes<'ctx>(
         frag.children()
             .iter()
             .map(|&child| {
-                instantiate_frag_holes(child, bd, holes, hole_arg_offset, ctx, frag_cache)
+                instantiate_frag_holes(child, bd, holes, hole_arg_offset, shift, ctx, frag_cache)
             })
             .collect_vec()
     };
 
     let new_frag = match frag.head() {
         FragHead::Hole(idx) => {
-            // No shift
-            let replacement = holes(idx);
+            let mut replacement = holes(idx);
+            if shift {
+                replacement = shift_frag(
+                    replacement,
+                    binding_depth,
+                    0,
+                    ctx,
+                    &mut FxHashMap::default(),
+                );
+            }
             let new_children = new_children(binding_depth);
             instantiate_frag_vars(
                 replacement,
@@ -678,6 +689,7 @@ fn instantiate_pres_holes<'ctx>(
     ty: PresInstTy,
     holes: &impl Fn(usize) -> PresFrag<'ctx>,
     hole_arg_offset: usize,
+    shift: bool,
     ctx: &Ctx<'ctx>,
     frag_cache: &mut FxHashMap<(FragmentId<'ctx>, usize), FragmentId<'ctx>>,
     pres_cache: &mut FxHashMap<(PresId<'ctx>, usize, PresInstTy), PresId<'ctx>>,
@@ -697,6 +709,7 @@ fn instantiate_pres_holes<'ctx>(
                     ty,
                     holes,
                     hole_arg_offset,
+                    shift,
                     ctx,
                     frag_cache,
                     pres_cache,
@@ -707,11 +720,21 @@ fn instantiate_pres_holes<'ctx>(
 
     let new_pres = match pres.head() {
         PresHead::FormalFrag(FragHead::Hole(idx)) => {
-            // No shift
-            let replacement = match ty {
+            let mut replacement = match ty {
                 PresInstTy::Normal => holes(idx).pres(),
                 PresInstTy::Formal => holes(idx).formal_pres(),
             };
+            if shift {
+                replacement = shift_pres(
+                    replacement,
+                    binding_depth,
+                    0,
+                    ty,
+                    ctx,
+                    &mut FxHashMap::default(),
+                    &mut FxHashMap::default(),
+                );
+            }
             let new_children = new_children();
             instantiate_pres_vars(
                 replacement,
@@ -742,6 +765,7 @@ fn instantiate_holes_impl<'ctx>(
     ty: PresInstTy,
     holes: &impl Fn(usize) -> PresFrag<'ctx>,
     hole_arg_offset: usize,
+    shift: bool,
     ctx: &Ctx<'ctx>,
     frag_cache: &mut FxHashMap<(FragmentId<'ctx>, usize), FragmentId<'ctx>>,
     pres_cache: &mut FxHashMap<(PresId<'ctx>, usize, PresInstTy), PresId<'ctx>>,
@@ -752,6 +776,7 @@ fn instantiate_holes_impl<'ctx>(
         PresInstTy::Normal,
         holes,
         hole_arg_offset,
+        shift,
         ctx,
         frag_cache,
         pres_cache,
@@ -762,6 +787,7 @@ fn instantiate_holes_impl<'ctx>(
         PresInstTy::Formal,
         holes,
         hole_arg_offset,
+        shift,
         ctx,
         frag_cache,
         pres_cache,
@@ -773,6 +799,7 @@ fn instantiate_holes_impl<'ctx>(
             binding_depth,
             &|idx| holes(idx).frag(),
             hole_arg_offset,
+            shift,
             ctx,
             frag_cache,
         ),
@@ -788,6 +815,7 @@ pub fn instantiate_holes<'ctx>(
     frag: PresFrag<'ctx>,
     holes: &impl Fn(usize) -> PresFrag<'ctx>,
     hole_arg_offset: usize,
+    shift: bool,
     ctx: &Ctx<'ctx>,
 ) -> PresFrag<'ctx> {
     instantiate_holes_impl(
@@ -796,6 +824,7 @@ pub fn instantiate_holes<'ctx>(
         PresInstTy::Normal,
         holes,
         hole_arg_offset,
+        shift,
         ctx,
         &mut FxHashMap::default(),
         &mut FxHashMap::default(),
@@ -842,6 +871,7 @@ fn instantiate_frag_templates<'ctx>(
                 0,
                 &|idx| new_children[idx],
                 0, // these holes should have no bindings so no need for an offset.
+                true,
                 ctx,
                 &mut FxHashMap::default(),
             )
@@ -914,6 +944,7 @@ fn instantiate_pres_templates<'ctx>(
                 ty,
                 &|idx| new_children[idx],
                 0, // these holes should have no bindings so no need for an offset.
+                true,
                 ctx,
                 &mut FxHashMap::default(),
                 &mut FxHashMap::default(),
@@ -929,6 +960,7 @@ fn instantiate_pres_templates<'ctx>(
                 ty,
                 &|idx| pres.children()[idx],
                 0, // these holes should have no bindings so no need for an offset.
+                true,
                 ctx,
                 &mut FxHashMap::default(),
                 &mut FxHashMap::default(),

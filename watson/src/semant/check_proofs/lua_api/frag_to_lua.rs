@@ -80,7 +80,8 @@ impl UserData for LuaPresFrag {
 
         methods.add_method("instantiateHoles", |lua, this, holes: Vec<LuaPresFrag>| {
             let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
-            let frag = instantiate_holes(this.out(), &|idx| holes[idx].out(), 0, ctx);
+            // TODO: make shifting an option?
+            let frag = instantiate_holes(this.out(), &|idx| holes[idx].out(), 0, false, ctx);
             Ok(LuaPresFrag::new(frag))
         });
 

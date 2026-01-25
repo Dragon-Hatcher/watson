@@ -46,7 +46,10 @@ pub fn run_check(cmd: CheckCommand) {
         let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
         let mut watcher = notify::recommended_watcher(tx).unwrap();
         watcher
-            .watch(config.src_dir(), notify::RecursiveMode::Recursive)
+            .watch(config.math_dir(), notify::RecursiveMode::Recursive)
+            .unwrap();
+        watcher
+            .watch(config.lua_dir(), notify::RecursiveMode::Recursive)
             .unwrap();
 
         // Build book initially and start server in background if book flag is set
@@ -115,7 +118,7 @@ pub fn check<'ctx>(
 fn make_source_cache(config: &WatsonConfig) -> (SourceCache, SourceId) {
     let source_cache = SourceCache::new();
 
-    let root_path = config.src_dir().join("main.wats");
+    let root_path = config.math_dir().join("main.wats");
     let root_text = std::fs::read_to_string(&root_path).unwrap();
     let root_id = SourceId::new(Ustr::from("main"));
     source_cache.add(root_id, root_text, SourceDecl::Root);

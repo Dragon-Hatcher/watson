@@ -41,16 +41,16 @@ fn run(cmd: NewCommand) -> Result<(), std::io::Error> {
         std::process::exit(1);
     });
 
-    // Create src directory
-    let src_path = project_path.join("src");
-    fs::create_dir(&src_path)?;
-
     // Create watson.toml (empty file)
     let toml_path = project_path.join("watson.toml");
     fs::write(&toml_path, "")?;
 
-    // Create src/main.luau with default content
-    let main_luau_path = src_path.join("main.luau");
+    // Create script directory
+    let script_path = project_path.join("script");
+    fs::create_dir(&script_path)?;
+
+    // Create script/main.luau with default content
+    let main_luau_path = script_path.join("main.luau");
     let main_luau_content = r#"local M = {}
     
 function M.handleTactic(tactic: Tactic, proofState: ProofState, tacticInfo: TacticInfo)
@@ -62,8 +62,12 @@ return M
 "#;
     fs::write(&main_luau_path, main_luau_content)?;
 
-    // Create src/main.wats with default content
-    let main_wats_path = src_path.join("main.wats");
+    // Create math directory
+    let math_path = project_path.join("math");
+    fs::create_dir(&math_path)?;
+
+    // Create math/main.wats with default content
+    let main_wats_path = math_path.join("main.wats");
     let main_wats_content = r#"
 "#;
     fs::write(&main_wats_path, main_wats_content)?;

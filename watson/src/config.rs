@@ -34,7 +34,8 @@ pub fn find_config_file() -> Result<PathBuf, ConfigError> {
 pub struct WatsonConfig {
     project_dir: PathBuf,
     build_dir: PathBuf,
-    src_dir: PathBuf,
+    math_dir: PathBuf,
+    lua_dir: PathBuf,
     book: BookConfig,
 }
 
@@ -49,7 +50,8 @@ impl WatsonConfig {
         let config_file = WatsonConfigFile::from_file(path)?;
         let project_dir = path.parent().unwrap().canonicalize().unwrap();
         let build_dir = project_dir.join("build");
-        let src_dir = project_dir.join("src");
+        let math_dir = project_dir.join("math");
+        let lua_dir = project_dir.join("script");
 
         let book = match config_file.book {
             Some(book_config) => BookConfig {
@@ -65,17 +67,18 @@ impl WatsonConfig {
         Ok(Self {
             project_dir,
             build_dir,
-            src_dir,
+            math_dir,
+            lua_dir,
             book,
         })
     }
 
-    pub fn project_dir(&self) -> &Path {
-        &self.project_dir
+    pub fn math_dir(&self) -> &Path {
+        &self.math_dir
     }
 
-    pub fn src_dir(&self) -> &Path {
-        &self.src_dir
+    pub fn lua_dir(&self) -> &Path {
+        &self.lua_dir
     }
 
     pub fn build_dir(&self) -> &Path {

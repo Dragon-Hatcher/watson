@@ -169,7 +169,7 @@ fn elaborate_module<'ctx>(module: ParseTreeId<'ctx>, ctx: &Ctx<'ctx>) -> WResult
                 );
             }
 
-            let path = source_id_to_path(source_id, ctx.config.src_dir());
+            let path = source_id_to_path(source_id, ctx.config.math_dir());
             let Ok(text) = std::fs::read_to_string(&path) else {
                 return Diagnostic::err_non_existent_file(&path, source_id_name.span());
             };

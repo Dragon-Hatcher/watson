@@ -164,12 +164,12 @@ pub fn hole_frag<'ctx>(
     let frag_children = children.iter().map(|c| c.frag()).collect();
     let frag = Fragment::new(cat, FragHead::Hole(idx), frag_children);
     let frag = ctx.arenas.fragments.intern(frag);
-    let pres = Pres::new(PresHead::FormalFrag(frag.head()), children);
+    let pres = Pres::new(PresHead::FormalFrag(frag.head()), children.clone());
     let pres = ctx.arenas.presentations.intern(pres);
+    let formal = Pres::new(pres.head(), children.iter().map(|c| c.formal()).collect());
+    let formal = ctx.arenas.presentations.intern(formal);
 
-    // The presentation is already formal so we can pass the pres as the
-    // formal pres.
-    PresFrag::new(frag, pres, pres)
+    PresFrag::new(frag, pres, formal)
 }
 
 pub fn var_frag<'ctx>(idx: usize, cat: FormalSyntaxCatId<'ctx>, ctx: &Ctx<'ctx>) -> PresFrag<'ctx> {

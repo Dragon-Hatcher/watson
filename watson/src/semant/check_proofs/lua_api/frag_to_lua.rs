@@ -41,7 +41,7 @@ impl UserData for LuaPresFrag {
         fields.add_field_method_get("formal", |_, this| {
             Ok(LuaPresFrag::new(this.out().formal()))
         });
-        
+
         fields.add_field_method_get("debug", |_, this| Ok(_debug_fragment(this.out().frag())));
     }
 

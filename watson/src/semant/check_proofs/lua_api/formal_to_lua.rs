@@ -1,5 +1,5 @@
 use crate::semant::{check_proofs::lua_api::ctx_to_lua::LuaCtx, formal_syntax::FormalSyntaxCatId};
-use mlua::{FromLua, UserData};
+use mlua::{FromLua, MetaMethod, UserData};
 
 #[derive(Debug, Clone, FromLua)]
 pub struct LuaFormalCat {
@@ -24,6 +24,12 @@ impl LuaFormalCat {
 impl UserData for LuaFormalCat {
     fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
         fields.add_field_method_get("name", |_, this| Ok(this.out().name().to_string()));
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_meta_method(MetaMethod::Eq, |_, this, other: LuaFormalCat| {
+            Ok(this.out() == other.out())
+        });
     }
 }
 

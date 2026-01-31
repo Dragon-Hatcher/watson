@@ -110,10 +110,6 @@ declare class Frag
     --- syntax from the formal language with no user defined notation
     formal: Frag
 
-    --- This same fragment but with the names removed from the bindings at the
-    --- top layer. This is useful to make matching work better.
-    noName: Frag
-
     --- Converts this fragment to a fact with no assumption (a standalone statement).
     --- @return A fact with this fragment as the conclusion
     function fact(self): Fact
@@ -123,6 +119,12 @@ declare class Frag
     --- @param name the name for the notation
     --- @return the new fragment
     function named(self, name: string): Frag
+
+    --- This same fragment but with the names changed in the bindings at the
+    --- top layer. 
+    --- @param names the new binding names
+    --- @return the new fragment
+    function changeBinderNames(self, names: {string}): Frag
 
     --- Instantiates holes in this fragment with concrete fragments.
     --- @param templates Array of fragments to substitute for the holes 
@@ -251,6 +253,11 @@ export type FactMap<T> = {
 --- A notation binding - represents a pattern that can be bound in a scope.
 --- Bindings are created from notation patterns and associate with scope entries.
 declare class Binding
+    --- The formal syntax category this binding binds
+    cat: FormalCat
+
+    --- Any names within the binding
+    names: {string}
 end
 
 declare class BindingMeta

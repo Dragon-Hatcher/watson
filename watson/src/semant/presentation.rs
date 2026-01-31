@@ -194,7 +194,11 @@ enum PresInstTy {
     Formal,
 }
 
-pub fn drop_top_name<'ctx>(frag: PresFrag<'ctx>, ctx: &Ctx<'ctx>) -> PresFrag<'ctx> {
+pub fn change_name_hints<'ctx>(
+    frag: PresFrag<'ctx>,
+    new_hints: BindingNameHintsId<'ctx>,
+    ctx: &Ctx<'ctx>,
+) -> PresFrag<'ctx> {
     let normal = frag.pres();
     let head = match normal.head() {
         PresHead::FormalFrag(_) => normal.head(),
@@ -203,11 +207,9 @@ pub fn drop_top_name<'ctx>(frag: PresFrag<'ctx>, ctx: &Ctx<'ctx>) -> PresFrag<'c
             replacement,
             ..
         } => {
-            let binding_names = BindingNameHints::new(Vec::new());
-            let binding_names = ctx.arenas.binding_name_hints.intern(binding_names);
             PresHead::Notation {
                 binding,
-                binding_names,
+                binding_names: new_hints,
                 replacement,
             }
         }
@@ -324,33 +326,31 @@ fn shift_pres<'ctx>(
                 pres
             }
         }
-        PresHead::Notation { replacement, .. }
-            if replacement.frag().unclosed_vars() > closed_count =>
-        {
+        PresHead::Notation {
+            replacement,
+            binding,
+            binding_names,
+        } if replacement.frag().unclosed_vars() > closed_count => {
             // If the replacement for this notation contains unclosed vars
             // then we need to expand the notation. The notation isn't accurate
             // any more.
-            let instantiated_replacement = instantiate_pres_holes(
-                replacement.pres(),
-                0,
-                ty,
-                &|idx| pres.children()[idx],
-                0, // these holes should have no bindings so no need for an offset.
-                true,
-                ctx,
-                &mut FxHashMap::default(),
-                &mut FxHashMap::default(),
-            );
-
-            shift_pres(
-                instantiated_replacement,
+            let new_children = new_children();
+            let shifted_replacement = shift_pres_frag_impl(
+                replacement,
                 shift,
                 closed_count,
                 ty,
                 ctx,
                 frag_cache,
                 pres_cache,
-            )
+            );
+            let head = PresHead::Notation {
+                binding,
+                binding_names,
+                replacement: shifted_replacement,
+            };
+            let pres = Pres::new(head, new_children);
+            ctx.arenas.presentations.intern(pres)
         }
         _ => {
             let new_children = new_children();
@@ -474,6 +474,10 @@ fn instantiate_pres_vars<'ctx>(
     frag_cache: &mut FxHashMap<(FragmentId<'ctx>, usize), FragmentId<'ctx>>,
     pres_cache: &mut FxHashMap<(PresId<'ctx>, usize, PresInstTy), PresId<'ctx>>,
 ) -> PresId<'ctx> {
+    if var_count == 0 {
+        return pres;
+    }
+
     if let Some(cached) = pres_cache.get(&(pres, closed_count, ty)) {
         return *cached;
     }

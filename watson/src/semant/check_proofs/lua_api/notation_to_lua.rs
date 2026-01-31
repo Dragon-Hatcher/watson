@@ -2,6 +2,7 @@ use crate::semant::{
     check_proofs::lua_api::{ctx_to_lua::LuaCtx, formal_to_lua::LuaFormalCat},
     notation::{NotationBinding, NotationBindingId},
 };
+use itertools::Itertools;
 use mlua::{FromLua, UserData};
 
 #[derive(Debug, Clone, Copy, FromLua)]
@@ -24,7 +25,24 @@ impl LuaNotationBinding {
     }
 }
 
-impl UserData for LuaNotationBinding {}
+impl UserData for LuaNotationBinding {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("cat", |_, this| {
+            let cat = this.out().pattern().cat();
+            Ok(LuaFormalCat::new(cat))
+        });
+
+        fields.add_field_method_get("names", |_, this| {
+            let names = this
+                .out()
+                .name_instantiations()
+                .iter()
+                .map(|s| s.to_string())
+                .collect_vec();
+            Ok(names)
+        });
+    }
+}
 
 pub struct LuaNotationBindingMeta;
 

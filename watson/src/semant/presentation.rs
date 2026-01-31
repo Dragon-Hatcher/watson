@@ -206,13 +206,11 @@ pub fn change_name_hints<'ctx>(
             binding,
             replacement,
             ..
-        } => {
-            PresHead::Notation {
-                binding,
-                binding_names: new_hints,
-                replacement,
-            }
-        }
+        } => PresHead::Notation {
+            binding,
+            binding_names: new_hints,
+            replacement,
+        },
     };
     let normal = Pres::new(head, normal.children().to_vec());
     let normal = ctx.arenas.presentations.intern(normal);
@@ -423,6 +421,7 @@ pub fn shift_pres_frag<'ctx>(
 fn instantiate_frag_vars<'ctx>(
     frag: FragmentId<'ctx>,
     closed_count: usize,
+    sub_offset: usize,
     vars: &impl Fn(usize) -> FragmentId<'ctx>,
     var_count: usize,
     ctx: &Ctx<'ctx>,
@@ -438,9 +437,15 @@ fn instantiate_frag_vars<'ctx>(
 
     let new_frag = match frag.head() {
         FragHead::Var(idx) => {
-            if closed_count <= idx && idx < closed_count + var_count {
-                let replacement = vars(idx - closed_count);
+            if closed_count + sub_offset <= idx && idx < sub_offset + closed_count + var_count {
+                let replacement = vars(idx - sub_offset - closed_count);
                 shift_frag(replacement, closed_count, 0, ctx, &mut FxHashMap::default())
+            } else if closed_count + sub_offset <= idx {
+                // Shift down any free variables that aren't instantiated.
+                let var = FragHead::Var(idx - var_count);
+                let cat = frag.cat();
+                let frag = Fragment::new(cat, var, Vec::new());
+                ctx.arenas.fragments.intern(frag)
             } else {
                 // This wasn't a free var or we weren't replacing it.
                 frag
@@ -453,7 +458,15 @@ fn instantiate_frag_vars<'ctx>(
                 .children()
                 .iter()
                 .map(|&child| {
-                    instantiate_frag_vars(child, closed_count, vars, var_count, ctx, frag_cache)
+                    instantiate_frag_vars(
+                        child,
+                        closed_count,
+                        sub_offset,
+                        vars,
+                        var_count,
+                        ctx,
+                        frag_cache,
+                    )
                 })
                 .collect();
             let frag = Fragment::new(frag.cat(), frag.head(), new_children);
@@ -467,6 +480,7 @@ fn instantiate_frag_vars<'ctx>(
 fn instantiate_pres_vars<'ctx>(
     pres: PresId<'ctx>,
     closed_count: usize,
+    sub_offset: usize,
     ty: PresInstTy,
     vars: &dyn Fn(usize) -> PresFrag<'ctx>,
     var_count: usize,
@@ -484,8 +498,8 @@ fn instantiate_pres_vars<'ctx>(
 
     let new_pres = match pres.head() {
         PresHead::FormalFrag(FragHead::Var(idx)) => {
-            if closed_count <= idx && idx < closed_count + var_count {
-                let replacement = vars(idx - closed_count);
+            if closed_count + sub_offset <= idx && idx < sub_offset + closed_count + var_count {
+                let replacement = vars(idx - sub_offset - closed_count);
                 let pres = match ty {
                     PresInstTy::Normal => replacement.pres(),
                     PresInstTy::Formal => replacement.formal_pres(),
@@ -499,6 +513,11 @@ fn instantiate_pres_vars<'ctx>(
                     &mut FxHashMap::default(),
                     &mut FxHashMap::default(),
                 )
+            } else if closed_count + sub_offset <= idx {
+                // Shift down any free variables that aren't instantiated.
+                let var = FragHead::Var(idx - var_count);
+                let pres = Pres::new(PresHead::FormalFrag(var), Vec::new());
+                ctx.arenas.presentations.intern(pres)
             } else {
                 pres
             }
@@ -524,6 +543,7 @@ fn instantiate_pres_vars<'ctx>(
             instantiate_pres_vars(
                 instantiated_replacement,
                 closed_count,
+                sub_offset,
                 ty,
                 vars,
                 var_count,
@@ -541,6 +561,7 @@ fn instantiate_pres_vars<'ctx>(
                     instantiate_vars_impl(
                         *child,
                         closed_count + pres.head().bindings_added(i),
+                        sub_offset,
                         ty,
                         vars,
                         var_count,
@@ -561,6 +582,7 @@ fn instantiate_pres_vars<'ctx>(
 fn instantiate_vars_impl<'ctx>(
     pres_frag: PresFrag<'ctx>,
     closed_count: usize,
+    sub_offset: usize,
     ty: PresInstTy,
     vars: &dyn Fn(usize) -> PresFrag<'ctx>,
     var_count: usize,
@@ -571,6 +593,7 @@ fn instantiate_vars_impl<'ctx>(
     let normal = instantiate_pres_vars(
         pres_frag.pres(),
         closed_count,
+        sub_offset,
         PresInstTy::Normal,
         vars,
         var_count,
@@ -581,6 +604,7 @@ fn instantiate_vars_impl<'ctx>(
     let formal = instantiate_pres_vars(
         pres_frag.formal_pres(),
         closed_count,
+        sub_offset,
         PresInstTy::Formal,
         vars,
         var_count,
@@ -593,6 +617,7 @@ fn instantiate_vars_impl<'ctx>(
         instantiate_frag_vars(
             pres_frag.frag(),
             closed_count,
+            sub_offset,
             &|idx| vars(idx).frag(),
             var_count,
             ctx,
@@ -614,6 +639,7 @@ pub fn instantiate_vars<'ctx>(
 ) -> PresFrag<'ctx> {
     instantiate_vars_impl(
         frag,
+        0,
         0,
         PresInstTy::Normal,
         vars,
@@ -666,6 +692,7 @@ fn instantiate_frag_holes<'ctx>(
             instantiate_frag_vars(
                 replacement,
                 0,
+                binding_depth,
                 &|idx| new_children[idx],
                 new_children.len(),
                 ctx,
@@ -743,6 +770,7 @@ fn instantiate_pres_holes<'ctx>(
             instantiate_pres_vars(
                 replacement,
                 0,
+                binding_depth,
                 ty,
                 &|idx| new_children[idx],
                 new_children.len(),

@@ -145,7 +145,7 @@ fn parse_fragment_impl<'ctx>(
                 let replacement = shift_pres_frag(replacement_frag, shift, ctx);
 
                 let instantiated_replacement =
-                    instantiate_holes(replacement, &|idx| children[idx], binding_depth, false, ctx);
+                    instantiate_holes(replacement, &|idx| children[idx], binding_depth, true, ctx);
 
                 let binding_names = BindingNameHints::new(binder_names);
                 let binding_names = ctx.arenas.binding_name_hints.intern(binding_names);

@@ -15,6 +15,10 @@ use crate::{
             tactic_to_lua::generate_luau_tactic_types,
             theorem_to_lua::LuaTheoremMeta,
             unresolved_to_lua::LuaUnResFragMeta,
+            vampire_to_lua::{
+                LuaVFormulaMeta, LuaVFunctionMeta, LuaVOptionsMeta, LuaVPredicateMeta,
+                LuaVProblemMeta, LuaVTermMeta,
+            },
         },
     },
     util::ansi::{ANSI_BOLD, ANSI_RESET, ANSI_YELLOW},
@@ -36,6 +40,7 @@ pub mod tactic_info_to_lua;
 pub mod tactic_to_lua;
 pub mod theorem_to_lua;
 pub mod unresolved_to_lua;
+pub mod vampire_to_lua;
 
 pub struct WLua<'ctx> {
     lua: Lua,
@@ -122,6 +127,14 @@ pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
     lua.globals().set("FactMap", LuaFactMapMeta).unwrap();
     lua.globals().set("Theorem", LuaTheoremMeta).unwrap();
     lua.globals().set("FormalCat", LuaFormalCatMeta).unwrap();
+
+    // Set up vampire theorem prover metatables.
+    lua.globals().set("VFunction", LuaVFunctionMeta).unwrap();
+    lua.globals().set("VPredicate", LuaVPredicateMeta).unwrap();
+    lua.globals().set("VTerm", LuaVTermMeta).unwrap();
+    lua.globals().set("VFormula", LuaVFormulaMeta).unwrap();
+    lua.globals().set("VOptions", LuaVOptionsMeta).unwrap();
+    lua.globals().set("VProblem", LuaVProblemMeta).unwrap();
 
     // Set up our custom require system.
     let src_folder = ctx.config.lua_dir();

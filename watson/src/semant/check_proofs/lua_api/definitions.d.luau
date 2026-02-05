@@ -431,3 +431,77 @@ declare class DiagnosticMeta
 end
 
 declare Diagnostic: DiagnosticMeta
+
+
+
+declare class VFunction
+    function with(self, args: {VTerm}): VTerm
+end
+
+declare class VFunctionMeta
+    function new(self, name: string, arity: number): VFunction
+end
+
+declare VFunction: VFunctionMeta
+
+
+declare class VPredicate
+    function with(self, args: {VTerm}): VFormula
+end
+
+declare class VPredicateMeta
+    function new(self, name: string, arity: number): VPredicate
+end
+
+declare VPredicate: VPredicateMeta
+
+
+declare class VTerm
+end
+
+declare class VTermMeta
+    function newVar(self, idx: number): VTerm
+end
+
+declare VTerm: VTermMeta
+
+
+declare class VFormula
+end
+
+declare class VFormulaMeta
+    function newEq(self, t1: VTerm, t2: VTerm): VFormula
+    function newAnd(self, ...: VFormula): VFormula
+    function newOr(self, ...: VFormula): VFormula
+    function newNot(self, f: VFormula): VFormula
+    function newImp(self, ant: VFormula, cons: VFormula): VFormula
+    function newIff(self, f1: VFormula, f2: VFormula): VFormula
+    function newForall(self, var: number, f: VFormula): VFormula
+    function newExists(self, var: number, f: VFormula): VFormula
+end
+
+declare VFormula: VFormulaMeta
+
+
+declare class VOptions
+    function setTimeout(self, timeout_ms: number)
+end
+
+declare class VOptionsMeta
+    function new(self): VOptions
+end
+
+declare VOptions: VOptionsMeta
+
+
+declare class VProblem
+    function addAxiom(self, axiom: VFormula)
+    function setConjecture(self, conj: VFormula)
+    function solve(self): string
+end
+
+declare class VProblemMeta
+    function new(self, options: VOptions): VProblem
+end
+
+declare VProblem: VProblemMeta 

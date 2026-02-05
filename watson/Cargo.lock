@@ -176,6 +176,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e4de3bc4ea267985becf712dc6d9eed8b04c953b3fcfb339ebc87acd9804901"
 
 [[package]]
+name = "cmake"
+version = "0.1.57"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75443c44cd6b379beb8c5b45d85d0773baf31cce901fe7bb252f4eff3008ef7d"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "console_error_panic_hook"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1240,6 +1249,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "vampire-prover"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dab46db7c8916794d33477e32d038b03b01c4302fa9a8d94182a7304df5cca00"
+dependencies = [
+ "vampire-sys",
+]
+
+[[package]]
+name = "vampire-sys"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86acb3c04c1669ea2018150739c2cb5c56e670763e1c17630a93e5afdcfbcc72"
+dependencies = [
+ "cmake",
+]
+
+[[package]]
 name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1339,6 +1366,7 @@ dependencies = [
  "toml",
  "typed-arena",
  "ustr",
+ "vampire-prover",
 ]
 
 [[package]]

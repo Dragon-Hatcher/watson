@@ -106,6 +106,22 @@ declare class Frag
     --- The formal syntax category this fragment belongs to
     cat: FormalCat
 
+    --- Children of this fragment
+    children: {Frag}
+
+    --- If this fragment is notation for a different fragment, this is the node
+    --- in which the children will be replaced to get that fragment.
+    replacement: Frag?
+
+    --- If this fragment is a variable, the index of that variable
+    varIdx: number?
+
+    --- If this fragment is a template, the index of that template
+    templateIdx: number?
+
+    --- The number of unclosed (aka free) variables in the fragment
+    unclosedCount: number
+
     --- The formal (canonical) representation of this fragment reduced to only
     --- syntax from the formal language with no user defined notation
     formal: Frag

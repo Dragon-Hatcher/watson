@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use mlua::{FromLua, UserData, Variadic};
+use mlua::{FromLua, MetaMethod, UserData, Variadic};
 use vampire_prover::{Formula, Function, Options, Predicate, Problem, ProofRes, Term};
 
 #[derive(Debug, Clone, FromLua)]
@@ -184,6 +184,10 @@ impl UserData for LuaVProblem {
                 ProofRes::Unknown(_) => "unknown",
             };
             Ok(result_str.to_string())
+        });
+
+        methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
+            Ok(format!("{:#?}", this.problem))
         });
     }
 }

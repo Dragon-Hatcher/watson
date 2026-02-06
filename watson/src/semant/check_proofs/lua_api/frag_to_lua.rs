@@ -1,12 +1,13 @@
 use crate::semant::{
     check_proofs::lua_api::{ctx_to_lua::LuaCtx, formal_to_lua::LuaFormalCat},
-    fragment::{_debug_fragment, Fragment, FragmentId, hole_frag, var_frag},
+    fragment::{_debug_fragment, FragHead, Fragment, FragmentId, hole_frag, var_frag},
     presentation::{
-        BindingNameHints, Pres, PresFrag, PresId, change_name_hints, instantiate_holes,
+        BindingNameHints, Pres, PresFrag, PresHead, PresId, change_name_hints, instantiate_holes,
         instantiate_templates, instantiate_vars, match_presentation, wrap_frag_with_name,
     },
     theorems::PresFact,
 };
+use itertools::Itertools;
 use mlua::{FromLua, MetaMethod, UserData};
 use rustc_hash::FxHashMap;
 
@@ -36,6 +37,33 @@ impl UserData for LuaPresFrag {
         fields.add_field_method_get("cat", |_, this| {
             let cat = this.out().frag().cat();
             Ok(LuaFormalCat::new(cat))
+        });
+
+        fields.add_field_method_get("children", |_, this| {
+            let children = this.out().pres().0.children();
+            let children = children.iter().map(|&c| LuaPresFrag::new(c)).collect_vec();
+            Ok(children)
+        });
+
+        fields.add_field_method_get("replacement", |_, this| match this.out().pres().head() {
+            PresHead::FormalFrag(_) => Ok(None),
+            PresHead::Notation { replacement, .. } => Ok(Some(LuaPresFrag::new(replacement))),
+        });
+
+        fields.add_field_method_get("varIdx", |_, this| match this.out().pres().head() {
+            PresHead::FormalFrag(FragHead::Var(idx)) => Ok(Some(idx)),
+            PresHead::FormalFrag(_) => Ok(None),
+            PresHead::Notation { .. } => Ok(None),
+        });
+
+        fields.add_field_method_get("templateIdx", |_, this| match this.out().pres().head() {
+            PresHead::FormalFrag(FragHead::TemplateRef(idx)) => Ok(Some(idx)),
+            PresHead::FormalFrag(_) => Ok(None),
+            PresHead::Notation { .. } => Ok(None),
+        });
+
+        fields.add_field_method_get("unclosedCount", |_, this| {
+            Ok(this.out().frag().unclosed_vars())
         });
 
         fields.add_field_method_get("formal", |_, this| {

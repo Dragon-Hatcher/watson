@@ -282,10 +282,13 @@ impl DocState {
     }
 
     fn process_markdown_text<'ctx>(&mut self, text: &str) -> WResult<'ctx, ()> {
+        // Remove Watson-style -- comments before processing markdown
+        let text_without_comments = strip_watson_comments(text);
+
         // Enable math support in pulldown-cmark
         let mut options = Options::empty();
         options.insert(Options::ENABLE_MATH);
-        let parser = Parser::new_ext(text, options);
+        let parser = Parser::new_ext(&text_without_comments, options);
 
         let mut in_heading: Option<HeadingLevel> = None;
         let mut heading_text = String::new();
@@ -410,6 +413,27 @@ impl DocState {
 
         Ok(())
     }
+}
+
+/// Strip Watson-style -- comments from text
+/// Comments start with -- and continue to the end of the line
+fn strip_watson_comments(text: &str) -> String {
+    let mut result = String::with_capacity(text.len());
+
+    for line in text.lines() {
+        // Find the position of -- comment starter
+        if let Some(comment_pos) = line.find("--") {
+            // Keep everything before the comment
+            result.push_str(&line[..comment_pos]);
+            result.push(' ');
+        } else {
+            // No comment, keep the whole line
+            result.push_str(line);
+            result.push('\n');
+        }
+    }
+
+    result
 }
 
 fn replace_patterns(template: &str, patterns: &[&str], replacements: &[&str]) -> String {

@@ -1,4 +1,3 @@
-use crate::util::ansi::{ANSI_BOLD, ANSI_GRAY, ANSI_GREEN, ANSI_RESET};
 use std::fs;
 use std::path::Path;
 use tiny_http::{Header, Response, Server};
@@ -6,9 +5,6 @@ use tiny_http::{Header, Response, Server};
 pub fn serve(book_dir: &Path, port: u16) {
     let server = Server::http(("127.0.0.1", port)).expect("Failed to start server");
     let book_dir = book_dir.to_path_buf();
-
-    println!("{ANSI_BOLD}{ANSI_GREEN}Serving book{ANSI_RESET} at http://localhost:{port}");
-    println!("{ANSI_GRAY}Press Ctrl+C to stop the server{ANSI_RESET}");
 
     for request in server.incoming_requests() {
         let url_path = request.url().trim_start_matches('/');

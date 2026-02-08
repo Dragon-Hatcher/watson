@@ -5,12 +5,13 @@ use crate::{
     parse::{ParseReport, SourceCache, SourceId, parse, source_cache::SourceDecl},
     report::{ProofReport, display_report},
     semant::{check_circularity::find_circular_dependency_groups, check_proofs::check_proofs},
+    util::ansi::{ANSI_BOLD, ANSI_GRAY, ANSI_GREEN, ANSI_RESET},
 };
 use argh::FromArgs;
 use crossterm::{
     cursor::MoveTo,
     execute,
-    terminal::{Clear, ClearType},
+    terminal::{BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate},
 };
 use notify::Watcher;
 use std::{io, path::PathBuf, sync::mpsc, thread};
@@ -64,19 +65,34 @@ pub fn run_check(cmd: CheckCommand) {
         for i in 1.. {
             let _ = rx.try_iter().count();
             let arenas = Arenas::new();
-            let (mut ctx, parse_report, report) = check(config.clone(), &arenas);
 
             // Clear the screen to print the new info
-            _ = execute!(io::stdout(), Clear(ClearType::Purge), MoveTo(0, 0));
+            _ = execute!(
+                io::stdout(),
+                BeginSynchronizedUpdate,
+                Clear(ClearType::All),
+                Clear(ClearType::Purge),
+                MoveTo(0, 0)
+            );
+
+            let (mut ctx, parse_report, report) = check(config.clone(), &arenas);
 
             display_report(&report, ctx.diags.has_errors(), Some(i));
             if ctx.diags.has_errors() {
                 ctx.diags.print_errors(&ctx);
             } else if cmd.book {
+                let book_port = config.book().port();
+
                 // Rebuild book on successful check
                 println!();
                 book::build_book(&mut ctx, parse_report, report, true, "/");
+                println!(
+                    "{ANSI_BOLD}{ANSI_GREEN}Serving book{ANSI_RESET} at http://localhost:{book_port}"
+                );
             }
+
+            // Display what has been printed.
+            _ = execute!(io::stdout(), EndSynchronizedUpdate,);
 
             while let Ok(e) = rx.recv().unwrap() {
                 if !matches!(e.kind, notify::EventKind::Access(_)) {

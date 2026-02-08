@@ -3,7 +3,7 @@ use crate::{
     cli::check_command,
     config::{WatsonConfig, find_config_file},
     context::Arenas,
-    util::ansi::{ANSI_BOLD, ANSI_RED, ANSI_RESET},
+    util::ansi::{ANSI_BOLD, ANSI_GRAY, ANSI_GREEN, ANSI_RED, ANSI_RESET},
 };
 use argh::FromArgs;
 use std::path::PathBuf;
@@ -46,5 +46,7 @@ pub fn run_book(cmd: BookCommand) {
     if cmd.serve {
         let port = ctx.config.book().port();
         book::server::serve(&book_path, port);
+        println!("{ANSI_BOLD}{ANSI_GREEN}Serving book{ANSI_RESET} at http://localhost:{port}");
+        println!("{ANSI_GRAY}Press Ctrl+C to stop the server{ANSI_RESET}");
     }
 }

@@ -90,7 +90,7 @@
     "keywords": {
       "patterns": [
         {
-          "match": "\\b(have|as|then|from|thus|follows|contradiction|assume|suffices|for_contra|obtain|arbitrary|st|using|specializing)\\b",
+          "match": "\\b(have|as|then|from|thus|follows|hence|done|logically|vampire|contradiction|assume|suffices|for_contra|obtain|arbitrary|st|using|specializing)\\b",
           "name": "keyword.control.watson"
         },
         {

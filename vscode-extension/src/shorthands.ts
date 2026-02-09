@@ -5,6 +5,8 @@ export const SHORTHAND_DICT = [
   ["\\iff", "↔"],
   ["\\to", "→"],
   ["\\not", "¬"],
+  ["\\neq", "≠"],
+  ["\\nin", "∉"],
   ["\\bot", "⊥"],
   ["\\top", "⊤"],
   ["\\ex", "∃"],
@@ -13,8 +15,15 @@ export const SHORTHAND_DICT = [
 
   // -=- Set Theory -=-
   ["\\cup", "∪"],
+  ["\\union", "∪"],
+  ["\\Union", "⋃"],
   ["\\cap", "∩"],
-  ["\\sub", "⊂"],
+  ["\\inter", "∩"],
+  ["\\Inter", "⋂"],
+  ["\\sub", "⊆"],
+  ["\\ssub", "⊂"],
+  ["\\pow", "𝒫"],
+  ["\\empty", "∅"],
 
   // -=- Greek letters -=-
 

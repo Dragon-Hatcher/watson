@@ -14,6 +14,8 @@
     />
   </head>
   <body data-chapter="{{CHAPTER_NUM}}">
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">&#9776;</button>
+    <div class="nav-overlay"></div>
     <aside class="nav">{{SIDEBAR}}</aside>
 
     <article>{{CHAPTER_CONTENT}}</article>
@@ -106,6 +108,36 @@
       });
 
       {{AUTO_RELOAD_SCRIPT}}
+
+      // Mobile navigation toggle
+      const navToggle = document.querySelector(".nav-toggle");
+      const navEl = document.querySelector(".nav");
+      const navOverlay = document.querySelector(".nav-overlay");
+
+      function openNav() {
+        navEl.classList.add("open");
+        navOverlay.classList.add("open");
+        navToggle.setAttribute("aria-expanded", "true");
+      }
+
+      function closeNav() {
+        navEl.classList.remove("open");
+        navOverlay.classList.remove("open");
+        navToggle.setAttribute("aria-expanded", "false");
+      }
+
+      navToggle.addEventListener("click", () => {
+        if (navEl.classList.contains("open")) closeNav();
+        else openNav();
+      });
+      navOverlay.addEventListener("click", closeNav);
+
+      // Close nav when a link is clicked (navigate to section)
+      navEl.querySelectorAll("a").forEach((link) => {
+        link.addEventListener("click", () => {
+          if (window.innerWidth <= 900) closeNav();
+        });
+      });
     </script>
   </body>
 </html>

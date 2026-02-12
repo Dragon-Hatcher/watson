@@ -14,7 +14,8 @@
   padding: 0;
 }
 
-html {
+html,
+body {
   overflow-x: hidden;
 }
 
@@ -371,10 +372,12 @@ code .comment {
   h1 {
     font-size: 32px;
     line-height: 38px;
-    padding-right: 64px;
+    align-items: flex-end;
   }
 
   .chapter-num {
+    position: static;
+    flex-shrink: 0;
     width: 56px;
     height: 56px;
     font-size: 28px;
@@ -382,11 +385,11 @@ code .comment {
 
   pre {
     width: 100%;
+    overflow-x: auto;
   }
 
   code.code-block {
     margin-left: 0;
-    overflow-x: auto;
     white-space: pre;
   }
 }

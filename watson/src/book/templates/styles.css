@@ -388,3 +388,14 @@ code .comment {
     white-space: pre;
   }
 }
+
+@media (max-width: 600px) {
+  code.code-block {
+    grid-template-columns: auto;
+    column-gap: 0;
+  }
+
+  code .line {
+    display: none;
+  }
+}

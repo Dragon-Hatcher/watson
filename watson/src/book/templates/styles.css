@@ -1,3 +1,5 @@
+/* ── Fonts ───────────────────────────────────────────────────────────────── */
+
 @import url("https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Crimson+Pro:ital,wght@0,200..900;1,200..900&family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=Fira+Code:wght@300..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Lora:ital,wght@0,400..700;1,400..700&display=swap");
 
 @font-face {
@@ -8,16 +10,21 @@
   font-style: normal;
   font-display: swap;
 }
-/* Clear margin and padding */
+
+/* ── Reset ───────────────────────────────────────────────────────────────── */
+
 * {
   margin: 0;
   padding: 0;
 }
 
+/* Prevent any overflowing element from causing page-level horizontal scroll */
 html,
 body {
   overflow-x: hidden;
 }
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
 
 body {
   background-color: #fefefe;
@@ -25,6 +32,8 @@ body {
 
   --nav-width: 260px;
 }
+
+/* ── Article layout ──────────────────────────────────────────────────────── */
 
 article {
   font-family: "Inter", sans-serif;
@@ -40,10 +49,14 @@ article {
   margin-bottom: 256px;
 }
 
+/* Ensure sections and h3s don't get hidden under the top of the viewport when
+   scrolled to via an anchor link */
 section,
 h3 {
   scroll-margin-top: 16px;
 }
+
+/* ── Headings ────────────────────────────────────────────────────────────── */
 
 h1,
 h2,
@@ -53,6 +66,8 @@ h3 {
   font-weight: 600;
   font-style: normal;
 
+  /* Flex layout lets justify-content: space-between push the section number
+     badge to the right edge */
   position: relative;
   display: flex;
   justify-content: space-between;
@@ -65,6 +80,7 @@ h1 {
   line-height: 45px;
 }
 
+/* Blue chapter number badge, absolutely positioned at the bottom-right of h1 */
 .chapter-num {
   display: flex;
   align-items: center;
@@ -102,7 +118,7 @@ h3 .num {
   font-size: 18px;
 }
 
-/* Header anchor links */
+/* § anchor link that appears on hover to the left of a heading */
 .header-link {
   color: inherit;
   text-decoration: none;
@@ -122,6 +138,8 @@ h3 .num {
   opacity: 1;
 }
 
+/* ── Prose spacing ───────────────────────────────────────────────────────── */
+
 p + p,
 pre + p {
   margin-top: 16px;
@@ -132,6 +150,8 @@ pre + pre {
   margin-top: 8px;
 }
 
+/* ── Blockquote ──────────────────────────────────────────────────────────── */
+
 blockquote {
   margin: 0 24px;
   font-style: italic;
@@ -139,22 +159,24 @@ blockquote {
 }
 
 blockquote *:first-child:before {
-  content: "“";
+  content: "\201C";
   position: absolute;
   margin-left: -0.4em;
 }
 
 blockquote *:last-child:after {
-  content: "”";
+  content: "\201D";
 }
 
 .cite {
   text-align: right;
 }
 
+/* ── Code blocks ─────────────────────────────────────────────────────────── */
+
+/* Allow code to extend to the right edge of the visible screen area.
+   Formula: full viewport width - sidebar - left padding - right padding */
 pre {
-  /* allow code to extend to the edge of the screen */
-  /* full screen width - sidebar - padding on each side */
   width: calc(100vw - var(--nav-width) - 128px - 64px);
 }
 
@@ -168,17 +190,20 @@ code.code-block {
   --num-gap: 24px;
 
   border-radius: 4px;
+  /* Shift left to make room for the line-number column outside the text margin */
   margin-left: calc(-4ch - var(--num-gap));
   padding: 8px 0;
 
+  /* Two-column grid: line numbers | code content */
   display: grid;
   grid-template-columns: 4ch auto;
   column-gap: var(--num-gap);
 
-  /* preserve indentation while allow code to wrap */
-  white-space: pre-wrap;   
+  /* Preserve indentation while allowing long lines to wrap */
+  white-space: pre-wrap;
 }
 
+/* Line number column — right-aligned and non-selectable */
 code .line {
   display: inline-block;
   text-align: right;
@@ -186,6 +211,8 @@ code .line {
   color: #7c7f93;
   user-select: none;
 }
+
+/* ── Syntax highlighting ─────────────────────────────────────────────────── */
 
 code .kw {
   color: #8839ef;
@@ -208,10 +235,14 @@ code .comment {
   font-style: italic;
 }
 
-/* Makes katex fraction lines render a little thicker, which I think looks better */
+/* ── KaTeX ───────────────────────────────────────────────────────────────── */
+
+/* Render fraction lines a little thicker */
 .katex .mfrac .frac-line {
   border-bottom-width: 1px !important;
 }
+
+/* ── Navigation sidebar ──────────────────────────────────────────────────── */
 
 .nav {
   position: fixed;
@@ -268,13 +299,14 @@ code .comment {
 
 .nav .chapter,
 .nav .section a {
-  /* Reset anchor attributes */
+  /* Reset anchor styles */
   color: inherit;
   display: block;
   width: 100%;
   text-decoration: none;
 }
 
+/* Hover highlight — uses a pseudo-element so z-index doesn't affect text */
 .nav .chapter:hover::after,
 .nav .section:hover::after {
   display: block;
@@ -290,6 +322,7 @@ code .comment {
   z-index: -1;
 }
 
+/* Active section indicator — same as hover but with a left accent bar */
 .nav .selected::after {
   display: block;
   content: "";
@@ -305,16 +338,22 @@ code .comment {
   z-index: -1;
 }
 
-/* Mobile navigation toggle button — hidden on desktop */
+/* ── Mobile navigation toggle ────────────────────────────────────────────── */
+
+/* Hidden on desktop; shown as a hamburger button on mobile */
 .nav-toggle {
   display: none;
 }
 
+/* Full-screen semi-transparent backdrop shown behind the open sidebar */
 .nav-overlay {
   display: none;
 }
 
+/* ── Responsive: tablet / mobile (≤ 900px) ───────────────────────────────── */
+
 @media (max-width: 900px) {
+  /* Hamburger button — fixed in the top-left corner */
   .nav-toggle {
     display: flex;
     align-items: center;
@@ -333,6 +372,7 @@ code .comment {
     cursor: pointer;
   }
 
+  /* Backdrop — invisible until .open is toggled on by JS */
   .nav-overlay {
     display: block;
     position: fixed;
@@ -349,11 +389,12 @@ code .comment {
     pointer-events: auto;
   }
 
+  /* Sidebar slides in from the left as a drawer */
   .nav {
     transform: translateX(-100%);
     transition: transform 0.2s ease;
     z-index: 100;
-
+    /* Extra top padding so the first chapter title clears the hamburger button */
     padding-top: 68px;
   }
 
@@ -361,6 +402,7 @@ code .comment {
     transform: translateX(0);
   }
 
+  /* Article fills the viewport width with small side margins */
   article {
     max-width: none;
     margin-left: 20px;
@@ -372,9 +414,12 @@ code .comment {
   h1 {
     font-size: 32px;
     line-height: 38px;
+    /* Align the chapter-num badge to the bottom of the heading */
     align-items: flex-end;
   }
 
+  /* On mobile, .chapter-num becomes a flex item rather than absolutely
+     positioned, so it stays within the visible article width */
   .chapter-num {
     position: static;
     flex-shrink: 0;
@@ -383,18 +428,25 @@ code .comment {
     font-size: 28px;
   }
 
+  /* pre is the scroll container for wide code on mobile; its width is
+     constrained to the article, and overflow scrolls horizontally */
   pre {
     width: 100%;
     overflow-x: auto;
   }
 
   code.code-block {
+    /* Remove the leftward shift used to accommodate line numbers on desktop */
     margin-left: 0;
+    /* Don't wrap lines — let pre scroll instead */
     white-space: pre;
   }
 }
 
+/* ── Responsive: small phones (≤ 600px) ─────────────────────────────────── */
+
 @media (max-width: 600px) {
+  /* Hide line numbers entirely — not enough horizontal room */
   code.code-block {
     grid-template-columns: auto;
     column-gap: 0;

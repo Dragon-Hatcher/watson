@@ -24,6 +24,13 @@ body {
   overflow-x: hidden;
 }
 
+/* Prevent iOS Safari from automatically inflating font sizes in narrow
+   elements (most visible in code blocks with long lines) */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 /* ── Base ────────────────────────────────────────────────────────────────── */
 
 body {

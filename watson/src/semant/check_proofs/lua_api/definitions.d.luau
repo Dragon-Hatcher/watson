@@ -494,6 +494,8 @@ declare class VFormulaMeta
     function newIff(self, f1: VFormula, f2: VFormula): VFormula
     function newForall(self, var: number, f: VFormula): VFormula
     function newExists(self, var: number, f: VFormula): VFormula
+    function newTrue(self): VFormula
+    function newFalse(self): VFormula
 end
 
 declare VFormula: VFormulaMeta

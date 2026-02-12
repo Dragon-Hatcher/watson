@@ -127,6 +127,16 @@ impl UserData for LuaVFormulaMeta {
             let formula = Formula::new_exists(var, f.formula);
             Ok(LuaVFormula { formula })
         });
+
+        methods.add_method("newTrue", |_, _, _: ()| {
+            let formula = Formula::new_true();
+            Ok(LuaVFormula { formula })
+        });
+
+        methods.add_method("newFalse", |_, _, _: ()| {
+            let formula = Formula::new_false();
+            Ok(LuaVFormula { formula })
+        });
     }
 }
 

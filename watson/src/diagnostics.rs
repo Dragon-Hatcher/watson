@@ -99,19 +99,19 @@ pub struct DiagnosticSpan {
 }
 
 impl DiagnosticSpan {
-    pub fn new_error(msg: &'static str, span: Span) -> Self {
+    pub fn new_error(msg: &str, span: Span) -> Self {
         Self {
             level: DiagnosticLevel::Error,
             span,
-            msg,
+            msg: Ustr::from(msg).as_str(),
         }
     }
 
-    pub fn new_info(msg: &'static str, span: Span) -> Self {
+    pub fn new_info(msg: &str, span: Span) -> Self {
         Self {
             level: DiagnosticLevel::Info,
             span,
-            msg,
+            msg: Ustr::from(msg).as_str(),
         }
     }
 
@@ -443,11 +443,45 @@ impl<'ctx> Diagnostic<'ctx> {
         Err(vec![diag])
     }
 
-    pub fn err_frag_parse_failure(span: Span, err: parse_fragment::ParseResultErr) -> Self {
-        Diagnostic::new(
-            &format!("failed to parse fragment because {err:?}"),
-            vec![DiagnosticSpan::new_error("", span)],
-        )
+    pub fn err_frag_parse_failure(fallback_span: Span, err: parse_fragment::ParseResultErr) -> Self {
+        use parse_fragment::ParseResultErr;
+        match err {
+            ParseResultErr::NoSolutions { span, tried } => {
+                let mut diag = Diagnostic::new(
+                    "failed to parse fragment: no notation in scope matched",
+                    vec![DiagnosticSpan::new_error("here", span)],
+                );
+                for notation in &tried {
+                    diag = diag.with_info(
+                        &format!("tried `{notation}` but it is not declared in this scope"),
+                        vec![],
+                    );
+                }
+                diag
+            }
+            ParseResultErr::MultipleSolutions { span, solutions } => {
+                let mut diag = Diagnostic::new(
+                    "ambiguous fragment: multiple notations matched",
+                    vec![DiagnosticSpan::new_error("here", span)],
+                );
+                for solution in &solutions {
+                    let child_diag_spans: Vec<DiagnosticSpan> = solution
+                        .child_spans
+                        .iter()
+                        .map(|(s, name)| DiagnosticSpan::new_info(name, *s))
+                        .collect();
+                    diag = diag.with_info(
+                        &format!("matched `{}`", solution.notation),
+                        child_diag_spans,
+                    );
+                }
+                diag
+            }
+            ParseResultErr::WrongCat => Diagnostic::new(
+                "failed to parse fragment: wrong category",
+                vec![DiagnosticSpan::new_error("", fallback_span)],
+            ),
+        }
     }
 
     pub fn _err_TODO_real_error_later<T>(span: Span, msg: &str) -> WResult<'ctx, T> {

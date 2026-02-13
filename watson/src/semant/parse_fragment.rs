@@ -3,7 +3,12 @@ use ustr::Ustr;
 use crate::{
     context::Ctx,
     diagnostics::WResult,
-    parse::{elaborator::elaborate_name, parse_state::ParseRuleSource, parse_tree::ParseTreeId},
+    parse::{
+        Span,
+        elaborator::elaborate_name,
+        parse_state::ParseRuleSource,
+        parse_tree::ParseTreeId,
+    },
     semant::{
         formal_syntax::FormalSyntaxCatId,
         fragment::{FragHead, Fragment, hole_frag},
@@ -55,18 +60,61 @@ pub fn parse_fragment<'ctx>(
     scope: &Scope<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, Result<PresFrag<'ctx>, ParseResultErr>> {
-    // println!();
-    // println!("=======================");
-    // println!("{:?}", frag.0.span());
-    // println!("=======================");
     parse_fragment_impl(frag.0, 0, scope, ctx)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParseResultErr {
-    NoSolutions,
-    MultipleSolutions,
+    /// No notation binding in scope matched this fragment.
+    /// `span` is the location of the fragment that failed.
+    /// `tried` lists notation patterns that were syntactically possible but not in scope.
+    NoSolutions { span: Span, tried: Vec<String> },
+    /// Multiple notation bindings matched this fragment ambiguously.
+    /// `span` is the location of the ambiguous fragment.
+    MultipleSolutions { span: Span, solutions: Vec<AmbiguousSolution> },
     WrongCat,
+}
+
+/// One of the ambiguous interpretations of a fragment.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AmbiguousSolution {
+    /// Human-readable notation pattern with names substituted in (e.g. `"x = y"`).
+    pub notation: String,
+    /// Spans of the `Cat` sub-expressions in this interpretation, with their category names.
+    pub child_spans: Vec<(Span, String)>,
+}
+
+impl ParseResultErr {
+    /// Returns the end byte offset of this error's span, used to pick the deepest child error.
+    fn span_end(&self) -> usize {
+        match self {
+            ParseResultErr::NoSolutions { span, .. } => span.end().byte_offset(),
+            ParseResultErr::MultipleSolutions { span, .. } => span.end().byte_offset(),
+            ParseResultErr::WrongCat => 0,
+        }
+    }
+}
+
+use crate::parse::parse_tree::ParseTreeChildren;
+
+/// Collects the spans of `Cat` sub-expressions from a successfully-parsed possibility,
+/// paired with their formal syntax category name. Used to annotate ambiguous solutions.
+fn child_spans_for_possibility<'ctx>(
+    possibility: &ParseTreeChildren<'ctx>,
+    notation: crate::semant::notation::NotationPatternId<'ctx>,
+) -> Vec<(Span, String)> {
+    possibility
+        .children()
+        .iter()
+        .zip(notation.parts())
+        .filter_map(|(child, part)| {
+            if let NotationPatternPart::Cat(cat_part) = part {
+                Some((child.span(), cat_part.cat().name().to_string()))
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 fn parse_fragment_impl<'ctx>(
@@ -75,7 +123,15 @@ fn parse_fragment_impl<'ctx>(
     scope: &Scope<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, Result<PresFrag<'ctx>, ParseResultErr>> {
-    let mut solution = Err(ParseResultErr::NoSolutions);
+    let my_span = frag.span();
+    // Notations that were syntactically possible at this level but not in scope.
+    let mut not_in_scope: Vec<String> = Vec::new();
+    // The deepest child error encountered. When all possibilities fail, we return this
+    // instead of a generic "no solutions" at the current level, so that the error
+    // points at the specific sub-expression that actually went wrong.
+    let mut deepest_child_err: Option<ParseResultErr> = None;
+    let mut solution: Result<PresFrag<'ctx>, ()> = Err(());
+    let mut first_solution: Option<AmbiguousSolution> = None;
 
     'possibility: for possibility in frag.possibilities() {
         let rule = possibility.rule();
@@ -100,6 +156,7 @@ fn parse_fragment_impl<'ctx>(
         let Some(replacement) = scope.lookup(binding) else {
             // If we didn't find anything then this notation isn't bound in this
             // scope so we should try the next possibility or error out.
+            not_in_scope.push(binding.print());
             continue;
         };
 
@@ -124,18 +181,39 @@ fn parse_fragment_impl<'ctx>(
                     parse_fragment_impl(child_node, new_binding_depth, &new_scope, ctx)?;
                 match child_parse {
                     Ok(parse) => children.push(parse),
-                    Err(ParseResultErr::NoSolutions) => {
-                        continue 'possibility;
+                    Err(child_err) => {
+                        // Track the deepest child error. The child with the deepest span
+                        // end is the most specific failure (furthest into the source).
+                        let is_deeper = deepest_child_err
+                            .as_ref()
+                            .map_or(true, |prev| child_err.span_end() > prev.span_end());
+                        if is_deeper {
+                            deepest_child_err = Some(child_err.clone());
+                        }
+                        match child_err {
+                            ParseResultErr::NoSolutions { .. } => continue 'possibility,
+                            ParseResultErr::MultipleSolutions { .. } => {
+                                multiple_solutions = true;
+                            }
+                            ParseResultErr::WrongCat => unreachable!(),
+                        }
                     }
-                    Err(ParseResultErr::MultipleSolutions) => multiple_solutions = true,
-                    Err(ParseResultErr::WrongCat) => unreachable!(),
                 }
             }
         }
 
         // We found multiple solutions in the child nodes.
         if multiple_solutions {
-            return Ok(Err(ParseResultErr::MultipleSolutions));
+            if let Some(child_err) = deepest_child_err {
+                return Ok(Err(child_err));
+            }
+            return Ok(Err(ParseResultErr::MultipleSolutions {
+                span: my_span,
+                solutions: vec![AmbiguousSolution {
+                    notation: binding.print(),
+                    child_spans: child_spans_for_possibility(possibility, notation),
+                }],
+            }));
         }
 
         // Now we perform the replacement using the children we have parsed.
@@ -169,13 +247,40 @@ fn parse_fragment_impl<'ctx>(
         };
 
         if let Ok(_alternate) = solution {
-            return Ok(Err(ParseResultErr::MultipleSolutions));
+            let solutions = vec![
+                first_solution.unwrap(),
+                AmbiguousSolution {
+                    notation: binding.print(),
+                    child_spans: child_spans_for_possibility(possibility, notation),
+                },
+            ];
+            return Ok(Err(ParseResultErr::MultipleSolutions {
+                span: my_span,
+                solutions,
+            }));
         }
 
+        first_solution = Some(AmbiguousSolution {
+            notation: binding.print(),
+            child_spans: child_spans_for_possibility(possibility, notation),
+        });
         solution = Ok(instantiated);
     }
 
-    Ok(solution)
+    if let Ok(frag) = solution {
+        return Ok(Ok(frag));
+    }
+
+    // Prefer the deepest child error over the current-level error: it points to the
+    // specific sub-expression that failed rather than the whole expression.
+    if let Some(child_err) = deepest_child_err {
+        return Ok(Err(child_err));
+    }
+
+    Ok(Err(ParseResultErr::NoSolutions {
+        span: my_span,
+        tried: not_in_scope,
+    }))
 }
 
 fn extend_scope_with_args<'ctx>(

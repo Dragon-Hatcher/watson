@@ -40,11 +40,18 @@ export const SHORTHAND_DICT = [
   ["\\kappa", "κ"],
   ["\\lambda", "λ"],
   ["\\mu", "μ"],
+  ["\\nu", "ν"],
   ["\\xi", "ξ"],
+  ["\\omicron", "ο"],
   ["\\pi", "π"],
   ["\\rho", "ρ"],
   ["\\sigma", "σ"],
   ["\\tau", "τ"],
+  ["\\upsilon", "υ"],
+  ["\\phi", "φ"],
+  ["\\chi", "χ"],
+  ["\\psi", "ψ"],
+  ["\\omega", "ω"],
 
   // Uppercase
   ["\\Gamma", "Γ"],
@@ -54,6 +61,10 @@ export const SHORTHAND_DICT = [
   ["\\Xi", "Ξ"],
   ["\\Pi", "Π"],
   ["\\Sigma", "Σ"],
+  ["\\Upsilon", "Υ"],
+  ["\\Phi", "Φ"],
+  ["\\Psi", "Ψ"],
+  ["\\Omega", "Ω"],
 
   // -=- Super and subscripts -=-
   ["\\_a", "ₐ"],

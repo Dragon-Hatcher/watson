@@ -119,6 +119,9 @@ declare class Frag
     --- If this fragment is a template, the index of that template
     templateIdx: number?
 
+    --- If this fragment is a hole, the index of that hole
+    holeIdx: number?
+
     --- The number of unclosed (aka free) variables in the fragment
     unclosedCount: number
 

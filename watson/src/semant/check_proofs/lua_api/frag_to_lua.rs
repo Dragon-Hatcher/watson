@@ -62,6 +62,12 @@ impl UserData for LuaPresFrag {
             PresHead::Notation { .. } => Ok(None),
         });
 
+        fields.add_field_method_get("holeIdx", |_, this| match this.out().pres().head() {
+            PresHead::FormalFrag(FragHead::Hole(idx)) => Ok(Some(idx)),
+            PresHead::FormalFrag(_) => Ok(None),
+            PresHead::Notation { .. } => Ok(None),
+        });
+
         fields.add_field_method_get("unclosedCount", |_, this| {
             Ok(this.out().frag().unclosed_vars())
         });

@@ -161,6 +161,11 @@ declare class Frag
     --- @return A new fragment with variables substituted
     function instantiateVars(self, templates: {Frag}): Frag
 
+    --- Create a new frag where the top level notation has been changed to the
+    --- notation that was used in the definition.
+    --- @return the new reduced fragment
+    function reduce(self): Frag
+
     --- Attempt to match this fragment to the provided pattern. If the pattern
     --- contains holes the corresponding subfragments of this fragment are 
     --- returned as a map.

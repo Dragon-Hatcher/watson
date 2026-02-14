@@ -241,6 +241,26 @@ pub fn wrap_frag_with_name<'ctx>(
     PresFrag::new(frag.frag(), pres, frag.formal_pres())
 }
 
+pub fn reduce_frag<'ctx>(frag: PresFrag<'ctx>, ctx: &Ctx<'ctx>) -> PresFrag<'ctx> {
+    match frag.pres().head() {
+        PresHead::FormalFrag(_) => frag,
+        PresHead::Notation { replacement, .. } => {
+            let pres = instantiate_pres_holes(
+                replacement.pres(),
+                0,
+                PresInstTy::Normal,
+                &|idx| frag.pres().children()[idx],
+                0, // TODO
+                true,
+                ctx,
+                &mut FxHashMap::default(),
+                &mut FxHashMap::default(),
+            );
+            PresFrag::new(frag.frag(), pres, frag.formal_pres())
+        }
+    }
+}
+
 fn shift_frag<'ctx>(
     frag: FragmentId<'ctx>,
     shift: usize,

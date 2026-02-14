@@ -2,8 +2,7 @@ use crate::semant::{
     check_proofs::lua_api::{ctx_to_lua::LuaCtx, formal_to_lua::LuaFormalCat},
     fragment::{_debug_fragment, FragHead, Fragment, FragmentId, hole_frag, var_frag},
     presentation::{
-        BindingNameHints, Pres, PresFrag, PresHead, PresId, change_name_hints, instantiate_holes,
-        instantiate_templates, instantiate_vars, match_presentation, wrap_frag_with_name,
+        BindingNameHints, Pres, PresFrag, PresHead, PresId, change_name_hints, instantiate_holes, instantiate_templates, instantiate_vars, match_presentation, reduce_frag, wrap_frag_with_name
     },
     theorems::PresFact,
 };
@@ -120,6 +119,12 @@ impl UserData for LuaPresFrag {
             // TODO: make shifting an option?
             let frag = instantiate_holes(this.out(), &|idx| holes[idx].out(), 0, false, ctx);
             Ok(LuaPresFrag::new(frag))
+        });
+
+        methods.add_method("reduce", |lua, this, _: ()| {
+            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+            let reduced = reduce_frag(this.out(), ctx);
+            Ok(LuaPresFrag::new(reduced))
         });
 
         methods.add_method(

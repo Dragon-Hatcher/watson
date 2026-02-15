@@ -824,12 +824,12 @@ fn elaborate_definition<'ctx>(
             }
 
             match solutions.as_slice() {
-                [] => Diagnostic::_err_TODO_real_error_later(notation_binding.span(), "no matching notation bindings"),
+                [] => Diagnostic::_err_todo_real_error_later(notation_binding.span(), "no matching notation bindings"),
                 [(binding, frag)] => {
                     let entry = ScopeEntry::new(*frag);
                     Ok(scope.child_with(*binding, entry))
                 },
-                [..] => Diagnostic::_err_TODO_real_error_later(notation_binding.span(), "multiple matching notation bindings"),
+                [..] => Diagnostic::_err_todo_real_error_later(notation_binding.span(), "multiple matching notation bindings"),
             }
         }
     }

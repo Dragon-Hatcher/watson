@@ -9,11 +9,11 @@ const CONFIG_FILE_NAME: &str = "watson.toml";
 /// Search for watson.toml starting from the given directory and moving up the directory tree
 pub fn find_config_file() -> Result<PathBuf, ConfigError> {
     let current_dir =
-        env::current_dir().map_err(|e| ConfigError::IoError(PathBuf::from("."), e))?;
+        env::current_dir().map_err(|_| ConfigError::IoError)?;
 
     let start_dir = current_dir
         .canonicalize()
-        .map_err(|e| ConfigError::IoError(current_dir.to_path_buf(), e))?;
+        .map_err(|_| ConfigError::IoError)?;
 
     let mut current = start_dir.as_path();
 
@@ -32,7 +32,6 @@ pub fn find_config_file() -> Result<PathBuf, ConfigError> {
 
 #[derive(Debug, Clone)]
 pub struct WatsonConfig {
-    project_dir: PathBuf,
     build_dir: PathBuf,
     math_dir: PathBuf,
     lua_dir: PathBuf,
@@ -65,7 +64,6 @@ impl WatsonConfig {
         };
 
         Ok(Self {
-            project_dir,
             build_dir,
             math_dir,
             lua_dir,
@@ -115,16 +113,15 @@ impl WatsonConfigFile {
     /// Parse a watson.toml config file from the given path
     fn from_file(path: &Path) -> Result<Self, ConfigError> {
         let contents =
-            fs::read_to_string(path).map_err(|e| ConfigError::IoError(path.to_path_buf(), e))?;
+            fs::read_to_string(path).map_err(|_| ConfigError::IoError)?;
 
-        toml::from_str(&contents).map_err(|e| ConfigError::ParseError(path.to_path_buf(), e))
+        toml::from_str(&contents).map_err(|_| ConfigError::ParseError)
     }
 }
 
 #[derive(Debug)]
 pub enum ConfigError {
     NotFound,
-    IoError(PathBuf, std::io::Error),
-    ParseError(PathBuf, toml::de::Error),
-    InvalidPath(PathBuf),
+    IoError,
+    ParseError,
 }

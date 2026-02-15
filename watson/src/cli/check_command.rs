@@ -5,7 +5,7 @@ use crate::{
     parse::{ParseReport, SourceCache, SourceId, parse, source_cache::SourceDecl},
     report::{ProofReport, display_report},
     semant::{check_circularity::find_circular_dependency_groups, check_proofs::check_proofs},
-    util::ansi::{ANSI_BOLD, ANSI_GRAY, ANSI_GREEN, ANSI_RESET},
+    util::ansi::{ANSI_BOLD, ANSI_GREEN, ANSI_RESET},
 };
 use argh::FromArgs;
 use crossterm::{

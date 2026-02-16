@@ -5,8 +5,8 @@ use crate::{
             unresolved_to_lua::{LuaUnresolvedAnyFrag, LuaUnresolvedFact, LuaUnresolvedFrag},
         },
         tactic::{
-            syntax::TacticPatPartCore,
-            tactic_manager::TacticManager,
+            syntax::CustomGrammarPatPartCore,
+            tactic_manager::CustomGrammarManager,
             unresolved_proof::{SpannedStr, TacticInst, TacticInstPart},
         },
     },
@@ -77,7 +77,7 @@ impl UserData for SpannedStr {
     }
 }
 
-pub fn generate_luau_tactic_types<'ctx>(tactics: &TacticManager<'ctx>) -> String {
+pub fn generate_luau_tactic_types<'ctx>(tactics: &CustomGrammarManager<'ctx>) -> String {
     let mut out = String::new();
 
     for &cat in tactics.cats() {
@@ -95,7 +95,7 @@ pub fn generate_luau_tactic_types<'ctx>(tactics: &TacticManager<'ctx>) -> String
             out.push_str(&format!("  | {{ _rule: \"{rule_name}\", _span: Span"));
 
             for part in rule.pattern().parts() {
-                use TacticPatPartCore as C;
+                use CustomGrammarPatPartCore as C;
 
                 let Some(label) = part.label() else {
                     continue;

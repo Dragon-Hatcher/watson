@@ -8,8 +8,7 @@ const CONFIG_FILE_NAME: &str = "watson.toml";
 
 /// Search for watson.toml starting from the given directory and moving up the directory tree
 pub fn find_config_file() -> Result<PathBuf, ConfigError> {
-    let current_dir =
-        env::current_dir().map_err(|_| ConfigError::IoError)?;
+    let current_dir = env::current_dir().map_err(|_| ConfigError::IoError)?;
 
     let start_dir = current_dir
         .canonicalize()
@@ -112,8 +111,7 @@ struct BookConfigFile {
 impl WatsonConfigFile {
     /// Parse a watson.toml config file from the given path
     fn from_file(path: &Path) -> Result<Self, ConfigError> {
-        let contents =
-            fs::read_to_string(path).map_err(|_| ConfigError::IoError)?;
+        let contents = fs::read_to_string(path).map_err(|_| ConfigError::IoError)?;
 
         toml::from_str(&contents).map_err(|_| ConfigError::ParseError)
     }

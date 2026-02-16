@@ -350,16 +350,16 @@ impl<'ctx> Diagnostic<'ctx> {
         Err(vec![diag])
     }
 
-    pub fn err_duplicate_tactic_cat<T>() -> WResult<'ctx, T> {
-        let diag = Diagnostic::new("err_duplicate_tactic_cat", vec![]);
+    pub fn err_duplicate_grammar_cat<T>() -> WResult<'ctx, T> {
+        let diag = Diagnostic::new("err_duplicate_grammar_cat", vec![]);
 
         Err(vec![diag])
     }
 
-    pub fn err_reserved_tactic_cat_name<T>(name: Ustr, span: Span) -> WResult<'ctx, T> {
+    pub fn err_reserved_grammar_cat_name<T>(name: Ustr, span: Span) -> WResult<'ctx, T> {
         let diag = Diagnostic::new(
             &format!(
-                "tactic category name `{name}` is reserved (it conflicts with a built-in Luau type)"
+                "grammar category name `{name}` is reserved (it conflicts with a built-in Luau type)"
             ),
             vec![DiagnosticSpan::new_error("", span)],
         );
@@ -367,15 +367,15 @@ impl<'ctx> Diagnostic<'ctx> {
         Err(vec![diag])
     }
 
-    pub fn err_duplicate_tactic_rule<T>() -> WResult<'ctx, T> {
-        let diag = Diagnostic::new("err_duplicate_tactic_rule", vec![]);
+    pub fn err_duplicate_grammar_rule<T>() -> WResult<'ctx, T> {
+        let diag = Diagnostic::new("err_duplicate_grammar_rule", vec![]);
 
         Err(vec![diag])
     }
 
-    pub fn err_unknown_tactic_cat<T>(name: Ustr, span: Span) -> WResult<'ctx, T> {
+    pub fn err_unknown_grammar_cat<T>(name: Ustr, span: Span) -> WResult<'ctx, T> {
         let diag = Diagnostic::new(
-            &format!("unknown tactic category `{name}`"),
+            &format!("unknown grammar category `{name}`"),
             vec![DiagnosticSpan::new_error("", span)],
         );
 
@@ -443,7 +443,10 @@ impl<'ctx> Diagnostic<'ctx> {
         Err(vec![diag])
     }
 
-    pub fn err_frag_parse_failure(fallback_span: Span, err: parse_fragment::ParseResultErr) -> Self {
+    pub fn err_frag_parse_failure(
+        fallback_span: Span,
+        err: parse_fragment::ParseResultErr,
+    ) -> Self {
         use parse_fragment::ParseResultErr;
         match err {
             ParseResultErr::NoSolutions { span, tried } => {

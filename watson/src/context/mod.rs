@@ -16,8 +16,10 @@ use crate::{
         notation::{NotationBinding, NotationBindingId, NotationPattern, NotationPatternId},
         presentation::{BindingNameHints, BindingNameHintsId, Pres, PresId},
         tactic::{
-            syntax::{TacticCat, TacticCatId, TacticRule, TacticRuleId},
-            tactic_manager::TacticManager,
+            syntax::{
+                CustomGrammarCat, CustomGrammarCatId, CustomGrammarRule, CustomGrammarRuleId,
+            },
+            tactic_manager::CustomGrammarManager,
         },
         theorems::{TheoremId, TheoremStatement},
     },
@@ -34,7 +36,7 @@ pub struct Ctx<'ctx> {
     pub parse_state: ParseState<'ctx>,
 
     /// Records information about tactics.
-    pub tactic_manager: TacticManager<'ctx>,
+    pub tactic_manager: CustomGrammarManager<'ctx>,
 
     /// Diagnostics manager for reporting errors and warnings.
     pub diags: DiagManager<'ctx>,
@@ -55,25 +57,25 @@ pub struct Ctx<'ctx> {
 impl<'ctx> Ctx<'ctx> {
     pub fn new(sources: SourceCache, config: WatsonConfig, arenas: &'ctx Arenas<'ctx>) -> Self {
         let mut parse_state = ParseState::new();
-        let mut tactic_manager = TacticManager::new();
+        let mut custom_grammar_manager = CustomGrammarManager::new();
 
         let sentence_formal_cat = arenas
             .formal_cats
             .alloc(*strings::SENTENCE, FormalSyntaxCat::new(*strings::SENTENCE));
 
-        let tactic_tactic_cat = arenas
-            .tactic_cats
-            .alloc(*strings::TACTIC, TacticCat::new(*strings::TACTIC));
-        tactic_manager.use_tactic_cat(tactic_tactic_cat);
+        let tactic_grammar_cat = arenas
+            .grammar_cats
+            .alloc(*strings::TACTIC, CustomGrammarCat::new(*strings::TACTIC));
+        custom_grammar_manager.use_cat(tactic_grammar_cat);
 
         // Create the tactic parse category before calling add_builtin_rules
         let tactic_parse_cat = crate::parse::parse_state::Category::new(
-            tactic_tactic_cat.name(),
-            crate::parse::parse_state::SyntaxCategorySource::Tactic(tactic_tactic_cat),
+            tactic_grammar_cat.name(),
+            crate::parse::parse_state::SyntaxCategorySource::User(tactic_grammar_cat),
         );
         let tactic_parse_cat = arenas
             .parse_cats
-            .alloc(tactic_tactic_cat.name(), tactic_parse_cat);
+            .alloc(tactic_grammar_cat.name(), tactic_parse_cat);
         parse_state.use_cat(tactic_parse_cat);
 
         let builtin_cats = BuiltinCats::new(arenas, &mut parse_state);
@@ -90,7 +92,7 @@ impl<'ctx> Ctx<'ctx> {
             arenas,
             scopes: ScopeArena::new(),
             parse_state,
-            tactic_manager,
+            tactic_manager: custom_grammar_manager,
             diags: DiagManager::new(),
             sources,
             config,
@@ -118,8 +120,8 @@ pub struct Arenas<'ctx> {
     pub fragments: InternedArena<Fragment<'ctx>, FragmentId<'ctx>>,
     pub presentations: InternedArena<Pres<'ctx>, PresId<'ctx>>,
     pub binding_name_hints: InternedArena<BindingNameHints, BindingNameHintsId<'ctx>>,
-    pub tactic_cats: NamedArena<TacticCat, TacticCatId<'ctx>>,
-    pub tactic_rules: NamedArena<TacticRule<'ctx>, TacticRuleId<'ctx>>,
+    pub grammar_cats: NamedArena<CustomGrammarCat, CustomGrammarCatId<'ctx>>,
+    pub grammar_rules: NamedArena<CustomGrammarRule<'ctx>, CustomGrammarRuleId<'ctx>>,
     pub theorem_stmts: NamedArena<TheoremStatement<'ctx>, TheoremId<'ctx>>,
 }
 
@@ -136,8 +138,8 @@ impl<'ctx> Arenas<'ctx> {
             fragments: InternedArena::new(),
             presentations: InternedArena::new(),
             binding_name_hints: InternedArena::new(),
-            tactic_cats: NamedArena::new(),
-            tactic_rules: NamedArena::new(),
+            grammar_cats: NamedArena::new(),
+            grammar_rules: NamedArena::new(),
             theorem_stmts: NamedArena::new(),
         }
     }

@@ -2,7 +2,7 @@ use crate::{
     parse::Span,
     semant::{
         parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag},
-        tactic::syntax::TacticRuleId,
+        tactic::syntax::CustomGrammarRuleId,
     },
 };
 use mlua::FromLua;
@@ -14,13 +14,17 @@ pub enum UnresolvedProof<'ctx> {
 }
 
 pub struct TacticInst<'ctx> {
-    rule: TacticRuleId<'ctx>,
+    rule: CustomGrammarRuleId<'ctx>,
     span: Span,
     children: Vec<TacticInstPart<'ctx>>,
 }
 
 impl<'ctx> TacticInst<'ctx> {
-    pub fn new(rule: TacticRuleId<'ctx>, span: Span, children: Vec<TacticInstPart<'ctx>>) -> Self {
+    pub fn new(
+        rule: CustomGrammarRuleId<'ctx>,
+        span: Span,
+        children: Vec<TacticInstPart<'ctx>>,
+    ) -> Self {
         Self {
             rule,
             span,
@@ -28,7 +32,7 @@ impl<'ctx> TacticInst<'ctx> {
         }
     }
 
-    pub fn rule(&self) -> TacticRuleId<'ctx> {
+    pub fn rule(&self) -> CustomGrammarRuleId<'ctx> {
         self.rule
     }
 

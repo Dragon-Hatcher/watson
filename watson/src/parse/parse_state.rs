@@ -3,7 +3,7 @@ use crate::{
     semant::{
         formal_syntax::FormalSyntaxCatId,
         notation::NotationPatternId,
-        tactic::syntax::{TacticCatId, TacticRuleId},
+        tactic::syntax::{CustomGrammarCatId, CustomGrammarRuleId},
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -12,7 +12,7 @@ use ustr::Ustr;
 pub struct ParseState<'ctx> {
     // Category info
     categories_by_formal_cat: FxHashMap<FormalSyntaxCatId<'ctx>, CategoryId<'ctx>>,
-    categories_by_tactic_cat: FxHashMap<TacticCatId<'ctx>, CategoryId<'ctx>>,
+    categories_by_tactic_cat: FxHashMap<CustomGrammarCatId<'ctx>, CategoryId<'ctx>>,
 
     // Rule info
     all_rules: FxHashSet<RuleId<'ctx>>,
@@ -43,7 +43,7 @@ impl<'ctx> ParseState<'ctx> {
             SyntaxCategorySource::FormalLang(formal) => {
                 self.categories_by_formal_cat.insert(formal, cat);
             }
-            SyntaxCategorySource::Tactic(tactic) => {
+            SyntaxCategorySource::User(tactic) => {
                 self.categories_by_tactic_cat.insert(tactic, cat);
             }
             SyntaxCategorySource::Builtin => {}
@@ -123,7 +123,7 @@ impl<'ctx> ParseState<'ctx> {
         self.categories_by_formal_cat[&formal_cat]
     }
 
-    pub fn cat_for_tactic_cat(&self, tactic_cat: TacticCatId<'ctx>) -> CategoryId<'ctx> {
+    pub fn cat_for_tactic_cat(&self, tactic_cat: CustomGrammarCatId<'ctx>) -> CategoryId<'ctx> {
         self.categories_by_tactic_cat[&tactic_cat]
     }
 
@@ -164,7 +164,7 @@ impl<'ctx> Category<'ctx> {
 pub enum SyntaxCategorySource<'ctx> {
     Builtin,
     FormalLang(FormalSyntaxCatId<'ctx>),
-    Tactic(TacticCatId<'ctx>),
+    User(CustomGrammarCatId<'ctx>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -229,7 +229,7 @@ pub enum ParseRuleSource<'ctx> {
     Builtin,
     AnyFrag(FormalSyntaxCatId<'ctx>),
     Notation(NotationPatternId<'ctx>),
-    TacticRule(TacticRuleId<'ctx>),
+    TacticRule(CustomGrammarRuleId<'ctx>),
 }
 
 impl<'ctx> ParseRuleSource<'ctx> {
@@ -240,7 +240,7 @@ impl<'ctx> ParseRuleSource<'ctx> {
         }
     }
 
-    pub fn get_tactic_rule(&self) -> TacticRuleId<'ctx> {
+    pub fn get_tactic_rule(&self) -> CustomGrammarRuleId<'ctx> {
         match self {
             ParseRuleSource::TacticRule(id) => *id,
             _ => panic!("ParseRuleSource is not TacticRule"),

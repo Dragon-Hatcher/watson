@@ -6,16 +6,16 @@ use crate::{
 };
 use ustr::Ustr;
 
-generate_arena_handle!(TacticCatId<'ctx> => TacticCat);
-generate_arena_handle!(TacticRuleId<'ctx> => TacticRule<'ctx>);
+generate_arena_handle!(CustomGrammarCatId<'ctx> => CustomGrammarCat);
+generate_arena_handle!(CustomGrammarRuleId<'ctx> => CustomGrammarRule<'ctx>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TacticCat {
+pub struct CustomGrammarCat {
     name: Ustr,
     lua_name: Ustr,
 }
 
-impl TacticCat {
+impl CustomGrammarCat {
     pub fn new(name: Ustr) -> Self {
         Self {
             name,
@@ -33,15 +33,20 @@ impl TacticCat {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TacticRule<'ctx> {
+pub struct CustomGrammarRule<'ctx> {
     name: Ustr,
-    cat: TacticCatId<'ctx>,
-    pat: TacticPat<'ctx>,
+    cat: CustomGrammarCatId<'ctx>,
+    pat: CustomGrammarPat<'ctx>,
     scope: ScopeId,
 }
 
-impl<'ctx> TacticRule<'ctx> {
-    pub fn new(name: Ustr, cat: TacticCatId<'ctx>, pat: TacticPat<'ctx>, scope: ScopeId) -> Self {
+impl<'ctx> CustomGrammarRule<'ctx> {
+    pub fn new(
+        name: Ustr,
+        cat: CustomGrammarCatId<'ctx>,
+        pat: CustomGrammarPat<'ctx>,
+        scope: ScopeId,
+    ) -> Self {
         Self {
             name,
             cat,
@@ -54,11 +59,11 @@ impl<'ctx> TacticRule<'ctx> {
         self.name
     }
 
-    pub fn cat(&self) -> TacticCatId<'ctx> {
+    pub fn cat(&self) -> CustomGrammarCatId<'ctx> {
         self.cat
     }
 
-    pub fn pattern(&self) -> &TacticPat<'ctx> {
+    pub fn pattern(&self) -> &CustomGrammarPat<'ctx> {
         &self.pat
     }
 
@@ -68,15 +73,15 @@ impl<'ctx> TacticRule<'ctx> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TacticPat<'ctx> {
-    parts: Vec<TacticPatPart<'ctx>>,
+pub struct CustomGrammarPat<'ctx> {
+    parts: Vec<CustomGrammarPatPart<'ctx>>,
     precedence: Precedence,
     associativity: Associativity,
 }
 
-impl<'ctx> TacticPat<'ctx> {
+impl<'ctx> CustomGrammarPat<'ctx> {
     pub fn new(
-        parts: Vec<TacticPatPart<'ctx>>,
+        parts: Vec<CustomGrammarPatPart<'ctx>>,
         precedence: Precedence,
         associativity: Associativity,
     ) -> Self {
@@ -87,7 +92,7 @@ impl<'ctx> TacticPat<'ctx> {
         }
     }
 
-    pub fn parts(&self) -> &[TacticPatPart<'ctx>] {
+    pub fn parts(&self) -> &[CustomGrammarPatPart<'ctx>] {
         &self.parts
     }
 
@@ -101,13 +106,13 @@ impl<'ctx> TacticPat<'ctx> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TacticPatPart<'ctx> {
+pub struct CustomGrammarPatPart<'ctx> {
     label: Option<Ustr>,
-    part: TacticPatPartCore<'ctx>,
+    part: CustomGrammarPatPartCore<'ctx>,
 }
 
-impl<'ctx> TacticPatPart<'ctx> {
-    pub fn new(label: Option<Ustr>, part: TacticPatPartCore<'ctx>) -> Self {
+impl<'ctx> CustomGrammarPatPart<'ctx> {
+    pub fn new(label: Option<Ustr>, part: CustomGrammarPatPartCore<'ctx>) -> Self {
         Self { label, part }
     }
 
@@ -115,17 +120,17 @@ impl<'ctx> TacticPatPart<'ctx> {
         self.label
     }
 
-    pub fn part(&self) -> &TacticPatPartCore<'ctx> {
+    pub fn part(&self) -> &CustomGrammarPatPartCore<'ctx> {
         &self.part
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TacticPatPartCore<'ctx> {
+pub enum CustomGrammarPatPartCore<'ctx> {
     Lit(Ustr),
     Kw(Ustr),
     Name,
-    Cat(TacticCatId<'ctx>),
+    Cat(CustomGrammarCatId<'ctx>),
     Frag(CategoryId<'ctx>),
     AnyFrag,
     Fact,

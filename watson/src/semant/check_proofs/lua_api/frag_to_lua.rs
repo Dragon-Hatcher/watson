@@ -2,7 +2,9 @@ use crate::semant::{
     check_proofs::lua_api::{ctx_to_lua::LuaCtx, formal_to_lua::LuaFormalCat},
     fragment::{_debug_fragment, FragHead, Fragment, FragmentId, hole_frag, var_frag},
     presentation::{
-        BindingNameHints, Pres, PresFrag, PresHead, PresId, change_name_hints, instantiate_holes, instantiate_templates, instantiate_vars, match_presentation, reduce_frag, wrap_frag_with_name
+        BindingNameHints, Pres, PresFrag, PresHead, PresId, change_name_hints, instantiate_holes,
+        instantiate_templates, instantiate_vars, match_presentation, reduce_frag,
+        wrap_frag_with_name,
     },
     theorems::PresFact,
 };

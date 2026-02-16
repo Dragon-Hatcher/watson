@@ -17,7 +17,7 @@ str_const! {
     DEFINITION = "definition";
     AXIOM = "axiom";
     THEOREM = "theorem";
-    TACTIC_CATEGORY = "tactic_category";
+    GRAMMAR_CATEGORY = "grammar_category";
     TACTIC = "tactic";
     NAME = "name";
     KW = "kw";

@@ -16,7 +16,7 @@ use crate::{
         },
         presentation::{Pres, PresFrag, PresHead},
         scope::ScopeEntry,
-        tactic::syntax::{TacticPatPartCore, TacticRuleId},
+        tactic::syntax::{CustomGrammarPatPartCore, CustomGrammarRuleId},
     },
     strings,
 };
@@ -58,14 +58,14 @@ macro_rules! builtin_rules {
 /*
 Grammar of the Watson language:
 
-command ::= (module_command)          module_command
+command ::= (module_command)           module_command
           | (syntax_cat_command)       syntax_cat_command
           | (syntax_command)           syntax_command
           | (notation_command)         notation_command
           | (definition_command)       definition_command
           | (axiom_command)            axiom_command
           | (theorem_command)          theorem_command
-          | (tactic_category_command)  tactic_category_command
+          | (grammar_category_command) grammar_category_command
           | (tactic_command)           tactic_command
 
 module_command ::= (module) kw"module" name
@@ -107,7 +107,7 @@ maybe_notation_pat_term_args ::= (maybe_notation_pat_term_args_none)
 notation_pat_term_args ::= (notation_pat_term_args_one)  @name
                          | (notation_pat_term_args_many) @name notation_pat_term_args
 
-tactic_category_command ::= (tactic_category) kw"tactic_category" name
+grammar_category_command ::= (grammar_category) kw"grammar_category" name
 tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" tactic_pat kw"end"
 
 tactic_pat ::= (tactic_pat_none)
@@ -149,7 +149,7 @@ hypothesis ::= (hypothesis) "(" fact ")"
 fact ::= (fact_assumption) kw"assume" sentence "|-" sentence
        | (fact_sentence)   sentence
 
-// tactic syntax is now user-defined via tactic_category and tactic commands
+// tactic syntax is now user-defined via grammar_category and tactic commands
 
 <formal_cat> ::= name maybe_shorthand_args
 
@@ -173,7 +173,7 @@ builtin_cats! {
         definition_command,
         axiom_command,
         theorem_command,
-        tactic_category_command,
+        grammar_category_command,
         tactic_command,
         prec_assoc,
         maybe_prec,
@@ -212,12 +212,12 @@ builtin_rules! {
         definition_command,
         axiom_command,
         theorem_command,
-        tactic_category_command,
+        grammar_category_command,
         tactic_command,
         module,
         syntax_cat,
         syntax,
-        tactic_category,
+        grammar_category,
         tactic,
         prec_assoc_none,
         prec_assoc_some,
@@ -360,10 +360,10 @@ pub fn add_builtin_rules<'ctx>(
             cats.command,
             vec![cat(cats.theorem_command)],
         ),
-        tactic_category_command: rule!(
-            "tactic_category_command",
+        grammar_category_command: rule!(
+            "grammar_category_command",
             cats.command,
-            vec![cat(cats.tactic_category_command)],
+            vec![cat(cats.grammar_category_command)],
         ),
         tactic_command: rule!(
             "tactic_command",
@@ -393,10 +393,10 @@ pub fn add_builtin_rules<'ctx>(
                 kw(*strings::END),
             ],
         ),
-        tactic_category: rule!(
-            "tactic_category",
-            cats.tactic_category_command,
-            vec![kw(*strings::TACTIC_CATEGORY), cat(cats.name)],
+        grammar_category: rule!(
+            "grammar_category",
+            cats.grammar_category_command,
+            vec![kw(*strings::GRAMMAR_CATEGORY), cat(cats.name)],
         ),
         tactic: rule!(
             "tactic",
@@ -946,26 +946,28 @@ pub fn add_parse_rules_for_notation<'ctx>(notation: NotationPatternId<'ctx>, ctx
 }
 
 fn tactic_rule_to_parse_rule<'ctx>(
-    tactic_rule: TacticRuleId<'ctx>,
+    tactic_rule: CustomGrammarRuleId<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> RuleId<'ctx> {
     let mut parts = Vec::new();
     for tactic_part in tactic_rule.pattern().parts() {
+        use CustomGrammarPatPartCore as PatPart;
+
         let part = match tactic_part.part() {
-            TacticPatPartCore::Lit(lit_str) => {
+            &PatPart::Lit(lit_str) => {
                 // Trim whitespace from literals for parsing, but preserve in presentation
                 let trimmed = Ustr::from(lit_str.trim());
                 lit(trimmed)
             }
-            TacticPatPartCore::Kw(kw_str) => kw(*kw_str),
-            TacticPatPartCore::Name => cat(ctx.builtin_cats.name),
-            TacticPatPartCore::Cat(tactic_cat) => {
+            PatPart::Kw(kw_str) => kw(*kw_str),
+            PatPart::Name => cat(ctx.builtin_cats.name),
+            PatPart::Cat(tactic_cat) => {
                 let cat = ctx.parse_state.cat_for_tactic_cat(*tactic_cat);
                 RulePatternPart::Cat(cat)
             }
-            TacticPatPartCore::Frag(cat_id) => cat(*cat_id),
-            TacticPatPartCore::AnyFrag => cat(ctx.builtin_cats.any_fragment),
-            TacticPatPartCore::Fact => cat(ctx.builtin_cats.fact),
+            PatPart::Frag(cat_id) => cat(*cat_id),
+            PatPart::AnyFrag => cat(ctx.builtin_cats.any_fragment),
+            PatPart::Fact => cat(ctx.builtin_cats.fact),
         };
         parts.push(part);
     }
@@ -986,7 +988,10 @@ fn tactic_rule_to_parse_rule<'ctx>(
     ctx.arenas.parse_rules.alloc(parse_rule)
 }
 
-pub fn add_parse_rules_for_tactic_rule<'ctx>(tactic_rule: TacticRuleId<'ctx>, ctx: &mut Ctx<'ctx>) {
+pub fn add_parse_rules_for_tactic_rule<'ctx>(
+    tactic_rule: CustomGrammarRuleId<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) {
     let parse_rule = tactic_rule_to_parse_rule(tactic_rule, ctx);
     ctx.parse_state.use_rule(parse_rule);
 }

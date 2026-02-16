@@ -150,15 +150,15 @@ fn parse_source<'ctx>(
             ElaborateAction::NewTheorem(new_theorem, proof) => {
                 theorems.push((new_theorem, proof));
             }
-            ElaborateAction::NewTacticCat(cat) => {
-                // The command created a new tactic category. We need to
+            ElaborateAction::NewGrammarCat(cat) => {
+                // The command created a new grammar category. We need to
                 // update the state of the parser to include this category.
-                let parse_cat = Category::new(cat.name(), SyntaxCategorySource::Tactic(cat));
+                let parse_cat = Category::new(cat.name(), SyntaxCategorySource::User(cat));
                 let parse_cat = ctx.arenas.parse_cats.alloc(cat.name(), parse_cat);
                 ctx.parse_state.use_cat(parse_cat);
                 ctx.parse_state.recompute_initial_atoms();
 
-                ctx.tactic_manager.use_tactic_cat(cat);
+                ctx.tactic_manager.use_cat(cat);
             }
             ElaborateAction::NewTacticRule(rule) => {
                 // The command created a new tactic rule. We need to
@@ -166,7 +166,7 @@ fn parse_source<'ctx>(
                 grammar::add_parse_rules_for_tactic_rule(rule, ctx);
                 ctx.parse_state.recompute_initial_atoms();
 
-                ctx.tactic_manager.use_tactic_rule(rule);
+                ctx.tactic_manager.use_rule(rule);
             }
         }
     } else {

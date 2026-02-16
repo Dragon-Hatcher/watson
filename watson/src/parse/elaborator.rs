@@ -22,8 +22,8 @@ use crate::{
         scope::{Scope, ScopeEntry},
         tactic::{
             syntax::{
-                TacticCat, TacticCatId, TacticPat, TacticPatPart, TacticPatPartCore, TacticRule,
-                TacticRuleId,
+                CustomGrammarCat, CustomGrammarCatId, CustomGrammarPat, CustomGrammarPatPart,
+                CustomGrammarPatPartCore, CustomGrammarRule, CustomGrammarRuleId,
             },
             unresolved_proof::{SpannedStr, TacticInst, TacticInstPart, UnresolvedProof},
         },
@@ -93,8 +93,8 @@ pub enum ElaborateAction<'ctx> {
     NewNotation(NotationPatternId<'ctx>),
     NewDefinition(Scope<'ctx>),
     NewTheorem(TheoremId<'ctx>, UnresolvedProof<'ctx>),
-    NewTacticCat(TacticCatId<'ctx>),
-    NewTacticRule(TacticRuleId<'ctx>),
+    NewGrammarCat(CustomGrammarCatId<'ctx>),
+    NewTacticRule(CustomGrammarRuleId<'ctx>),
 }
 
 pub fn elaborate_command<'ctx>(
@@ -102,14 +102,14 @@ pub fn elaborate_command<'ctx>(
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<'ctx, ElaborateAction<'ctx>> {
-    // command ::= (module_command)          module_command
+    // command ::= (module_command)           module_command
     //           | (syntax_cat_command)       syntax_cat_command
     //           | (syntax_command)           syntax_command
     //           | (notation_command)         notation_command
     //           | (definition_command)       definition_command
     //           | (axiom_command)            axiom_command
     //           | (theorem_command)          theorem_command
-    //           | (tactic_category_command)  tactic_category_command
+    //           | (grammar_category_command) grammar_category_command
     //           | (tactic_command)           tactic_command
 
     match_rule! { (ctx, command) =>
@@ -141,9 +141,9 @@ pub fn elaborate_command<'ctx>(
             let (thm_id, proof) = elaborate_theorem(theorem_cmd.as_node().unwrap(), scope, ctx)?;
             Ok(ElaborateAction::NewTheorem(thm_id, proof))
         },
-        tactic_category_command ::= [tactic_cat_cmd] => {
-            let cat = elaborate_tactic_category(tactic_cat_cmd.as_node().unwrap(), ctx)?;
-            Ok(ElaborateAction::NewTacticCat(cat))
+        grammar_category_command ::= [grammar_cat_cmd] => {
+            let cat = elaborate_grammar_category(grammar_cat_cmd.as_node().unwrap(), ctx)?;
+            Ok(ElaborateAction::NewGrammarCat(cat))
         },
         tactic_command ::= [tactic_cmd] => {
             let rule = elaborate_tactic_def(tactic_cmd.as_node().unwrap(), scope, ctx)?;
@@ -587,32 +587,32 @@ fn elaborate_notation_pat_args<'ctx>(
     Ok(elaborated_args)
 }
 
-fn elaborate_tactic_category<'ctx>(
+fn elaborate_grammar_category<'ctx>(
     cat: ParseTreeId<'ctx>,
     ctx: &Ctx<'ctx>,
-) -> WResult<'ctx, TacticCatId<'ctx>> {
-    // tactic_category_command ::= (tactic_category) kw"tactic_category" name
+) -> WResult<'ctx, CustomGrammarCatId<'ctx>> {
+    // grammar_category_command ::= (grammar_category) kw"tactic_category" name
 
     match_rule! { (ctx, cat) =>
-        tactic_category ::= [tactic_category_kw, cat_name] => {
-            debug_assert!(tactic_category_kw.is_kw(*strings::TACTIC_CATEGORY));
+        grammar_category ::= [grammar_category_kw, cat_name] => {
+            debug_assert!(grammar_category_kw.is_kw(*strings::GRAMMAR_CATEGORY));
             let cat_name_node = cat_name.as_node().unwrap();
             let cat_name = elaborate_name(cat_name_node, ctx)?;
 
-            if ctx.arenas.tactic_cats.get(cat_name).is_some() {
-                return Diagnostic::err_duplicate_tactic_cat();
+            if ctx.arenas.grammar_cats.get(cat_name).is_some() {
+                return Diagnostic::err_duplicate_grammar_cat();
             }
 
             // Check if the category name conflicts with reserved Luau types
             // (tactic names are converted to PascalCase for Lua)
             let lua_name = crate::util::name_to_lua(cat_name.as_str());
             if RESERVED_LUAU_TYPES.contains(&lua_name.as_str()) {
-                return Diagnostic::err_reserved_tactic_cat_name(cat_name, cat_name_node.span());
+                return Diagnostic::err_reserved_grammar_cat_name(cat_name, cat_name_node.span());
             }
 
-            let tactic_cat = TacticCat::new(cat_name);
-            let tactic_cat = ctx.arenas.tactic_cats.alloc(cat_name, tactic_cat);
-            Ok(tactic_cat)
+            let grammar_cat = CustomGrammarCat::new(cat_name);
+            let grammar_cat = ctx.arenas.grammar_cats.alloc(cat_name, grammar_cat);
+            Ok(grammar_cat)
         }
     }
 }
@@ -621,7 +621,7 @@ fn elaborate_tactic_def<'ctx>(
     tactic: ParseTreeId<'ctx>,
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<'ctx, TacticRuleId<'ctx>> {
+) -> WResult<'ctx, CustomGrammarRuleId<'ctx>> {
     // tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" tactic_pat kw"end"
 
     match_rule! { (ctx, tactic) =>
@@ -635,17 +635,17 @@ fn elaborate_tactic_def<'ctx>(
             let (prec, assoc) = elaborate_prec_assoc(prec_assoc.as_node().unwrap(), ctx)?;
             let pat = elaborate_tactic_pat(pat_list.as_node().unwrap(), prec, assoc, ctx)?;
 
-            let Some(cat) = ctx.arenas.tactic_cats.get(cat_name) else {
-                return Diagnostic::err_unknown_tactic_cat(cat_name, cat.span());
+            let Some(cat) = ctx.arenas.grammar_cats.get(cat_name) else {
+                return Diagnostic::err_unknown_grammar_cat(cat_name, cat.span());
             };
 
-            if ctx.arenas.tactic_rules.get(rule_name).is_some() {
-                return Diagnostic::err_duplicate_tactic_rule();
+            if ctx.arenas.grammar_rules.get(rule_name).is_some() {
+                return Diagnostic::err_duplicate_grammar_rule();
             }
 
             let scope = ctx.scopes.alloc(scope.clone());
-            let rule = TacticRule::new(rule_name, cat, pat, scope);
-            let rule_id = ctx.arenas.tactic_rules.alloc(rule_name, rule);
+            let rule = CustomGrammarRule::new(rule_name, cat, pat, scope);
+            let rule_id = ctx.arenas.grammar_rules.alloc(rule_name, rule);
 
             Ok(rule_id)
         }
@@ -657,7 +657,7 @@ fn elaborate_tactic_pat<'ctx>(
     prec: Precedence,
     assoc: Associativity,
     ctx: &Ctx<'ctx>,
-) -> WResult<'ctx, TacticPat<'ctx>> {
+) -> WResult<'ctx, CustomGrammarPat<'ctx>> {
     // tactic_pat ::= (tactic_pat_none)
     //              | (tactic_pat_many) tactic_pat_part tactic_pat
 
@@ -676,20 +676,20 @@ fn elaborate_tactic_pat<'ctx>(
         }
     }
 
-    Ok(TacticPat::new(parts, prec, assoc))
+    Ok(CustomGrammarPat::new(parts, prec, assoc))
 }
 
 fn elaborate_tactic_pat_part<'ctx>(
     pat: ParseTreeId<'ctx>,
     ctx: &Ctx<'ctx>,
-) -> WResult<'ctx, TacticPatPart<'ctx>> {
+) -> WResult<'ctx, CustomGrammarPatPart<'ctx>> {
     // tactic_pat_part ::= (tactic_pat_part) maybe_label tactic_pat_part_core
 
     match_rule! { (ctx, pat) =>
         tactic_pat_part ::= [maybe_label, core] => {
             let label = elaborate_maybe_label(maybe_label.as_node().unwrap(), ctx)?;
             let core = elaborate_tactic_pat_part_core(core.as_node().unwrap(), ctx)?;
-            Ok(TacticPatPart::new(label, core))
+            Ok(CustomGrammarPatPart::new(label, core))
         }
     }
 }
@@ -721,7 +721,7 @@ fn elaborate_maybe_label<'ctx>(
 fn elaborate_tactic_pat_part_core<'ctx>(
     core: ParseTreeId<'ctx>,
     ctx: &Ctx<'ctx>,
-) -> WResult<'ctx, TacticPatPartCore<'ctx>> {
+) -> WResult<'ctx, CustomGrammarPatPartCore<'ctx>> {
     // tactic_pat_part_core ::= (core_lit)          str
     //                        | (core_kw)           "@" kw"kw" str
     //                        | (core_name)         "@" kw"name"
@@ -733,29 +733,29 @@ fn elaborate_tactic_pat_part_core<'ctx>(
     match_rule! { (ctx, core) =>
         core_lit ::= [lit] => {
             let lit = elaborate_str_lit(lit.as_node().unwrap(), ctx)?;
-            Ok(TacticPatPartCore::Lit(lit))
+            Ok(CustomGrammarPatPartCore::Lit(lit))
         },
         core_kw ::= [at, kw_kw, lit] => {
             debug_assert!(at.is_lit(*strings::AT));
             debug_assert!(kw_kw.is_kw(*strings::KW));
 
             let lit = elaborate_str_lit(lit.as_node().unwrap(), ctx)?;
-            Ok(TacticPatPartCore::Kw(lit))
+            Ok(CustomGrammarPatPartCore::Kw(lit))
         },
         core_name ::= [at, name_kw] => {
             debug_assert!(at.is_lit(*strings::AT));
             debug_assert!(name_kw.is_kw(*strings::NAME));
 
-            Ok(TacticPatPartCore::Name)
+            Ok(CustomGrammarPatPartCore::Name)
         },
         core_cat ::= [cat_name_node] => {
             let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
 
-            let Some(cat) = ctx.arenas.tactic_cats.get(cat_name) else {
-                return Diagnostic::err_unknown_tactic_cat(cat_name, cat_name_node.span());
+            let Some(cat) = ctx.arenas.grammar_cats.get(cat_name) else {
+                return Diagnostic::err_unknown_grammar_cat(cat_name, cat_name_node.span());
             };
 
-            Ok(TacticPatPartCore::Cat(cat))
+            Ok(CustomGrammarPatPartCore::Cat(cat))
         },
         core_fragment ::= [at, fragment_kw, lparen, cat_name_node, rparen] => {
             debug_assert!(at.is_lit(*strings::AT));
@@ -769,19 +769,19 @@ fn elaborate_tactic_pat_part_core<'ctx>(
                 return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
             };
 
-            Ok(TacticPatPartCore::Frag(cat))
+            Ok(CustomGrammarPatPartCore::Frag(cat))
         },
         core_any_fragment ::= [at, any_fragment_kw] => {
             debug_assert!(at.is_lit(*strings::AT));
             debug_assert!(any_fragment_kw.is_kw(*strings::ANY_FRAGMENT));
 
-            Ok(TacticPatPartCore::AnyFrag)
+            Ok(CustomGrammarPatPartCore::AnyFrag)
         },
         core_fact ::= [at, fact_kw] => {
             debug_assert!(at.is_lit(*strings::AT));
             debug_assert!(fact_kw.is_kw(*strings::FACT));
 
-            Ok(TacticPatPartCore::Fact)
+            Ok(CustomGrammarPatPartCore::Fact)
         }
     }
 }
@@ -1247,32 +1247,32 @@ fn elaborate_tactic<'ctx>(
         .zip(children.children().iter())
     {
         let t_child = match part.part() {
-            TacticPatPartCore::Kw(str) => {
+            CustomGrammarPatPartCore::Kw(str) => {
                 let spanned_str = SpannedStr::new(*str, child.span());
                 TacticInstPart::Kw(spanned_str)
             }
-            TacticPatPartCore::Lit(str) => {
+            CustomGrammarPatPartCore::Lit(str) => {
                 let spanned_str = SpannedStr::new(*str, child.span());
                 TacticInstPart::Lit(spanned_str)
             }
-            TacticPatPartCore::Name => {
+            CustomGrammarPatPartCore::Name => {
                 let name = elaborate_name(child.as_node().unwrap(), ctx)?;
                 let spanned_str = SpannedStr::new(name, child.span());
                 TacticInstPart::Name(spanned_str)
             }
-            TacticPatPartCore::Cat(_) => {
+            CustomGrammarPatPartCore::Cat(_) => {
                 let inst = elaborate_tactic(child.as_node().unwrap(), ctx)?;
                 TacticInstPart::SubInst(inst)
             }
-            TacticPatPartCore::Frag(_) => {
+            CustomGrammarPatPartCore::Frag(_) => {
                 let frag = UnresolvedFrag(child.as_node().unwrap());
                 TacticInstPart::Frag(frag)
             }
-            TacticPatPartCore::AnyFrag => {
+            CustomGrammarPatPartCore::AnyFrag => {
                 let frag = UnresolvedAnyFrag(child.as_node().unwrap());
                 TacticInstPart::AnyFrag(frag)
             }
-            TacticPatPartCore::Fact => {
+            CustomGrammarPatPartCore::Fact => {
                 let fact = elaborate_fact(child.as_node().unwrap(), ctx)?;
                 TacticInstPart::Fact(fact)
             }

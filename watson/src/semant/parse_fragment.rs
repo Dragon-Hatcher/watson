@@ -4,10 +4,7 @@ use crate::{
     context::Ctx,
     diagnostics::WResult,
     parse::{
-        Span,
-        elaborator::elaborate_name,
-        parse_state::ParseRuleSource,
-        parse_tree::ParseTreeId,
+        Span, elaborator::elaborate_name, parse_state::ParseRuleSource, parse_tree::ParseTreeId,
     },
     semant::{
         formal_syntax::FormalSyntaxCatId,
@@ -68,10 +65,16 @@ pub enum ParseResultErr {
     /// No notation binding in scope matched this fragment.
     /// `span` is the location of the fragment that failed.
     /// `tried` lists notation patterns that were syntactically possible but not in scope.
-    NoSolutions { span: Span, tried: Vec<String> },
+    NoSolutions {
+        span: Span,
+        tried: Vec<String>,
+    },
     /// Multiple notation bindings matched this fragment ambiguously.
     /// `span` is the location of the ambiguous fragment.
-    MultipleSolutions { span: Span, solutions: Vec<AmbiguousSolution> },
+    MultipleSolutions {
+        span: Span,
+        solutions: Vec<AmbiguousSolution>,
+    },
     WrongCat,
 }
 

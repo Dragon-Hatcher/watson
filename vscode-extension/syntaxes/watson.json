@@ -9,7 +9,7 @@
     "simple-command": {
       "patterns": [
         {
-          "match": "^(module|syntax_category|tactic_category)\\s+([\\w_'][\\w_'\\d\\.]*)",
+          "match": "^(module|syntax_category|grammar_category)\\s+([\\w_'][\\w_'\\d\\.]*)",
           "captures": {
             "1": { "name": "keyword.other.watson" },
             "2": { "name": "entity.name.function.watson" }

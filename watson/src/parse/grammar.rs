@@ -108,23 +108,24 @@ notation_pat_term_args ::= (notation_pat_term_args_one)  @name
                          | (notation_pat_term_args_many) @name notation_pat_term_args
 
 grammar_category_command ::= (grammar_category) kw"grammar_category" name
+
 tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" tactic_pat kw"end"
 
-tactic_pat ::= (tactic_pat_none)
-             | (tactic_pat_many) tactic_pat_part tactic_pat
+grammar_pat ::= (grammar_pat_none)
+              | (grammar_pat_many) grammar_pat_part grammar_pat
 
-tactic_pat_part ::= (tactic_pat_part) maybe_label tactic_pat_part_core
+grammar_pat_part ::= (grammar_pat_part) maybe_label grammar_pat_part_core
 
 maybe_label ::= (label_none)
               | (label_some) name ":"
 
-tactic_pat_part_core ::= (core_lit)          str
-                       | (core_kw)           "@" kw"kw" str
-                       | (core_name)         "@" kw"name"
-                       | (core_cat)          name
-                       | (core_fragment)     "@" kw"fragment" "(" name ")"
-                       | (core_any_fragment) "@" kw"any_fragment"
-                       | (core_fact)         "@" kw"fact"
+grammar_pat_part_core ::= (core_lit)          str
+                        | (core_kw)           "@" kw"kw" str
+                        | (core_name)         "@" kw"name"
+                        | (core_cat)          name
+                        | (core_fragment)     "@" kw"fragment" "(" name ")"
+                        | (core_any_fragment) "@" kw"any_fragment"
+                        | (core_fact)         "@" kw"fact"
 
 definition_command ::= (definition) kw"definition" notation_binding ":=" any_fragment kw"end"
 
@@ -184,10 +185,10 @@ builtin_cats! {
         notation_pat_part,
         maybe_notation_pat_term_args,
         notation_pat_term_args,
-        tactic_pat,
-        tactic_pat_part,
+        grammar_pat,
+        grammar_pat_part,
         maybe_label,
-        tactic_pat_part_core,
+        grammar_pat_part_core,
         notation_binding,
         templates,
         template,
@@ -243,9 +244,9 @@ builtin_rules! {
         maybe_notation_pat_term_args_some,
         notation_pat_term_args_one,
         notation_pat_term_args_many,
-        tactic_pat_none,
-        tactic_pat_many,
-        tactic_pat_part,
+        grammar_pat_none,
+        grammar_pat_many,
+        grammar_pat_part,
         label_none,
         label_some,
         core_lit,
@@ -407,7 +408,7 @@ pub fn add_builtin_rules<'ctx>(
                 cat(cats.name),
                 cat(cats.prec_assoc),
                 lit(*strings::BNF_REPLACE),
-                cat(cats.tactic_pat),
+                cat(cats.grammar_pat),
                 kw(*strings::END),
             ],
         ),
@@ -592,16 +593,16 @@ pub fn add_builtin_rules<'ctx>(
             vec![cat(cats.name), cat(cats.notation_pat_term_args)],
         ),
 
-        tactic_pat_none: rule!("tactic_pat_none", cats.tactic_pat, vec![]),
-        tactic_pat_many: rule!(
-            "tactic_pat_many",
-            cats.tactic_pat,
-            vec![cat(cats.tactic_pat_part), cat(cats.tactic_pat)],
+        grammar_pat_none: rule!("grammar_pat_none", cats.grammar_pat, vec![]),
+        grammar_pat_many: rule!(
+            "grammar_pat_many",
+            cats.grammar_pat,
+            vec![cat(cats.grammar_pat_part), cat(cats.grammar_pat)],
         ),
-        tactic_pat_part: rule!(
-            "tactic_pat_part",
-            cats.tactic_pat_part,
-            vec![cat(cats.maybe_label), cat(cats.tactic_pat_part_core)],
+        grammar_pat_part: rule!(
+            "grammar_pat_part",
+            cats.grammar_pat_part,
+            vec![cat(cats.maybe_label), cat(cats.grammar_pat_part_core)],
         ),
 
         label_none: rule!("label_none", cats.maybe_label, vec![]),
@@ -611,21 +612,21 @@ pub fn add_builtin_rules<'ctx>(
             vec![cat(cats.name), lit(*strings::COLON)],
         ),
 
-        core_lit: rule!("core_lit", cats.tactic_pat_part_core, vec![cat(cats.str)]),
+        core_lit: rule!("core_lit", cats.grammar_pat_part_core, vec![cat(cats.str)]),
         core_kw: rule!(
             "core_kw",
-            cats.tactic_pat_part_core,
+            cats.grammar_pat_part_core,
             vec![lit(*strings::AT), kw(*strings::KW), cat(cats.str)],
         ),
         core_name: rule!(
             "core_name",
-            cats.tactic_pat_part_core,
+            cats.grammar_pat_part_core,
             vec![lit(*strings::AT), kw(*strings::NAME)],
         ),
-        core_cat: rule!("core_cat", cats.tactic_pat_part_core, vec![cat(cats.name)]),
+        core_cat: rule!("core_cat", cats.grammar_pat_part_core, vec![cat(cats.name)]),
         core_fragment: rule!(
             "core_fragment",
-            cats.tactic_pat_part_core,
+            cats.grammar_pat_part_core,
             vec![
                 lit(*strings::AT),
                 kw(*strings::FRAGMENT),
@@ -636,12 +637,12 @@ pub fn add_builtin_rules<'ctx>(
         ),
         core_any_fragment: rule!(
             "core_any_fragment",
-            cats.tactic_pat_part_core,
+            cats.grammar_pat_part_core,
             vec![lit(*strings::AT), kw(*strings::ANY_FRAGMENT)],
         ),
         core_fact: rule!(
             "core_fact",
-            cats.tactic_pat_part_core,
+            cats.grammar_pat_part_core,
             vec![lit(*strings::AT), kw(*strings::FACT)],
         ),
 

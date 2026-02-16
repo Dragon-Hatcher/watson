@@ -651,7 +651,7 @@ fn elaborate_tactic_def<'ctx>(
             let rule_name = elaborate_name(rule_name.as_node().unwrap(), ctx)?;
             let cat_name = elaborate_name(cat.as_node().unwrap(), ctx)?;
             let (prec, assoc) = elaborate_prec_assoc(prec_assoc.as_node().unwrap(), ctx)?;
-            let pat = elaborate_tactic_pat(pat_list.as_node().unwrap(), prec, assoc, ctx)?;
+            let pat = elaborate_grammar_pat(pat_list.as_node().unwrap(), prec, assoc, ctx)?;
 
             let Some(cat) = ctx.arenas.grammar_cats.get(cat_name) else {
                 return Diagnostic::err_unknown_grammar_cat(cat_name, cat.span());
@@ -670,25 +670,25 @@ fn elaborate_tactic_def<'ctx>(
     }
 }
 
-fn elaborate_tactic_pat<'ctx>(
+fn elaborate_grammar_pat<'ctx>(
     mut pat_list: ParseTreeId<'ctx>,
     prec: Precedence,
     assoc: Associativity,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, CustomGrammarPat<'ctx>> {
-    // tactic_pat ::= (tactic_pat_none)
-    //              | (tactic_pat_many) tactic_pat_part tactic_pat
+    // grammar_pat ::= (grammar_pat_none)
+    //               | (grammar_pat_many) grammar_pat_part grammar_pat
 
     let mut parts = Vec::new();
 
     loop {
         match_rule! { (ctx, pat_list) =>
-            tactic_pat_none ::= [] => {
+            grammar_pat_none ::= [] => {
                 break;
             },
-            tactic_pat_many ::= [pat, rest] => {
+            grammar_pat_many ::= [pat, rest] => {
                 let pat = pat.as_node().unwrap();
-                parts.push(elaborate_tactic_pat_part(pat, ctx)?);
+                parts.push(elaborate_grammar_pat_part(pat, ctx)?);
                 pat_list = rest.as_node().unwrap();
             }
         }
@@ -697,16 +697,16 @@ fn elaborate_tactic_pat<'ctx>(
     Ok(CustomGrammarPat::new(parts, prec, assoc))
 }
 
-fn elaborate_tactic_pat_part<'ctx>(
+fn elaborate_grammar_pat_part<'ctx>(
     pat: ParseTreeId<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, CustomGrammarPatPart<'ctx>> {
-    // tactic_pat_part ::= (tactic_pat_part) maybe_label tactic_pat_part_core
+    // grammar_pat_part ::= (grammar_pat_part) maybe_label grammar_pat_part_core
 
     match_rule! { (ctx, pat) =>
-        tactic_pat_part ::= [maybe_label, core] => {
+        grammar_pat_part ::= [maybe_label, core] => {
             let label = elaborate_maybe_label(maybe_label.as_node().unwrap(), ctx)?;
-            let core = elaborate_tactic_pat_part_core(core.as_node().unwrap(), ctx)?;
+            let core = elaborate_grammar_pat_part_core(core.as_node().unwrap(), ctx)?;
             Ok(CustomGrammarPatPart::new(label, core))
         }
     }
@@ -727,7 +727,7 @@ fn elaborate_maybe_label<'ctx>(
 
             // Check for reserved label names
             if label == *strings::RESERVED_RULE || label == *strings::RESERVED_SPAN {
-                _ = Diagnostic::err_reserved_tactic_label::<()>(label, label_node.span());
+                _ = Diagnostic::err_reserved_grammar_label::<()>(label, label_node.span());
                 return Ok(None);
             }
 
@@ -736,17 +736,17 @@ fn elaborate_maybe_label<'ctx>(
     }
 }
 
-fn elaborate_tactic_pat_part_core<'ctx>(
+fn elaborate_grammar_pat_part_core<'ctx>(
     core: ParseTreeId<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, CustomGrammarPatPartCore<'ctx>> {
-    // tactic_pat_part_core ::= (core_lit)          str
-    //                        | (core_kw)           "@" kw"kw" str
-    //                        | (core_name)         "@" kw"name"
-    //                        | (core_cat)          name
-    //                        | (core_fragment)     "@" kw"fragment" "(" name ")"
-    //                        | (core_any_fragment) "@" kw"any_fragment"
-    //                        | (core_fact)         "@" kw"fact"
+    // grammar_pat_part_core ::= (core_lit)          str
+    //                         | (core_kw)           "@" kw"kw" str
+    //                         | (core_name)         "@" kw"name"
+    //                         | (core_cat)          name
+    //                         | (core_fragment)     "@" kw"fragment" "(" name ")"
+    //                         | (core_any_fragment) "@" kw"any_fragment"
+    //                         | (core_fact)         "@" kw"fact"
 
     match_rule! { (ctx, core) =>
         core_lit ::= [lit] => {

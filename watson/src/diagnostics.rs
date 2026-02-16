@@ -382,9 +382,9 @@ impl<'ctx> Diagnostic<'ctx> {
         Err(vec![diag])
     }
 
-    pub fn err_reserved_tactic_label<T>(label: Ustr, span: Span) -> WResult<'ctx, T> {
+    pub fn err_reserved_grammar_label<T>(label: Ustr, span: Span) -> WResult<'ctx, T> {
         let diag = Diagnostic::new(
-            &format!("tactic label `{label}` is reserved"),
+            &format!("label `{label}` is reserved"),
             vec![DiagnosticSpan::new_error("", span)],
         );
 

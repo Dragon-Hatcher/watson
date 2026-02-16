@@ -10,9 +10,9 @@ use crate::{
             formal_to_lua::LuaFormalCatMeta,
             frag_map_to_lua::{LuaFactMapMeta, LuaFragMapMeta},
             frag_to_lua::{LuaPresFactMeta, LuaPresFragMeta},
+            grammar_to_lua::generate_luau_grammar_types,
             notation_to_lua::LuaNotationBindingMeta,
             scope_to_lua::LuaScopeMeta,
-            tactic_to_lua::generate_luau_tactic_types,
             theorem_to_lua::LuaTheoremMeta,
             unresolved_to_lua::LuaUnResFragMeta,
             vampire_to_lua::{
@@ -32,12 +32,12 @@ mod file_loader;
 pub mod formal_to_lua;
 pub mod frag_map_to_lua;
 pub mod frag_to_lua;
+pub mod grammar_to_lua;
 pub mod notation_to_lua;
 pub mod proof_to_lua;
 pub mod scope_to_lua;
 pub mod span_to_lua;
 pub mod tactic_info_to_lua;
-pub mod tactic_to_lua;
 pub mod theorem_to_lua;
 pub mod unresolved_to_lua;
 pub mod vampire_to_lua;
@@ -207,7 +207,7 @@ fn read_main_module<'ctx>(lua: WLua<'ctx>, module: mlua::Value) -> WResult<'ctx,
 
 fn write_luau_types<'ctx>(ctx: &Ctx<'ctx>) {
     let definitions_file = include_str!("./definitions.d.luau");
-    let types_content = generate_luau_tactic_types(&ctx.tactic_manager);
+    let types_content = generate_luau_grammar_types(&ctx.tactic_manager);
 
     let luau_dir = ctx.config.build_dir().join("luau");
     let types_path = luau_dir.join("definitions.d.luau");

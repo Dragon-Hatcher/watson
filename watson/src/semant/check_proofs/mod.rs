@@ -7,12 +7,10 @@ use crate::{
             LuaInfo, diag_to_lua::LuaDiagnostic, proof_to_lua::LuaProofState, setup_lua,
             tactic_info_to_lua::LuaTacticInfo, theorem_to_lua::LuaTheorem,
         },
+        custom_grammar::inst::CustomGrammarInst,
         proof_kernel::ProofState,
         proof_status::{ProofStatus, ProofStatuses},
-        tactic::{
-            tactic_info::TacticInfo,
-            unresolved_proof::{TacticInst, UnresolvedProof},
-        },
+        tactic::{tactic_info::TacticInfo, unresolved_proof::UnresolvedProof},
         theorems::TheoremId,
     },
 };
@@ -76,7 +74,7 @@ type LuaTheoremInfo = Rc<RefCell<LuaTheoremInfoInner>>;
 
 fn check_theorem<'ctx>(
     thm: TheoremId<'ctx>,
-    tactic: &TacticInst<'ctx>,
+    tactic: &CustomGrammarInst<'ctx>,
     lua: &LuaInfo,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<'ctx, ProofStatus<'ctx>> {

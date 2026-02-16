@@ -11,16 +11,16 @@ use crate::{
         parse_tree::{ParseTree, ParseTreeId},
     },
     semant::{
+        custom_grammar::{
+            manager::CustomGrammarManager,
+            syntax::{
+                CustomGrammarCat, CustomGrammarCatId, CustomGrammarRule, CustomGrammarRuleId,
+            },
+        },
         formal_syntax::{FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxRule, FormalSyntaxRuleId},
         fragment::{Fragment, FragmentId},
         notation::{NotationBinding, NotationBindingId, NotationPattern, NotationPatternId},
         presentation::{BindingNameHints, BindingNameHintsId, Pres, PresId},
-        tactic::{
-            syntax::{
-                CustomGrammarCat, CustomGrammarCatId, CustomGrammarRule, CustomGrammarRuleId,
-            },
-            tactic_manager::CustomGrammarManager,
-        },
         theorems::{TheoremId, TheoremStatement},
     },
     strings,

@@ -8,6 +8,7 @@ use crate::{
         Precedence, Rule, RuleId, RulePattern, RulePatternPart, SyntaxCategorySource,
     },
     semant::{
+        custom_grammar::syntax::{CustomGrammarPatPartCore, CustomGrammarRuleId},
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
         fragment::{FragHead, FragRuleApplication, Fragment, hole_frag, var_frag},
         notation::{
@@ -16,7 +17,6 @@ use crate::{
         },
         presentation::{Pres, PresFrag, PresHead},
         scope::ScopeEntry,
-        tactic::syntax::{CustomGrammarPatPartCore, CustomGrammarRuleId},
     },
     strings,
 };

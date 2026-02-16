@@ -8,6 +8,13 @@ use crate::{
         source_cache::{SourceDecl, source_id_to_path},
     },
     semant::{
+        custom_grammar::{
+            inst::{CustomGrammarInst, CustomGrammarInstPart, SpannedStr},
+            syntax::{
+                CustomGrammarCat, CustomGrammarCatId, CustomGrammarPat, CustomGrammarPatPart,
+                CustomGrammarPatPartCore, CustomGrammarRule, CustomGrammarRuleId,
+            },
+        },
         formal_syntax::{
             FormalSyntaxCat, FormalSyntaxCatId, FormalSyntaxPat, FormalSyntaxPatPart,
             FormalSyntaxRule, FormalSyntaxRuleId,
@@ -20,13 +27,7 @@ use crate::{
         parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag, parse_fragment},
         presentation::PresFrag,
         scope::{Scope, ScopeEntry},
-        tactic::{
-            syntax::{
-                CustomGrammarCat, CustomGrammarCatId, CustomGrammarPat, CustomGrammarPatPart,
-                CustomGrammarPatPartCore, CustomGrammarRule, CustomGrammarRuleId,
-            },
-            unresolved_proof::{SpannedStr, TacticInst, TacticInstPart, UnresolvedProof},
-        },
+        tactic::unresolved_proof::UnresolvedProof,
         theorems::{PresFact, Template, TheoremId, TheoremStatement, add_templates_to_scope},
     },
     strings,
@@ -1234,7 +1235,7 @@ fn elaborate_fact<'ctx>(
 fn elaborate_tactic<'ctx>(
     tactic: ParseTreeId<'ctx>,
     ctx: &Ctx<'ctx>,
-) -> WResult<'ctx, TacticInst<'ctx>> {
+) -> WResult<'ctx, CustomGrammarInst<'ctx>> {
     let children = expect_unambiguous(tactic)?;
     let rule = children.rule();
     let tactic_rule = rule.source().get_tactic_rule();
@@ -1249,38 +1250,42 @@ fn elaborate_tactic<'ctx>(
         let t_child = match part.part() {
             CustomGrammarPatPartCore::Kw(str) => {
                 let spanned_str = SpannedStr::new(*str, child.span());
-                TacticInstPart::Kw(spanned_str)
+                CustomGrammarInstPart::Kw(spanned_str)
             }
             CustomGrammarPatPartCore::Lit(str) => {
                 let spanned_str = SpannedStr::new(*str, child.span());
-                TacticInstPart::Lit(spanned_str)
+                CustomGrammarInstPart::Lit(spanned_str)
             }
             CustomGrammarPatPartCore::Name => {
                 let name = elaborate_name(child.as_node().unwrap(), ctx)?;
                 let spanned_str = SpannedStr::new(name, child.span());
-                TacticInstPart::Name(spanned_str)
+                CustomGrammarInstPart::Name(spanned_str)
             }
             CustomGrammarPatPartCore::Cat(_) => {
                 let inst = elaborate_tactic(child.as_node().unwrap(), ctx)?;
-                TacticInstPart::SubInst(inst)
+                CustomGrammarInstPart::SubInst(inst)
             }
             CustomGrammarPatPartCore::Frag(_) => {
                 let frag = UnresolvedFrag(child.as_node().unwrap());
-                TacticInstPart::Frag(frag)
+                CustomGrammarInstPart::Frag(frag)
             }
             CustomGrammarPatPartCore::AnyFrag => {
                 let frag = UnresolvedAnyFrag(child.as_node().unwrap());
-                TacticInstPart::AnyFrag(frag)
+                CustomGrammarInstPart::AnyFrag(frag)
             }
             CustomGrammarPatPartCore::Fact => {
                 let fact = elaborate_fact(child.as_node().unwrap(), ctx)?;
-                TacticInstPart::Fact(fact)
+                CustomGrammarInstPart::Fact(fact)
             }
         };
         tactic_children.push(t_child);
     }
 
-    Ok(TacticInst::new(tactic_rule, tactic.span(), tactic_children))
+    Ok(CustomGrammarInst::new(
+        tactic_rule,
+        tactic.span(),
+        tactic_children,
+    ))
 }
 
 pub fn elaborate_name<'ctx>(name: ParseTreeId<'ctx>, ctx: &Ctx<'ctx>) -> WResult<'ctx, Ustr> {

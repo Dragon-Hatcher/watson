@@ -1,4 +1,4 @@
-use crate::semant::tactic::syntax::{CustomGrammarCatId, CustomGrammarRuleId};
+use crate::semant::custom_grammar::syntax::{CustomGrammarCatId, CustomGrammarRuleId};
 use rustc_hash::FxHashMap;
 use ustr::Ustr;
 

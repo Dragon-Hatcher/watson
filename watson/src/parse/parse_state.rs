@@ -1,9 +1,9 @@
 use crate::{
     generate_arena_handle,
     semant::{
+        custom_grammar::syntax::{CustomGrammarCatId, CustomGrammarRuleId},
         formal_syntax::FormalSyntaxCatId,
         notation::NotationPatternId,
-        tactic::syntax::{CustomGrammarCatId, CustomGrammarRuleId},
     },
 };
 use rustc_hash::{FxHashMap, FxHashSet};

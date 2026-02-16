@@ -4,17 +4,17 @@ use crate::{
             span_to_lua::LuaSpan,
             unresolved_to_lua::{LuaUnresolvedAnyFrag, LuaUnresolvedFact, LuaUnresolvedFrag},
         },
-        tactic::{
+        custom_grammar::{
+            inst::{CustomGrammarInst, CustomGrammarInstPart, SpannedStr},
+            manager::CustomGrammarManager,
             syntax::CustomGrammarPatPartCore,
-            tactic_manager::CustomGrammarManager,
-            unresolved_proof::{SpannedStr, TacticInst, TacticInstPart},
         },
     },
     strings,
 };
 use mlua::{IntoLua, Lua, UserData, Value};
 
-impl<'ctx> IntoLua for &TacticInst<'ctx> {
+impl<'ctx> IntoLua for &CustomGrammarInst<'ctx> {
     fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
         let table = lua.create_table()?;
 
@@ -43,25 +43,25 @@ impl<'ctx> IntoLua for &TacticInst<'ctx> {
     }
 }
 
-impl<'ctx> IntoLua for &TacticInstPart<'ctx> {
+impl<'ctx> IntoLua for &CustomGrammarInstPart<'ctx> {
     fn into_lua(self, lua: &Lua) -> mlua::Result<Value> {
         match self {
-            TacticInstPart::Kw(s) | TacticInstPart::Lit(s) | TacticInstPart::Name(s) => {
-                s.into_lua(lua)
-            }
-            TacticInstPart::SubInst(sub_tactic) => {
+            CustomGrammarInstPart::Kw(s)
+            | CustomGrammarInstPart::Lit(s)
+            | CustomGrammarInstPart::Name(s) => s.into_lua(lua),
+            CustomGrammarInstPart::SubInst(sub_tactic) => {
                 // Recursively convert sub-tactics to tables
                 sub_tactic.into_lua(lua)
             }
-            TacticInstPart::Frag(frag) => {
+            CustomGrammarInstPart::Frag(frag) => {
                 let lua_frag = LuaUnresolvedFrag::new(*frag);
                 lua_frag.into_lua(lua)
             }
-            TacticInstPart::AnyFrag(any_frag) => {
+            CustomGrammarInstPart::AnyFrag(any_frag) => {
                 let lua_any_frag = LuaUnresolvedAnyFrag::new(*any_frag);
                 lua_any_frag.into_lua(lua)
             }
-            TacticInstPart::Fact(fact) => {
+            CustomGrammarInstPart::Fact(fact) => {
                 let lua_fact = LuaUnresolvedFact::new(fact);
                 lua_fact.into_lua(lua)
             }
@@ -77,12 +77,12 @@ impl UserData for SpannedStr {
     }
 }
 
-pub fn generate_luau_tactic_types<'ctx>(tactics: &CustomGrammarManager<'ctx>) -> String {
+pub fn generate_luau_grammar_types<'ctx>(grammar: &CustomGrammarManager<'ctx>) -> String {
     let mut out = String::new();
 
-    for &cat in tactics.cats() {
+    for &cat in grammar.cats() {
         let name = cat.lua_name();
-        let rules = tactics.rules_for_cat(cat);
+        let rules = grammar.rules_for_cat(cat);
 
         if rules.is_empty() {
             out.push_str(&format!("export type {name} = never\n\n"));

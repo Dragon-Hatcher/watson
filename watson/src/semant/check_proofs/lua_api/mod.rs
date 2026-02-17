@@ -26,6 +26,7 @@ use crate::{
 use mlua::{Lua, LuaOptions, StdLib};
 use std::{fs, ops::Deref};
 
+pub mod command_to_lua;
 pub mod ctx_to_lua;
 pub mod diag_to_lua;
 mod file_loader;

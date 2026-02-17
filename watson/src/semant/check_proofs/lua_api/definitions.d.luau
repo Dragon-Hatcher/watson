@@ -197,6 +197,15 @@ declare Frag: FragMeta
 
 
 declare class DefinitionSource
+    isDefinitionCmd: CommandId?
+    isSyntaxCmd: CommandId?
+    isTemplate: boolean
+    isDefinitionHole: boolean
+    isBinding: boolean
+    isLuaApi: boolean
+end
+
+declare class CommandId
 end
 
 --- Metatable for creating fragment maps.

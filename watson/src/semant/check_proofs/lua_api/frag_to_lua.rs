@@ -1,5 +1,7 @@
 use crate::semant::{
-    check_proofs::lua_api::{ctx_to_lua::LuaCtx, formal_to_lua::LuaFormalCat},
+    check_proofs::lua_api::{
+        command_to_lua::LuaCommandId, ctx_to_lua::LuaCtx, formal_to_lua::LuaFormalCat,
+    },
     fragment::{_debug_fragment, FragHead, Fragment, FragmentId, hole_frag, var_frag},
     presentation::{
         BindingNameHints, Pres, PresFrag, PresHead, PresId, change_name_hints, instantiate_holes,
@@ -319,4 +321,42 @@ impl LuaDefinitionSource {
     }
 }
 
-impl UserData for LuaDefinitionSource {}
+impl UserData for LuaDefinitionSource {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("isDefinitionCmd", |_, this| {
+            let cmd = match this.out() {
+                DefinitionSource::DefinitionCmd(cmd) => Some(LuaCommandId::new(cmd)),
+                _ => None,
+            };
+            Ok(cmd)
+        });
+
+        fields.add_field_method_get("isSyntaxCmd", |_, this| {
+            let cmd = match this.out() {
+                DefinitionSource::SyntaxCmd(cmd) => Some(LuaCommandId::new(cmd)),
+                _ => None,
+            };
+            Ok(cmd)
+        });
+
+        fields.add_field_method_get("isTemplate", |_, this| {
+            let is = matches!(this.out(), DefinitionSource::Template);
+            Ok(is)
+        });
+
+        fields.add_field_method_get("isDefinitionHole", |_, this| {
+            let is = matches!(this.out(), DefinitionSource::DefinitionHole);
+            Ok(is)
+        });
+
+        fields.add_field_method_get("isBinding", |_, this| {
+            let is = matches!(this.out(), DefinitionSource::Binding);
+            Ok(is)
+        });
+
+        fields.add_field_method_get("isLuaApi", |_, this| {
+            let is = matches!(this.out(), DefinitionSource::LuaApi);
+            Ok(is)
+        });
+    }
+}

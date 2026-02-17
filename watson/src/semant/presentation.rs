@@ -248,7 +248,7 @@ pub fn wrap_frag_with_name<'ctx>(
 }
 
 pub fn reduce_frag<'ctx>(frag: PresFrag<'ctx>, ctx: &Ctx<'ctx>) -> PresFrag<'ctx> {
-    match frag.pres().head() {
+    let new = match frag.pres().head() {
         PresHead::FormalFrag(_) => frag,
         PresHead::Notation { replacement, .. } => {
             let pres = instantiate_pres_holes(
@@ -264,7 +264,13 @@ pub fn reduce_frag<'ctx>(frag: PresFrag<'ctx>, ctx: &Ctx<'ctx>) -> PresFrag<'ctx
             );
             PresFrag::new(frag.frag(), pres, frag.formal_pres())
         }
-    }
+    };
+
+    // changing notation shouldn't have changed the fragment
+    assert_eq!(new.formal(), frag.formal());
+    assert_eq!(new.formal_pres(), frag.formal_pres());
+
+    new
 }
 
 fn shift_frag<'ctx>(

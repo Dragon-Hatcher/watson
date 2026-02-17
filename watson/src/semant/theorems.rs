@@ -6,7 +6,7 @@ use crate::{
         fragment::{Fact, FragHead, Fragment, hole_frag},
         notation::{_debug_binding, NotationBindingId},
         presentation::{Pres, PresFrag, PresHead},
-        scope::{Scope, ScopeEntry},
+        scope::{DefinitionSource, Scope, ScopeEntry},
     },
 };
 use itertools::Itertools;
@@ -124,7 +124,7 @@ pub fn add_templates_to_scope<'ctx>(
 
     for (i, template) in templates.iter().enumerate() {
         let frag = template_to_frag(template, i, ctx);
-        let entry = ScopeEntry::new(frag);
+        let entry = ScopeEntry::new(frag, DefinitionSource::Template);
         my_scope = my_scope.child_with(template.binding(), entry)
     }
 

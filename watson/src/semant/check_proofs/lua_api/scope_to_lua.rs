@@ -2,7 +2,7 @@ use crate::semant::{
     check_proofs::lua_api::{
         ctx_to_lua::LuaCtx, frag_to_lua::LuaPresFrag, notation_to_lua::LuaNotationBinding,
     },
-    scope::{Scope, ScopeEntry},
+    scope::{DefinitionSource, Scope, ScopeEntry},
 };
 use mlua::{FromLua, UserData};
 
@@ -32,7 +32,7 @@ impl UserData for LuaScope {
             "bindFrag",
             |_, this, (binding, frag): (LuaNotationBinding, LuaPresFrag)| {
                 let binding = binding.out();
-                let entry = ScopeEntry::new(frag.out());
+                let entry = ScopeEntry::new(frag.out(), DefinitionSource::LuaApi);
                 let new_scope = this.out_ref().child_with(binding, entry);
                 Ok(LuaScope::new(new_scope))
             },
@@ -42,7 +42,8 @@ impl UserData for LuaScope {
             "bindHole",
             |_, this, (binding, idx): (LuaNotationBinding, usize)| {
                 let binding = binding.out();
-                let entry = ScopeEntry::new_hole(binding.pattern().cat(), idx);
+                let entry =
+                    ScopeEntry::new_hole(binding.pattern().cat(), idx, DefinitionSource::LuaApi);
                 let new_scope = this.out_ref().child_with(binding, entry);
                 Ok(LuaScope::new(new_scope))
             },

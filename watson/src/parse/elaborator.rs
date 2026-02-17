@@ -9,6 +9,7 @@ use crate::{
     },
     semant::{
         attributes::Attribute,
+        commands::CommandId,
         custom_grammar::{
             inst::{CustomGrammarInst, CustomGrammarInstPart, SpannedStr},
             syntax::{
@@ -27,7 +28,7 @@ use crate::{
         },
         parse_fragment::{UnresolvedAnyFrag, UnresolvedFact, UnresolvedFrag, parse_fragment},
         presentation::PresFrag,
-        scope::{Scope, ScopeEntry},
+        scope::{DefinitionSource, Scope, ScopeEntry},
         tactic::unresolved_proof::UnresolvedProof,
         theorems::{PresFact, Template, TheoremId, TheoremStatement, add_templates_to_scope},
     },
@@ -118,6 +119,7 @@ pub enum ElaborateAction<'ctx> {
 
 pub fn elaborate_command_decl<'ctx>(
     command_decl: ParseTreeId<'ctx>,
+    cmd: CommandId<'ctx>,
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<'ctx, (ElaborateAction<'ctx>, Vec<Attribute<'ctx>>)> {
@@ -126,7 +128,7 @@ pub fn elaborate_command_decl<'ctx>(
     match_rule! { (ctx, command_decl) =>
         command_decl ::= [maybe_attr_anno, command] => {
             let attrs = elaborate_maybe_attribute_anno(maybe_attr_anno.as_node().unwrap(), ctx)?;
-            let cmd = elaborate_command(command.as_node().unwrap(), scope, ctx)?;
+            let cmd = elaborate_command(command.as_node().unwrap(), cmd, scope, ctx)?;
             Ok((cmd, attrs))
         }
     }
@@ -191,6 +193,7 @@ fn elaborate_attributes<'ctx>(
 
 pub fn elaborate_command<'ctx>(
     command: ParseTreeId<'ctx>,
+    cmd: CommandId<'ctx>,
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> WResult<'ctx, ElaborateAction<'ctx>> {
@@ -223,7 +226,7 @@ pub fn elaborate_command<'ctx>(
             Ok(ElaborateAction::NewNotation(notation))
         },
         definition_command ::= [definition_cmd] => {
-            let new_scope = elaborate_definition(definition_cmd.as_node().unwrap(), scope, ctx)?;
+            let new_scope = elaborate_definition(definition_cmd.as_node().unwrap(), cmd, scope, ctx)?;
             Ok(ElaborateAction::NewDefinition(new_scope))
         },
         axiom_command ::= [axiom_cmd] => {
@@ -920,6 +923,7 @@ fn elaborate_grammar_pat_part_core<'ctx>(
 
 fn elaborate_definition<'ctx>(
     definition: ParseTreeId<'ctx>,
+    cmd: CommandId<'ctx>,
     scope: &Scope<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, Scope<'ctx>> {
@@ -943,7 +947,7 @@ fn elaborate_definition<'ctx>(
                 let mut scope = scope.clone();
                 for (i, hole_binding) in possibility.holes.iter().enumerate() {
                     let hole_cat = hole_binding.pattern().cat();
-                    let entry = ScopeEntry::new_hole(hole_cat, i);
+                    let entry = ScopeEntry::new_hole(hole_cat, i, DefinitionSource::DefinitionHole);
                     scope = scope.child_with(*hole_binding, entry);
                 }
 
@@ -958,7 +962,7 @@ fn elaborate_definition<'ctx>(
             match solutions.as_slice() {
                 [] => Diagnostic::_err_todo_real_error_later(notation_binding.span(), "no matching notation bindings"),
                 [(binding, frag)] => {
-                    let entry = ScopeEntry::new(*frag);
+                    let entry = ScopeEntry::new(*frag, DefinitionSource::DefinitionCmd(cmd));
                     Ok(scope.child_with(*binding, entry))
                 },
                 [..] => Diagnostic::_err_todo_real_error_later(notation_binding.span(), "multiple matching notation bindings"),

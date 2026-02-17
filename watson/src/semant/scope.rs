@@ -1,5 +1,6 @@
 use crate::semant::{
-    formal_syntax::FormalSyntaxCatId, notation::NotationBindingId, presentation::PresFrag,
+    commands::CommandId, formal_syntax::FormalSyntaxCatId, notation::NotationBindingId,
+    presentation::PresFrag,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +38,17 @@ impl<'ctx> Scope<'ctx> {
 pub struct ScopeEntry<'ctx> {
     replacement: ScopeReplacement<'ctx>,
     binding_depth: usize,
+    source: DefinitionSource<'ctx>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DefinitionSource<'ctx> {
+    DefinitionCmd(CommandId<'ctx>),
+    SyntaxCmd(CommandId<'ctx>),
+    Template,
+    DefinitionHole,
+    Binding,
+    LuaApi,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,17 +58,23 @@ pub enum ScopeReplacement<'ctx> {
 }
 
 impl<'ctx> ScopeEntry<'ctx> {
-    pub fn new(frag: PresFrag<'ctx>) -> Self {
+    pub fn new(frag: PresFrag<'ctx>, source: DefinitionSource<'ctx>) -> Self {
         Self {
             replacement: ScopeReplacement::Frag(frag),
             binding_depth: 0,
+            source,
         }
     }
 
-    pub fn new_hole(cat: FormalSyntaxCatId<'ctx>, idx: usize) -> Self {
+    pub fn new_hole(
+        cat: FormalSyntaxCatId<'ctx>,
+        idx: usize,
+        source: DefinitionSource<'ctx>,
+    ) -> Self {
         Self {
             replacement: ScopeReplacement::Hole(cat, idx),
             binding_depth: 0,
+            source,
         }
     }
 

@@ -8,6 +8,7 @@ use crate::{
         Precedence, Rule, RuleId, RulePattern, RulePatternPart, SyntaxCategorySource,
     },
     semant::{
+        commands::CommandId,
         custom_grammar::syntax::{CustomGrammarPatPartCore, CustomGrammarRuleId},
         formal_syntax::{FormalSyntaxCatId, FormalSyntaxPatPart, FormalSyntaxRuleId},
         fragment::{FragHead, FragRuleApplication, Fragment, hole_frag, var_frag},
@@ -16,7 +17,7 @@ use crate::{
             NotationPatternPart, NotationPatternPartCat, NotationPatternSource,
         },
         presentation::{Pres, PresFrag, PresHead},
-        scope::ScopeEntry,
+        scope::{DefinitionSource, ScopeEntry},
     },
     strings,
 };
@@ -852,6 +853,7 @@ pub fn add_parse_rules_for_formal_cat<'ctx>(
 
 pub fn formal_rule_to_notation<'ctx>(
     rule: FormalSyntaxRuleId<'ctx>,
+    syntax_cmd: CommandId<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> (
     NotationPatternId<'ctx>,
@@ -930,7 +932,7 @@ pub fn formal_rule_to_notation<'ctx>(
     let binding = ctx.arenas.notation_bindings.intern(binding);
 
     let frag = to_frag(rule, ctx);
-    let scope_entry = ScopeEntry::new(frag);
+    let scope_entry = ScopeEntry::new(frag, DefinitionSource::SyntaxCmd(syntax_cmd));
 
     (pattern, binding, scope_entry)
 }

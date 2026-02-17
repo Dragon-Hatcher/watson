@@ -107,7 +107,7 @@ fn parse_source<'ctx>(
         let cmd = ctx.arenas.commands.alloc(CommandInfo::new());
 
         // Now let's elaborate the command.
-        let (action, attributes) = match elaborator::elaborate_command_decl(tree, scope, ctx) {
+        let (action, attributes) = match elaborator::elaborate_command_decl(tree, cmd, scope, ctx) {
             Ok((action, attributes)) => (action, attributes),
             Err(diags) => {
                 // There was an error elaborating the command. Add the diagnostics
@@ -139,7 +139,8 @@ fn parse_source<'ctx>(
             ElaborateAction::NewFormalRule(rule) => {
                 // The command created a new formal syntax rule. We need to
                 // update the state of the parser to include this rule.
-                let (pattern, binding, scope_entry) = grammar::formal_rule_to_notation(rule, ctx);
+                let (pattern, binding, scope_entry) =
+                    grammar::formal_rule_to_notation(rule, cmd, ctx);
                 grammar::add_parse_rules_for_notation(pattern, ctx);
                 ctx.parse_state.recompute_initial_atoms();
 

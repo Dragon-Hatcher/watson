@@ -13,7 +13,7 @@ use crate::{
         presentation::{
             BindingNameHints, Pres, PresFrag, PresHead, instantiate_holes, shift_pres_frag,
         },
-        scope::{Scope, ScopeEntry, ScopeReplacement},
+        scope::{DefinitionSource, Scope, ScopeEntry, ScopeReplacement},
     },
 };
 
@@ -313,7 +313,8 @@ fn extend_scope_with_args<'ctx>(
 
         // Add the # of args to the binding depth because the vars go inside
         // the new bindings.
-        let scope_entry = ScopeEntry::new(formal_pres_frag).with_depth(binding_depth + args.len());
+        let scope_entry = ScopeEntry::new(formal_pres_frag, DefinitionSource::Binding)
+            .with_depth(binding_depth + args.len());
         scope = scope.child_with(single_name_binding, scope_entry);
     }
 

@@ -5,6 +5,7 @@ use crate::{
         formal_syntax::FormalSyntaxPatPart,
         fragment::{FragHead, Fragment, FragmentId},
         notation::{NotationBinding, NotationBindingId, NotationPatternPart},
+        scope::DefinitionSource,
     },
 };
 use itertools::Itertools;
@@ -121,7 +122,7 @@ impl<'ctx> Pres<'ctx> {
             PresHead::Notation {
                 binding,
                 binding_names,
-                replacement: _,
+                ..
             } => {
                 let mut out = String::new();
                 let mut children = self.children().iter();
@@ -158,6 +159,7 @@ pub enum PresHead<'ctx> {
     Notation {
         binding: NotationBindingId<'ctx>,
         binding_names: BindingNameHintsId<'ctx>,
+        def_source: DefinitionSource<'ctx>,
         replacement: PresFrag<'ctx>,
     },
 }
@@ -205,11 +207,13 @@ pub fn change_name_hints<'ctx>(
         PresHead::Notation {
             binding,
             replacement,
+            def_source,
             ..
         } => PresHead::Notation {
             binding,
             binding_names: new_hints,
             replacement,
+            def_source,
         },
     };
     let normal = Pres::new(head, normal.children().to_vec());
@@ -220,6 +224,7 @@ pub fn change_name_hints<'ctx>(
 
 pub fn wrap_frag_with_name<'ctx>(
     frag: PresFrag<'ctx>,
+    src: DefinitionSource<'ctx>,
     name: Ustr,
     ctx: &Ctx<'ctx>,
 ) -> PresFrag<'ctx> {
@@ -234,6 +239,7 @@ pub fn wrap_frag_with_name<'ctx>(
         binding,
         binding_names,
         replacement: frag,
+        def_source: src,
     };
     let pres = Pres::new(head, Vec::new());
     let pres = ctx.arenas.presentations.intern(pres);
@@ -348,6 +354,7 @@ fn shift_pres<'ctx>(
             replacement,
             binding,
             binding_names,
+            def_source,
         } if replacement.frag().unclosed_vars() > closed_count => {
             // If the replacement for this notation contains unclosed vars
             // then we need to expand the notation. The notation isn't accurate
@@ -366,6 +373,7 @@ fn shift_pres<'ctx>(
                 binding,
                 binding_names,
                 replacement: shifted_replacement,
+                def_source,
             };
             let pres = Pres::new(head, new_children);
             ctx.arenas.presentations.intern(pres)

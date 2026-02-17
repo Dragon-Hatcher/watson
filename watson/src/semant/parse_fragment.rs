@@ -223,10 +223,15 @@ fn parse_fragment_impl<'ctx>(
         let instantiated = match replacement.replacement() {
             ScopeReplacement::Frag(replacement_frag) => {
                 let shift = binding_depth - replacement.binding_depth();
-                let replacement = shift_pres_frag(replacement_frag, shift, ctx);
+                let replacement_frag = shift_pres_frag(replacement_frag, shift, ctx);
 
-                let instantiated_replacement =
-                    instantiate_holes(replacement, &|idx| children[idx], binding_depth, true, ctx);
+                let instantiated_replacement = instantiate_holes(
+                    replacement_frag,
+                    &|idx| children[idx],
+                    binding_depth,
+                    true,
+                    ctx,
+                );
 
                 let binding_names = BindingNameHints::new(binder_names);
                 let binding_names = ctx.arenas.binding_name_hints.intern(binding_names);
@@ -234,8 +239,9 @@ fn parse_fragment_impl<'ctx>(
                 let my_pres = Pres::new(
                     PresHead::Notation {
                         binding,
-                        replacement,
+                        replacement: replacement_frag,
                         binding_names,
+                        def_source: replacement.source(),
                     },
                     children,
                 );

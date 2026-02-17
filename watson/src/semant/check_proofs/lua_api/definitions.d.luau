@@ -113,6 +113,10 @@ declare class Frag
     --- in which the children will be replaced to get that fragment.
     replacement: Frag?
 
+    --- If this fragment is notation for a different fragment, what was the
+    --- source of that definition.
+    source: DefinitionSource?
+
     --- If this fragment is a variable, the index of that variable
     varIdx: number?
 
@@ -191,6 +195,9 @@ end
 --- Metatable for constructing frags.
 declare Frag: FragMeta
 
+
+declare class DefinitionSource
+end
 
 --- Metatable for creating fragment maps.
 declare FragMap : {

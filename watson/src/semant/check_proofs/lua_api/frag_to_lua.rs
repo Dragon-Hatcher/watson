@@ -6,6 +6,7 @@ use crate::semant::{
         instantiate_templates, instantiate_vars, match_presentation, reduce_frag,
         wrap_frag_with_name,
     },
+    scope::DefinitionSource,
     theorems::PresFact,
 };
 use itertools::Itertools;
@@ -51,6 +52,11 @@ impl UserData for LuaPresFrag {
             PresHead::Notation { replacement, .. } => Ok(Some(LuaPresFrag::new(replacement))),
         });
 
+        fields.add_field_method_get("source", |_, this| match this.out().pres().head() {
+            PresHead::FormalFrag(_) => Ok(None),
+            PresHead::Notation { def_source, .. } => Ok(Some(LuaDefinitionSource::new(def_source))),
+        });
+
         fields.add_field_method_get("varIdx", |_, this| match this.out().pres().head() {
             PresHead::FormalFrag(FragHead::Var(idx)) => Ok(Some(idx)),
             PresHead::FormalFrag(_) => Ok(None),
@@ -88,7 +94,7 @@ impl UserData for LuaPresFrag {
 
         methods.add_method("named", |lua, this, name: String| {
             let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
-            let frag = wrap_frag_with_name(this.out(), name.into(), ctx);
+            let frag = wrap_frag_with_name(this.out(), DefinitionSource::LuaApi, name.into(), ctx);
             Ok(LuaPresFrag::new(frag))
         });
 
@@ -293,3 +299,24 @@ impl LuaPres {
         PresId(pres)
     }
 }
+
+pub struct LuaDefinitionSource {
+    src: DefinitionSource<'static>,
+}
+
+impl LuaDefinitionSource {
+    pub fn new<'ctx>(src: DefinitionSource<'ctx>) -> Self {
+        // SAFETY: This isn't actually safe the way we have set this up. But!
+        // as long as we only use these objects inside lua, since the lua
+        // runtime doesn't live for as long as context, this is safe.
+        let src: DefinitionSource<'static> = unsafe { std::mem::transmute(src) };
+        Self { src }
+    }
+
+    pub fn out<'ctx>(&self) -> DefinitionSource<'ctx> {
+        // SAFETY: see above.
+        unsafe { std::mem::transmute(self.src) }
+    }
+}
+
+impl UserData for LuaDefinitionSource {}

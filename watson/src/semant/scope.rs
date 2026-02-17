@@ -41,7 +41,7 @@ pub struct ScopeEntry<'ctx> {
     source: DefinitionSource<'ctx>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DefinitionSource<'ctx> {
     DefinitionCmd(CommandId<'ctx>),
     SyntaxCmd(CommandId<'ctx>),
@@ -89,5 +89,9 @@ impl<'ctx> ScopeEntry<'ctx> {
 
     pub fn binding_depth(&self) -> usize {
         self.binding_depth
+    }
+
+    pub fn source(&self) -> DefinitionSource<'ctx> {
+        self.source
     }
 }

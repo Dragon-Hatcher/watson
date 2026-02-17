@@ -11,6 +11,7 @@ use crate::{
         parse_tree::{ParseTree, ParseTreeId},
     },
     semant::{
+        commands::{CommandId, CommandInfo},
         custom_grammar::{
             manager::CustomGrammarManager,
             syntax::{
@@ -140,6 +141,7 @@ pub struct Arenas<'ctx> {
     pub grammar_cats: NamedArena<CustomGrammarCat, CustomGrammarCatId<'ctx>>,
     pub grammar_rules: NamedArena<CustomGrammarRule<'ctx>, CustomGrammarRuleId<'ctx>>,
     pub theorem_stmts: NamedArena<TheoremStatement<'ctx>, TheoremId<'ctx>>,
+    pub commands: PlainArena<CommandInfo, CommandId<'ctx>>,
 }
 
 impl<'ctx> Arenas<'ctx> {
@@ -158,6 +160,7 @@ impl<'ctx> Arenas<'ctx> {
             grammar_cats: NamedArena::new(),
             grammar_rules: NamedArena::new(),
             theorem_stmts: NamedArena::new(),
+            commands: PlainArena::new(),
         }
     }
 }

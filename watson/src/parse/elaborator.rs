@@ -8,6 +8,7 @@ use crate::{
         source_cache::{SourceDecl, source_id_to_path},
     },
     semant::{
+        attributes::Attribute,
         custom_grammar::{
             inst::{CustomGrammarInst, CustomGrammarInstPart, SpannedStr},
             syntax::{
@@ -119,14 +120,14 @@ pub fn elaborate_command_decl<'ctx>(
     command_decl: ParseTreeId<'ctx>,
     scope: &Scope<'ctx>,
     ctx: &mut Ctx<'ctx>,
-) -> WResult<'ctx, ElaborateAction<'ctx>> {
+) -> WResult<'ctx, (ElaborateAction<'ctx>, Vec<Attribute<'ctx>>)> {
     // command_decl ::= (command_decl) maybe_attribute_anno command
 
     match_rule! { (ctx, command_decl) =>
         command_decl ::= [maybe_attr_anno, command] => {
-            let _attrs = elaborate_maybe_attribute_anno(maybe_attr_anno.as_node().unwrap(), ctx)?;
-            // TODO: attach _attrs to the resulting action (requires CommandId/AttributeMap)
-            elaborate_command(command.as_node().unwrap(), scope, ctx)
+            let attrs = elaborate_maybe_attribute_anno(maybe_attr_anno.as_node().unwrap(), ctx)?;
+            let cmd = elaborate_command(command.as_node().unwrap(), scope, ctx)?;
+            Ok((cmd, attrs))
         }
     }
 }
@@ -134,7 +135,7 @@ pub fn elaborate_command_decl<'ctx>(
 fn elaborate_maybe_attribute_anno<'ctx>(
     maybe_anno: ParseTreeId<'ctx>,
     ctx: &Ctx<'ctx>,
-) -> WResult<'ctx, Vec<CustomGrammarInst<'ctx>>> {
+) -> WResult<'ctx, Vec<Attribute<'ctx>>> {
     // maybe_attribute_anno ::= (attribute_anno_some) attribute_anno
     //                        | (attribute_anno_none)
 
@@ -151,7 +152,7 @@ fn elaborate_maybe_attribute_anno<'ctx>(
 fn elaborate_attribute_anno<'ctx>(
     anno: ParseTreeId<'ctx>,
     ctx: &Ctx<'ctx>,
-) -> WResult<'ctx, Vec<CustomGrammarInst<'ctx>>> {
+) -> WResult<'ctx, Vec<Attribute<'ctx>>> {
     // attribute_anno ::= (attribute_anno) "@" "[" attributes "]"
 
     match_rule! { (ctx, anno) =>
@@ -162,24 +163,30 @@ fn elaborate_attribute_anno<'ctx>(
 }
 
 fn elaborate_attributes<'ctx>(
-    attrs: ParseTreeId<'ctx>,
+    mut attrs: ParseTreeId<'ctx>,
     ctx: &Ctx<'ctx>,
-) -> WResult<'ctx, Vec<CustomGrammarInst<'ctx>>> {
+) -> WResult<'ctx, Vec<Attribute<'ctx>>> {
     // attributes ::= (attributes_one)  attribute
     //              | (attributes_many) attribute "," attributes
 
-    match_rule! { (ctx, attrs) =>
-        attributes_one ::= [attr] => {
-            let inst = elaborate_tactic(attr.as_node().unwrap(), ctx)?;
-            Ok(vec![inst])
-        },
-        attributes_many ::= [attr, _comma, rest] => {
-            let inst = elaborate_tactic(attr.as_node().unwrap(), ctx)?;
-            let mut result = vec![inst];
-            result.extend(elaborate_attributes(rest.as_node().unwrap(), ctx)?);
-            Ok(result)
+    let mut result = Vec::new();
+
+    loop {
+        match_rule! { (ctx, attrs) =>
+            attributes_one ::= [attr] => {
+                let inst = elaborate_custom_grammar(attr.as_node().unwrap(), ctx)?;
+                result.push(Attribute(inst));
+                break;
+            },
+            attributes_many ::= [attr, _comma, rest] => {
+                let inst = elaborate_custom_grammar(attr.as_node().unwrap(), ctx)?;
+                result.push(Attribute(inst));
+                attrs = rest.as_node().unwrap();
+            }
         }
     }
+
+    Ok(result)
 }
 
 pub fn elaborate_command<'ctx>(
@@ -1173,7 +1180,7 @@ fn elaborate_theorem<'ctx>(
             let theorem_stmt = TheoremStatement::new(name, templates, hypotheses, conclusion, scope_id);
             let theorem_stmt = ctx.arenas.theorem_stmts.alloc(name, theorem_stmt);
 
-            let proof = elaborate_tactic(tactic.as_node().unwrap(), ctx)?;
+            let proof = elaborate_custom_grammar(tactic.as_node().unwrap(), ctx)?;
             let proof = UnresolvedProof::Theorem(proof);
 
             Ok((theorem_stmt, proof))
@@ -1356,22 +1363,22 @@ fn elaborate_fact<'ctx>(
     }
 }
 
-fn elaborate_tactic<'ctx>(
-    tactic: ParseTreeId<'ctx>,
+fn elaborate_custom_grammar<'ctx>(
+    grammar: ParseTreeId<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, CustomGrammarInst<'ctx>> {
-    let children = expect_unambiguous(tactic)?;
+    let children = expect_unambiguous(grammar)?;
     let rule = children.rule();
-    let tactic_rule = rule.source().get_tactic_rule();
+    let grammar_rule = rule.source().get_tactic_rule();
 
-    let mut tactic_children = Vec::new();
-    for (part, child) in tactic_rule
+    let mut grammar_children = Vec::new();
+    for (part, child) in grammar_rule
         .pattern()
         .parts()
         .iter()
         .zip(children.children().iter())
     {
-        let t_child = match part.part() {
+        let g_child = match part.part() {
             CustomGrammarPatPartCore::Kw(str) => {
                 let spanned_str = SpannedStr::new(*str, child.span());
                 CustomGrammarInstPart::Kw(spanned_str)
@@ -1386,7 +1393,7 @@ fn elaborate_tactic<'ctx>(
                 CustomGrammarInstPart::Name(spanned_str)
             }
             CustomGrammarPatPartCore::Cat(_) => {
-                let inst = elaborate_tactic(child.as_node().unwrap(), ctx)?;
+                let inst = elaborate_custom_grammar(child.as_node().unwrap(), ctx)?;
                 CustomGrammarInstPart::SubInst(inst)
             }
             CustomGrammarPatPartCore::Frag(_) => {
@@ -1402,13 +1409,13 @@ fn elaborate_tactic<'ctx>(
                 CustomGrammarInstPart::Fact(fact)
             }
         };
-        tactic_children.push(t_child);
+        grammar_children.push(g_child);
     }
 
     Ok(CustomGrammarInst::new(
-        tactic_rule,
-        tactic.span(),
-        tactic_children,
+        grammar_rule,
+        grammar.span(),
+        grammar_children,
     ))
 }
 

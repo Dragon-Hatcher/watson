@@ -8,6 +8,7 @@ use crate::{
 use mlua::FromLua;
 use ustr::Ustr;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CustomGrammarInst<'ctx> {
     rule: CustomGrammarRuleId<'ctx>,
     span: Span,
@@ -40,7 +41,7 @@ impl<'ctx> CustomGrammarInst<'ctx> {
     }
 }
 
-#[derive(Debug, Clone, Copy, FromLua)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromLua)]
 pub struct SpannedStr {
     str: Ustr,
     span: Span,
@@ -60,6 +61,7 @@ impl SpannedStr {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CustomGrammarInstPart<'ctx> {
     Kw(SpannedStr),
     Lit(SpannedStr),

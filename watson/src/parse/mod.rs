@@ -21,6 +21,8 @@ use crate::{
         parse_tree::ParseTreeId,
     },
     semant::{
+        attributes::AttributeTracker,
+        commands::CommandInfo,
         formal_syntax::FormalSyntaxCatId,
         notation::{NotationPattern, NotationPatternPart, NotationPatternSource},
         scope::Scope,
@@ -43,6 +45,7 @@ pub enum ParseEntry<'ctx> {
 pub fn parse<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> ParseReport<'ctx> {
     let mut sources_stack = Vec::new();
     let mut scope = Scope::new();
+    let mut attributes = AttributeTracker::new();
     sources_stack.push(root.start_loc());
 
     let mut theorems = Vec::new();
@@ -53,6 +56,7 @@ pub fn parse<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> ParseReport<'ctx> {
             ctx,
             &mut sources_stack,
             &mut scope,
+            &mut attributes,
             &mut theorems,
             &mut entries,
         );
@@ -66,6 +70,7 @@ fn parse_source<'ctx>(
     ctx: &mut Ctx<'ctx>,
     sources_stack: &mut Vec<Location>,
     scope: &mut Scope<'ctx>,
+    attribute_tracker: &mut AttributeTracker<'ctx>,
     theorems: &mut Vec<(TheoremId<'ctx>, UnresolvedProof<'ctx>)>,
     entries: &mut Vec<ParseEntry<'ctx>>,
 ) {
@@ -99,9 +104,11 @@ fn parse_source<'ctx>(
         let after_command = tree.span().end();
         sources_stack.push(after_command);
 
+        let cmd = ctx.arenas.commands.alloc(CommandInfo::new());
+
         // Now let's elaborate the command.
-        let action = match elaborator::elaborate_command_decl(tree, scope, ctx) {
-            Ok(action) => action,
+        let (action, attributes) = match elaborator::elaborate_command_decl(tree, scope, ctx) {
+            Ok((action, attributes)) => (action, attributes),
             Err(diags) => {
                 // There was an error elaborating the command. Add the diagnostics
                 // and continue.
@@ -109,6 +116,8 @@ fn parse_source<'ctx>(
                 return;
             }
         };
+
+        *attribute_tracker = attribute_tracker.child_with(cmd, attributes);
 
         match action {
             ElaborateAction::NewSource(new_source) => {

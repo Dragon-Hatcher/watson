@@ -1,5 +1,7 @@
+pub mod attributes;
 pub mod check_circularity;
 pub mod check_proofs;
+pub mod commands;
 pub mod custom_grammar;
 pub mod formal_syntax;
 pub mod fragment;

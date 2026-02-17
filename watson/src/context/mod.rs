@@ -36,7 +36,7 @@ pub struct Ctx<'ctx> {
     pub parse_state: ParseState<'ctx>,
 
     /// Records information about tactics.
-    pub tactic_manager: CustomGrammarManager<'ctx>,
+    pub custom_grammar_manager: CustomGrammarManager<'ctx>,
 
     /// Diagnostics manager for reporting errors and warnings.
     pub diags: DiagManager<'ctx>,
@@ -78,6 +78,22 @@ impl<'ctx> Ctx<'ctx> {
             .alloc(tactic_grammar_cat.name(), tactic_parse_cat);
         parse_state.use_cat(tactic_parse_cat);
 
+        let attribute_grammar_cat = arenas.grammar_cats.alloc(
+            *strings::ATTRIBUTE,
+            CustomGrammarCat::new(*strings::ATTRIBUTE),
+        );
+        custom_grammar_manager.use_cat(attribute_grammar_cat);
+
+        // Create the attribute parse category before calling add_builtin_rules
+        let attribute_parse_cat = crate::parse::parse_state::Category::new(
+            attribute_grammar_cat.name(),
+            crate::parse::parse_state::SyntaxCategorySource::User(attribute_grammar_cat),
+        );
+        let attribute_parse_cat = arenas
+            .parse_cats
+            .alloc(attribute_grammar_cat.name(), attribute_parse_cat);
+        parse_state.use_cat(attribute_parse_cat);
+
         let builtin_cats = BuiltinCats::new(arenas, &mut parse_state);
         let builtin_rules = add_builtin_rules(
             &arenas.parse_rules,
@@ -85,6 +101,7 @@ impl<'ctx> Ctx<'ctx> {
             &mut parse_state,
             sentence_formal_cat,
             tactic_parse_cat,
+            attribute_parse_cat,
             &builtin_cats,
         );
 
@@ -92,7 +109,7 @@ impl<'ctx> Ctx<'ctx> {
             arenas,
             scopes: ScopeArena::new(),
             parse_state,
-            tactic_manager: custom_grammar_manager,
+            custom_grammar_manager,
             diags: DiagManager::new(),
             sources,
             config,

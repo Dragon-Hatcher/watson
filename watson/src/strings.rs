@@ -35,6 +35,7 @@ str_const! {
     ASSIGN = ":=";
     AT = "@";
     COLON = ":";
+    COMMA = ",";
     TURNSTILE = "|-";
     LEFT_PAREN = "(";
     RIGHT_PAREN = ")";
@@ -57,6 +58,7 @@ str_const! {
 str_const! {
     SENTENCE = "sentence";
     BINDING = "binding";
+    ATTRIBUTE = "attribute";
 }
 
 str_const! {

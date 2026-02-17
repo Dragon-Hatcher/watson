@@ -207,7 +207,7 @@ fn read_main_module<'ctx>(lua: WLua<'ctx>, module: mlua::Value) -> WResult<'ctx,
 
 fn write_luau_types<'ctx>(ctx: &Ctx<'ctx>) {
     let definitions_file = include_str!("./definitions.d.luau");
-    let types_content = generate_luau_grammar_types(&ctx.tactic_manager);
+    let types_content = generate_luau_grammar_types(&ctx.custom_grammar_manager);
 
     let luau_dir = ctx.config.build_dir().join("luau");
     let types_path = luau_dir.join("definitions.d.luau");

@@ -81,7 +81,7 @@ fn parse_source<'ctx>(
     if can_start_command(text, loc, ctx) {
         // The current line could start a command so we will assume it does.
 
-        let tree = match earley::parse(loc, ctx.builtin_cats.command, ctx) {
+        let tree = match earley::parse(loc, ctx.builtin_cats.command_decl, ctx) {
             Ok(tree) => tree,
             Err(diags) => {
                 // We weren't able to parse a command. Add the diagnostics and
@@ -100,7 +100,7 @@ fn parse_source<'ctx>(
         sources_stack.push(after_command);
 
         // Now let's elaborate the command.
-        let action = match elaborator::elaborate_command(tree, scope, ctx) {
+        let action = match elaborator::elaborate_command_decl(tree, scope, ctx) {
             Ok(action) => action,
             Err(diags) => {
                 // There was an error elaborating the command. Add the diagnostics
@@ -158,15 +158,15 @@ fn parse_source<'ctx>(
                 ctx.parse_state.use_cat(parse_cat);
                 ctx.parse_state.recompute_initial_atoms();
 
-                ctx.tactic_manager.use_cat(cat);
+                ctx.custom_grammar_manager.use_cat(cat);
             }
-            ElaborateAction::NewTacticRule(rule) => {
-                // The command created a new tactic rule. We need to
+            ElaborateAction::NewGrammarRule(rule) => {
+                // The command created a new custom grammar rule. We need to
                 // update the state of the parser to include this rule.
-                grammar::add_parse_rules_for_tactic_rule(rule, ctx);
+                grammar::add_parse_rules_for_custom_grammar_rule(rule, ctx);
                 ctx.parse_state.recompute_initial_atoms();
 
-                ctx.tactic_manager.use_rule(rule);
+                ctx.custom_grammar_manager.use_rule(rule);
             }
         }
     } else {
@@ -219,7 +219,7 @@ pub fn add_formal_cat<'ctx>(cat: FormalSyntaxCatId<'ctx>, ctx: &mut Ctx<'ctx>) {
 fn can_start_command(text: &str, loc: Location, ctx: &Ctx) -> bool {
     let name = parse_name(text, loc.offset());
 
-    for atom in ctx.parse_state.initial_atoms(ctx.builtin_cats.command) {
+    for atom in ctx.parse_state.initial_atoms(ctx.builtin_cats.command_decl) {
         match atom {
             ParseAtomPattern::Lit(lit) => {
                 if text[loc.byte_offset()..].starts_with(lit.as_str()) {

@@ -56,7 +56,7 @@ impl UserData for LuaScopeMeta {
     fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
         methods.add_method("atTactic", |lua, _, name: String| {
             let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
-            let rule = ctx.tactic_manager.rule_by_name(name.into());
+            let rule = ctx.custom_grammar_manager.rule_by_name(name.into());
             let scope = rule.map(|r| ctx.scopes.get(r.scope()));
             Ok(scope.map(LuaScope::new))
         });

@@ -21,7 +21,7 @@
     "block-command": {
       "patterns": [
         {
-          "begin": "^(syntax|tactic|notation|theorem|axiom|definition)\\s+",
+          "begin": "^(syntax|tactic|attribute|notation|theorem|axiom|definition)\\s+",
           "beginCaptures": {
             "1": { "name": "keyword.other.watson" }
           },

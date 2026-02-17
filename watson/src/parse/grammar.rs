@@ -58,6 +58,8 @@ macro_rules! builtin_rules {
 /*
 Grammar of the Watson language:
 
+command_decl ::= (command_decl) maybe_attribute_anno command
+
 command ::= (module_command)           module_command
           | (syntax_cat_command)       syntax_cat_command
           | (syntax_command)           syntax_command
@@ -67,6 +69,17 @@ command ::= (module_command)           module_command
           | (theorem_command)          theorem_command
           | (grammar_category_command) grammar_category_command
           | (tactic_command)           tactic_command
+          | (attribute_command)        attribute_command
+
+maybe_attribute_anno ::= (attribute_anno_some) attribute_anno
+                       | (attribute_anno_none)
+
+attribute_anno ::= (attribute_anno) "@" "[" attributes "]"
+
+attributes ::= (attributes_one)  attribute
+             | (attributes_many) attribute "," attributes
+
+// attribute filled in dynamically
 
 module_command ::= (module) kw"module" name
 
@@ -109,7 +122,9 @@ notation_pat_term_args ::= (notation_pat_term_args_one)  @name
 
 grammar_category_command ::= (grammar_category) kw"grammar_category" name
 
-tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" tactic_pat kw"end"
+tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" grammar_pat kw"end"
+
+attribute_command ::= (attribute) kw"attribute" name name prec_assoc "::=" grammar_pat kw"end"
 
 grammar_pat ::= (grammar_pat_none)
               | (grammar_pat_many) grammar_pat_part grammar_pat
@@ -166,7 +181,11 @@ any_fragment ::= <formal_cat>
 
 builtin_cats! {
     BuiltinCats {
+        command_decl,
         command,
+        maybe_attribute_anno,
+        attribute_anno,
+        attributes,
         module_command,
         syntax_cat_command,
         syntax_command,
@@ -176,6 +195,7 @@ builtin_cats! {
         theorem_command,
         grammar_category_command,
         tactic_command,
+        attribute_command,
         prec_assoc,
         maybe_prec,
         maybe_assoc,
@@ -206,6 +226,12 @@ builtin_rules! {
     BuiltinRules {
         name,
         str,
+        command_decl,
+        attribute_anno_none,
+        attribute_anno_some,
+        attribute_anno,
+        attributes_one,
+        attributes_many,
         module_command,
         syntax_cat_command,
         syntax_command,
@@ -215,11 +241,13 @@ builtin_rules! {
         theorem_command,
         grammar_category_command,
         tactic_command,
+        attribute_command,
         module,
         syntax_cat,
         syntax,
         grammar_category,
         tactic,
+        attribute,
         prec_assoc_none,
         prec_assoc_some,
         prec_none,
@@ -294,6 +322,7 @@ pub fn add_builtin_rules<'ctx>(
     state: &mut ParseState<'ctx>,
     formal_sentence_cat: FormalSyntaxCatId<'ctx>,
     tactic_parse_cat: CategoryId<'ctx>,
+    attribute_parse_cat: CategoryId<'ctx>,
     cats: &BuiltinCats<'ctx>,
 ) -> BuiltinRules<'ctx> {
     let sentence_cat = Category::new(
@@ -329,6 +358,42 @@ pub fn add_builtin_rules<'ctx>(
             "str",
             cats.str,
             vec![RulePatternPart::Atom(ParseAtomPattern::Str)],
+        ),
+
+        command_decl: rule!(
+            "command_decl",
+            cats.command_decl,
+            vec![cat(cats.maybe_attribute_anno), cat(cats.command)],
+        ),
+        attribute_anno_none: rule!("attribute_anno_none", cats.maybe_attribute_anno, vec![]),
+        attribute_anno_some: rule!(
+            "attribute_anno_some",
+            cats.maybe_attribute_anno,
+            vec![cat(cats.attribute_anno)],
+        ),
+        attribute_anno: rule!(
+            "attribute_anno",
+            cats.attribute_anno,
+            vec![
+                lit(*strings::AT),
+                lit(*strings::LEFT_BRACKET),
+                cat(cats.attributes),
+                lit(*strings::RIGHT_BRACKET),
+            ],
+        ),
+        attributes_one: rule!(
+            "attributes_one",
+            cats.attributes,
+            vec![cat(attribute_parse_cat)],
+        ),
+        attributes_many: rule!(
+            "attributes_many",
+            cats.attributes,
+            vec![
+                cat(attribute_parse_cat),
+                lit(*strings::COMMA),
+                cat(cats.attributes),
+            ],
         ),
         module_command: rule!(
             "module_command",
@@ -371,6 +436,11 @@ pub fn add_builtin_rules<'ctx>(
             cats.command,
             vec![cat(cats.tactic_command)],
         ),
+        attribute_command: rule!(
+            "attribute_command",
+            cats.command,
+            vec![cat(cats.attribute_command)],
+        ),
         module: rule!(
             "module",
             cats.module_command,
@@ -404,6 +474,19 @@ pub fn add_builtin_rules<'ctx>(
             cats.tactic_command,
             vec![
                 kw(*strings::TACTIC),
+                cat(cats.name),
+                cat(cats.name),
+                cat(cats.prec_assoc),
+                lit(*strings::BNF_REPLACE),
+                cat(cats.grammar_pat),
+                kw(*strings::END),
+            ],
+        ),
+        attribute: rule!(
+            "attribute",
+            cats.attribute_command,
+            vec![
+                kw(*strings::ATTRIBUTE),
                 cat(cats.name),
                 cat(cats.name),
                 cat(cats.prec_assoc),
@@ -946,15 +1029,15 @@ pub fn add_parse_rules_for_notation<'ctx>(notation: NotationPatternId<'ctx>, ctx
     ctx.parse_state.use_rule(binding_rule2);
 }
 
-fn tactic_rule_to_parse_rule<'ctx>(
-    tactic_rule: CustomGrammarRuleId<'ctx>,
+fn custom_grammar_rule_to_parse_rule<'ctx>(
+    grammar_rule: CustomGrammarRuleId<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> RuleId<'ctx> {
     let mut parts = Vec::new();
-    for tactic_part in tactic_rule.pattern().parts() {
+    for grammar_part in grammar_rule.pattern().parts() {
         use CustomGrammarPatPartCore as PatPart;
 
-        let part = match tactic_part.part() {
+        let part = match grammar_part.part() {
             &PatPart::Lit(lit_str) => {
                 // Trim whitespace from literals for parsing, but preserve in presentation
                 let trimmed = Ustr::from(lit_str.trim());
@@ -975,24 +1058,24 @@ fn tactic_rule_to_parse_rule<'ctx>(
 
     let parse_pat = RulePattern::new(
         parts,
-        tactic_rule.pattern().precedence(),
-        tactic_rule.pattern().associativity(),
+        grammar_rule.pattern().precedence(),
+        grammar_rule.pattern().associativity(),
     );
 
     let parse_rule = Rule::new(
-        tactic_rule.name(),
-        ctx.parse_state.cat_for_tactic_cat(tactic_rule.cat()),
-        ParseRuleSource::TacticRule(tactic_rule),
+        grammar_rule.name(),
+        ctx.parse_state.cat_for_tactic_cat(grammar_rule.cat()),
+        ParseRuleSource::TacticRule(grammar_rule),
         parse_pat,
     );
 
     ctx.arenas.parse_rules.alloc(parse_rule)
 }
 
-pub fn add_parse_rules_for_tactic_rule<'ctx>(
-    tactic_rule: CustomGrammarRuleId<'ctx>,
+pub fn add_parse_rules_for_custom_grammar_rule<'ctx>(
+    grammar_rule: CustomGrammarRuleId<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) {
-    let parse_rule = tactic_rule_to_parse_rule(tactic_rule, ctx);
+    let parse_rule = custom_grammar_rule_to_parse_rule(grammar_rule, ctx);
     ctx.parse_state.use_rule(parse_rule);
 }

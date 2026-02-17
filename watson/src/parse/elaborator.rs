@@ -112,7 +112,74 @@ pub enum ElaborateAction<'ctx> {
     NewDefinition(Scope<'ctx>),
     NewTheorem(TheoremId<'ctx>, UnresolvedProof<'ctx>),
     NewGrammarCat(CustomGrammarCatId<'ctx>),
-    NewTacticRule(CustomGrammarRuleId<'ctx>),
+    NewGrammarRule(CustomGrammarRuleId<'ctx>),
+}
+
+pub fn elaborate_command_decl<'ctx>(
+    command_decl: ParseTreeId<'ctx>,
+    scope: &Scope<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<'ctx, ElaborateAction<'ctx>> {
+    // command_decl ::= (command_decl) maybe_attribute_anno command
+
+    match_rule! { (ctx, command_decl) =>
+        command_decl ::= [maybe_attr_anno, command] => {
+            let _attrs = elaborate_maybe_attribute_anno(maybe_attr_anno.as_node().unwrap(), ctx)?;
+            // TODO: attach _attrs to the resulting action (requires CommandId/AttributeMap)
+            elaborate_command(command.as_node().unwrap(), scope, ctx)
+        }
+    }
+}
+
+fn elaborate_maybe_attribute_anno<'ctx>(
+    maybe_anno: ParseTreeId<'ctx>,
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Vec<CustomGrammarInst<'ctx>>> {
+    // maybe_attribute_anno ::= (attribute_anno_some) attribute_anno
+    //                        | (attribute_anno_none)
+
+    match_rule! { (ctx, maybe_anno) =>
+        attribute_anno_none ::= [] => {
+            Ok(Vec::new())
+        },
+        attribute_anno_some ::= [anno] => {
+            elaborate_attribute_anno(anno.as_node().unwrap(), ctx)
+        }
+    }
+}
+
+fn elaborate_attribute_anno<'ctx>(
+    anno: ParseTreeId<'ctx>,
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Vec<CustomGrammarInst<'ctx>>> {
+    // attribute_anno ::= (attribute_anno) "@" "[" attributes "]"
+
+    match_rule! { (ctx, anno) =>
+        attribute_anno ::= [_at, _lbracket, attrs, _rbracket] => {
+            elaborate_attributes(attrs.as_node().unwrap(), ctx)
+        }
+    }
+}
+
+fn elaborate_attributes<'ctx>(
+    attrs: ParseTreeId<'ctx>,
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Vec<CustomGrammarInst<'ctx>>> {
+    // attributes ::= (attributes_one)  attribute
+    //              | (attributes_many) attribute "," attributes
+
+    match_rule! { (ctx, attrs) =>
+        attributes_one ::= [attr] => {
+            let inst = elaborate_tactic(attr.as_node().unwrap(), ctx)?;
+            Ok(vec![inst])
+        },
+        attributes_many ::= [attr, _comma, rest] => {
+            let inst = elaborate_tactic(attr.as_node().unwrap(), ctx)?;
+            let mut result = vec![inst];
+            result.extend(elaborate_attributes(rest.as_node().unwrap(), ctx)?);
+            Ok(result)
+        }
+    }
 }
 
 pub fn elaborate_command<'ctx>(
@@ -129,6 +196,7 @@ pub fn elaborate_command<'ctx>(
     //           | (theorem_command)          theorem_command
     //           | (grammar_category_command) grammar_category_command
     //           | (tactic_command)           tactic_command
+    //           | (attribute_command)        attribute_command
 
     match_rule! { (ctx, command) =>
         module_command ::= [module_cmd] => {
@@ -165,7 +233,11 @@ pub fn elaborate_command<'ctx>(
         },
         tactic_command ::= [tactic_cmd] => {
             let rule = elaborate_tactic_def(tactic_cmd.as_node().unwrap(), scope, ctx)?;
-            Ok(ElaborateAction::NewTacticRule(rule))
+            Ok(ElaborateAction::NewGrammarRule(rule))
+        },
+        attribute_command ::= [attribute_cmd] => {
+            let rule = elaborate_attribute_def(attribute_cmd.as_node().unwrap(), scope, ctx)?;
+            Ok(ElaborateAction::NewGrammarRule(rule))
         },
     }
 }
@@ -645,6 +717,41 @@ fn elaborate_tactic_def<'ctx>(
     match_rule! { (ctx, tactic) =>
         tactic ::= [tactic_kw, rule_name, cat, prec_assoc, bnf_replace, pat_list, end_kw] => {
             debug_assert!(tactic_kw.is_kw(*strings::TACTIC));
+            debug_assert!(bnf_replace.is_lit(*strings::BNF_REPLACE));
+            debug_assert!(end_kw.is_kw(*strings::END));
+
+            let rule_name = elaborate_name(rule_name.as_node().unwrap(), ctx)?;
+            let cat_name = elaborate_name(cat.as_node().unwrap(), ctx)?;
+            let (prec, assoc) = elaborate_prec_assoc(prec_assoc.as_node().unwrap(), ctx)?;
+            let pat = elaborate_grammar_pat(pat_list.as_node().unwrap(), prec, assoc, ctx)?;
+
+            let Some(cat) = ctx.arenas.grammar_cats.get(cat_name) else {
+                return Diagnostic::err_unknown_grammar_cat(cat_name, cat.span());
+            };
+
+            if ctx.arenas.grammar_rules.get(rule_name).is_some() {
+                return Diagnostic::err_duplicate_grammar_rule();
+            }
+
+            let scope = ctx.scopes.alloc(scope.clone());
+            let rule = CustomGrammarRule::new(rule_name, cat, pat, scope);
+            let rule_id = ctx.arenas.grammar_rules.alloc(rule_name, rule);
+
+            Ok(rule_id)
+        }
+    }
+}
+
+fn elaborate_attribute_def<'ctx>(
+    attribute: ParseTreeId<'ctx>,
+    scope: &Scope<'ctx>,
+    ctx: &mut Ctx<'ctx>,
+) -> WResult<'ctx, CustomGrammarRuleId<'ctx>> {
+    // tactic_command ::= (tactic) kw"tactic" name name prec_assoc "::=" tactic_pat kw"end"
+
+    match_rule! { (ctx, attribute) =>
+        attribute ::= [attribute_kw, rule_name, cat, prec_assoc, bnf_replace, pat_list, end_kw] => {
+            debug_assert!(attribute_kw.is_kw(*strings::ATTRIBUTE));
             debug_assert!(bnf_replace.is_lit(*strings::BNF_REPLACE));
             debug_assert!(end_kw.is_kw(*strings::END));
 

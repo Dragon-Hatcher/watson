@@ -433,6 +433,20 @@ declare class TacticInfo
     function withGoal(self, f: Frag): TacticInfo
 end
 
+declare class AttributeTracker
+    --- Get the list of attributes for the given command.
+    --- @param the command to get the attributes for
+    --- @return a list of the attributes
+    function getAttributes(self, cmd: CommandId): {Attribute}
+end
+
+declare class AttributeTrackerMeta
+    --- Get the attribute state at the end of parsing.
+    function atEnd(self): AttributeTracker
+end
+
+declare AttributeTracker : AttributeTrackerMeta
+
 --- A span of text with an attached message.
 declare class DiagnosticSpan
 end

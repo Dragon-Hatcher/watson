@@ -3,6 +3,7 @@ use crate::{
     diagnostics::{Diagnostic, DiagnosticSpan, WResult},
     parse::Span,
     semant::{
+        attributes::AttributeTracker,
         check_proofs::lua_api::{
             LuaInfo, diag_to_lua::LuaDiagnostic, proof_to_lua::LuaProofState, setup_lua,
             tactic_info_to_lua::LuaTacticInfo, theorem_to_lua::LuaTheorem,
@@ -22,11 +23,12 @@ mod lua_api;
 
 pub fn check_proofs<'ctx>(
     theorems: &[(TheoremId<'ctx>, UnresolvedProof<'ctx>)],
+    attributes: AttributeTracker,
     ctx: &mut Ctx<'ctx>,
 ) -> ProofStatuses<'ctx> {
     let mut statuses = ProofStatuses::new();
 
-    let info = match setup_lua(ctx) {
+    let info = match setup_lua(ctx, attributes) {
         Ok(info) => info,
         Err(diags) => {
             // Failed to set up Lua. Add the diagnostics and return.

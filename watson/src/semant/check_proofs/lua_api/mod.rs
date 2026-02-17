@@ -1,23 +1,27 @@
 use crate::{
     context::{Arenas, Ctx},
     diagnostics::{Diagnostic, WResult},
-    semant::check_proofs::{
-        LuaTheoremInfo,
-        lua_api::{
-            ctx_to_lua::LuaCtx,
-            diag_to_lua::LuaDiagnosticMeta,
-            file_loader::LuaFileRequirer,
-            formal_to_lua::LuaFormalCatMeta,
-            frag_map_to_lua::{LuaFactMapMeta, LuaFragMapMeta},
-            frag_to_lua::{LuaPresFactMeta, LuaPresFragMeta},
-            grammar_to_lua::generate_luau_grammar_types,
-            notation_to_lua::LuaNotationBindingMeta,
-            scope_to_lua::LuaScopeMeta,
-            theorem_to_lua::LuaTheoremMeta,
-            unresolved_to_lua::LuaUnResFragMeta,
-            vampire_to_lua::{
-                LuaVFormulaMeta, LuaVFunctionMeta, LuaVOptionsMeta, LuaVPredicateMeta,
-                LuaVProblemMeta, LuaVTermMeta,
+    semant::{
+        attributes::AttributeTracker,
+        check_proofs::{
+            LuaTheoremInfo,
+            lua_api::{
+                attributes_to_lua::{LuaAttributeTracker, LuaAttributeTrackerMeta},
+                ctx_to_lua::LuaCtx,
+                diag_to_lua::LuaDiagnosticMeta,
+                file_loader::LuaFileRequirer,
+                formal_to_lua::LuaFormalCatMeta,
+                frag_map_to_lua::{LuaFactMapMeta, LuaFragMapMeta},
+                frag_to_lua::{LuaPresFactMeta, LuaPresFragMeta},
+                grammar_to_lua::generate_luau_grammar_types,
+                notation_to_lua::LuaNotationBindingMeta,
+                scope_to_lua::LuaScopeMeta,
+                theorem_to_lua::LuaTheoremMeta,
+                unresolved_to_lua::LuaUnResFragMeta,
+                vampire_to_lua::{
+                    LuaVFormulaMeta, LuaVFunctionMeta, LuaVOptionsMeta, LuaVPredicateMeta,
+                    LuaVProblemMeta, LuaVTermMeta,
+                },
             },
         },
     },
@@ -26,6 +30,7 @@ use crate::{
 use mlua::{Lua, LuaOptions, StdLib};
 use std::{fs, ops::Deref};
 
+pub mod attributes_to_lua;
 pub mod command_to_lua;
 pub mod ctx_to_lua;
 pub mod diag_to_lua;
@@ -97,7 +102,10 @@ pub struct LuaInfo<'ctx> {
     pub handle_tactic_fn: mlua::Function,
 }
 
-pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
+pub fn setup_lua<'ctx>(
+    ctx: &Ctx<'ctx>,
+    attributes: AttributeTracker,
+) -> WResult<'ctx, LuaInfo<'ctx>> {
     // Write out types
     write_luau_types(ctx);
 
@@ -112,12 +120,19 @@ pub fn setup_lua<'ctx>(ctx: &Ctx<'ctx>) -> WResult<'ctx, LuaInfo<'ctx>> {
     let lua_ctx = LuaCtx::new(ctx);
     lua.set_app_data(lua_ctx);
 
+    // Add the final attributes as app data
+    let lua_attribute_tracker = LuaAttributeTracker::new(attributes);
+    lua.set_app_data(lua_attribute_tracker);
+
     // Set up the custom log function
     add_log_fn(&lua);
 
     // Set up metatables.
     lua.globals().set("UnResFrag", LuaUnResFragMeta).unwrap();
     lua.globals().set("Scope", LuaScopeMeta).unwrap();
+    lua.globals()
+        .set("AttributeTracker", LuaAttributeTrackerMeta)
+        .unwrap();
     lua.globals()
         .set("Binding", LuaNotationBindingMeta)
         .unwrap();

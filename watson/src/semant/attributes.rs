@@ -3,8 +3,9 @@ use crate::semant::{commands::CommandId, custom_grammar::inst::CustomGrammarInst
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attribute<'ctx>(pub CustomGrammarInst<'ctx>);
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AttributeTracker<'ctx> {
-    attrs: im::HashMap<CommandId<'ctx>, Vec<Attribute<'ctx>>>,
+    pub attrs: im::HashMap<CommandId<'ctx>, Vec<Attribute<'ctx>>>,
 }
 
 impl<'ctx> AttributeTracker<'ctx> {
@@ -18,5 +19,12 @@ impl<'ctx> AttributeTracker<'ctx> {
         let mut map = self.attrs.clone();
         map.insert(cmd, attrs);
         Self { attrs: map }
+    }
+
+    pub fn get(&self, cmd: CommandId<'ctx>) -> &[Attribute<'ctx>] {
+        match self.attrs.get(&cmd) {
+            Some(attrs) => attrs,
+            None => &[],
+        }
     }
 }

@@ -33,6 +33,7 @@ use crate::{
 
 pub struct ParseReport<'ctx> {
     pub theorems: Vec<(TheoremId<'ctx>, UnresolvedProof<'ctx>)>,
+    pub attributes: AttributeTracker<'ctx>,
     pub entries: Vec<ParseEntry<'ctx>>,
 }
 
@@ -62,7 +63,11 @@ pub fn parse<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> ParseReport<'ctx> {
         );
     }
 
-    ParseReport { theorems, entries }
+    ParseReport {
+        theorems,
+        attributes,
+        entries,
+    }
 }
 
 fn parse_source<'ctx>(

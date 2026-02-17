@@ -15,7 +15,7 @@ use crate::{
                 frag_to_lua::{LuaPresFactMeta, LuaPresFragMeta},
                 grammar_to_lua::generate_luau_grammar_types,
                 notation_to_lua::LuaNotationBindingMeta,
-                scope_to_lua::LuaScopeMeta,
+                scope_to_lua::{LuaScope, LuaScopeMeta},
                 theorem_to_lua::LuaTheoremMeta,
                 unresolved_to_lua::LuaUnResFragMeta,
                 vampire_to_lua::{
@@ -24,6 +24,7 @@ use crate::{
                 },
             },
         },
+        scope::Scope,
     },
     util::ansi::{ANSI_BOLD, ANSI_RESET, ANSI_YELLOW},
 };
@@ -104,7 +105,8 @@ pub struct LuaInfo<'ctx> {
 
 pub fn setup_lua<'ctx>(
     ctx: &Ctx<'ctx>,
-    attributes: AttributeTracker,
+    scope: Scope<'ctx>,
+    attributes: AttributeTracker<'ctx>,
 ) -> WResult<'ctx, LuaInfo<'ctx>> {
     // Write out types
     write_luau_types(ctx);
@@ -120,7 +122,9 @@ pub fn setup_lua<'ctx>(
     let lua_ctx = LuaCtx::new(ctx);
     lua.set_app_data(lua_ctx);
 
-    // Add the final attributes as app data
+    // Add the final scope & attributes as app data
+    let lua_scope = LuaScope::new(scope);
+    lua.set_app_data(lua_scope);
     let lua_attribute_tracker = LuaAttributeTracker::new(attributes);
     lua.set_app_data(lua_attribute_tracker);
 

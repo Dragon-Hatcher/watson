@@ -11,6 +11,7 @@ use crate::{
         custom_grammar::inst::CustomGrammarInst,
         proof_kernel::ProofState,
         proof_status::{ProofStatus, ProofStatuses},
+        scope::Scope,
         tactic::{tactic_info::TacticInfo, unresolved_proof::UnresolvedProof},
         theorems::TheoremId,
     },
@@ -23,12 +24,13 @@ mod lua_api;
 
 pub fn check_proofs<'ctx>(
     theorems: &[(TheoremId<'ctx>, UnresolvedProof<'ctx>)],
-    attributes: AttributeTracker,
+    scope: Scope<'ctx>,
+    attributes: AttributeTracker<'ctx>,
     ctx: &mut Ctx<'ctx>,
 ) -> ProofStatuses<'ctx> {
     let mut statuses = ProofStatuses::new();
 
-    let info = match setup_lua(ctx, attributes) {
+    let info = match setup_lua(ctx, scope, attributes) {
         Ok(info) => info,
         Err(diags) => {
             // Failed to set up Lua. Add the diagnostics and return.

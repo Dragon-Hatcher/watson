@@ -61,5 +61,10 @@ impl UserData for LuaScopeMeta {
             let scope = rule.map(|r| ctx.scopes.get(r.scope()));
             Ok(scope.map(LuaScope::new))
         });
+
+        methods.add_method("atEnd", |lua, _, _: ()| {
+            let scope = lua.app_data_ref::<LuaScope>().unwrap();
+            Ok(scope.clone())
+        });
     }
 }

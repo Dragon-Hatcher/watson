@@ -331,6 +331,9 @@ declare class ScopeMeta
     --- @param name the name of the tactic
     --- @return the scope for that tactic or none if no tactic with that name exists
     function atTactic(self, name: string): Scope?
+
+    --- Get the active scope at the end of parsing.
+    function atEnd(self): Scope
 end
 
 declare Scope: ScopeMeta

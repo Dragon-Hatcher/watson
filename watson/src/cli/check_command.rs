@@ -144,7 +144,12 @@ fn make_source_cache(config: &WatsonConfig) -> (SourceCache, SourceId) {
 
 fn compile<'ctx>(root: SourceId, ctx: &mut Ctx<'ctx>) -> (ParseReport<'ctx>, ProofReport<'ctx>) {
     let parse_report = parse(root, ctx);
-    let statuses = check_proofs(&parse_report.theorems, parse_report.attributes.clone(), ctx);
+    let statuses = check_proofs(
+        &parse_report.theorems,
+        parse_report.scope.clone(),
+        parse_report.attributes.clone(),
+        ctx,
+    );
     let circularities = find_circular_dependency_groups(&statuses);
 
     let proof_report = ProofReport {

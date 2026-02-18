@@ -1367,6 +1367,7 @@ dependencies = [
  "typed-arena",
  "ustr",
  "vampire-prover",
+ "vampire-sys",
 ]
 
 [[package]]

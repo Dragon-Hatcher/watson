@@ -122,6 +122,7 @@ impl DiagnosticSpan {
             .span(self.span.bytes())
             .label(self.msg);
         Snippet::source(sources.get_text(self.span.source()).as_str())
+            .origin(self.span.source().name().as_str())
             .annotation(anno)
             .fold(true)
     }

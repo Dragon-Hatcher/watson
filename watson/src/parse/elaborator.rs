@@ -938,7 +938,7 @@ fn elaborate_definition<'ctx>(
             let binding_possibilities = elaborate_notation_binding(notation_binding.as_node().unwrap(), None, None, ctx)?;
             let possible_frag_cats = elaborate_any_fragment(fragment_node.as_node().unwrap());
 
-            let mut best_prec = None;
+            let mut best_priority = None;
             let mut solutions = Vec::new();
             let mut parse_errors = Vec::new();
 
@@ -964,10 +964,15 @@ fn elaborate_definition<'ctx>(
                 };
 
                 let this_prec = possibility.binding.pattern().prec();
-                if best_prec.is_none_or(|best_prec| this_prec > best_prec)  {
-                    best_prec = Some(this_prec);
+                let this_name_count = possibility.binding.name_instantiations().len();
+                if best_priority.is_none_or(|best_priority| (this_prec, this_name_count) > best_priority)  {
+                    best_priority = Some((this_prec, this_name_count));
                     solutions.clear();
                     parse_errors.clear();
+                }
+
+                if Some((this_prec, this_name_count)) != best_priority {
+                    continue;
                 }
 
                 solutions.push((possibility.binding, parse));

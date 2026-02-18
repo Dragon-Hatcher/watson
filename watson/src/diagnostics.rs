@@ -3,7 +3,7 @@ use crate::parse::elaborator::BindingResolution;
 use crate::parse::parse_state::ParseAtomPattern;
 use crate::parse::source_cache::SourceDecl;
 use crate::parse::{Location, SourceCache, SourceId, Span};
-use crate::semant::notation::NotationPatternSource;
+use crate::semant::notation::{NotationBindingId, NotationPatternSource};
 use crate::semant::parse_fragment;
 use crate::semant::tactic::tactic_info::{TacticInfo, TacticInfoStep};
 use crate::semant::theorems::TheoremId;
@@ -487,9 +487,25 @@ impl<'ctx> Diagnostic<'ctx> {
         }
     }
 
-    pub fn _err_todo_real_error_later<T>(span: Span, msg: &str) -> WResult<'ctx, T> {
-        let diag = Diagnostic::new(msg, vec![DiagnosticSpan::new_error("", span)]);
+    pub fn err_multiple_notations<T>(
+        span: Span,
+        notations: Vec<NotationBindingId<'ctx>>,
+    ) -> WResult<'ctx, T> {
+        let mut diag = Diagnostic::new(
+            "ambiguous definition: multiple notations matched",
+            vec![DiagnosticSpan::new_error("", span)],
+        );
+
+        for notation in notations {
+            diag = diag.with_info(&format!("matched `{}`", notation.print()), vec![])
+        }
 
         Err(vec![diag])
     }
+
+    // pub fn _err_todo_real_error_later<T>(span: Span, msg: &str) -> WResult<'ctx, T> {
+    //     let diag = Diagnostic::new(msg, vec![DiagnosticSpan::new_error("", span)]);
+
+    //     Err(vec![diag])
+    // }
 }

@@ -1,6 +1,6 @@
 use crate::{
     context::Ctx,
-    diagnostics::{Diagnostic, WResult},
+    diagnostics::{Diagnostic, DiagnosticSpan, WResult},
     parse::{
         SourceId,
         parse_state::{Associativity, ParseRuleSource, Precedence, SyntaxCategorySource},
@@ -938,7 +938,10 @@ fn elaborate_definition<'ctx>(
             let binding_possibilities = elaborate_notation_binding(notation_binding.as_node().unwrap(), None, None, ctx)?;
             let possible_frag_cats = elaborate_any_fragment(fragment_node.as_node().unwrap());
 
+            let mut best_prec = None;
             let mut solutions = Vec::new();
+            let mut parse_errors = Vec::new();
+
             for possibility in binding_possibilities {
                 let Some(frag) = possible_frag_cats.get(&possibility.binding.pattern().cat()) else {
                     continue;
@@ -952,20 +955,42 @@ fn elaborate_definition<'ctx>(
                 }
 
                 // Try parsing the fragment given these possibilities.
-                let Ok(parse) = parse_fragment(UnresolvedFrag(*frag), &scope, ctx)? else {
-                    continue;
+                let parse = match parse_fragment(UnresolvedFrag(*frag), &scope, ctx)? {
+                    Ok(parse) => parse,
+                    Err(err) => {
+                        parse_errors.push((possibility.binding, err));
+                        continue
+                    },
                 };
+
+                let this_prec = possibility.binding.pattern().prec();
+                if best_prec.is_none_or(|best_prec| this_prec > best_prec)  {
+                    best_prec = Some(this_prec);
+                    solutions.clear();
+                    parse_errors.clear();
+                }
 
                 solutions.push((possibility.binding, parse));
             }
 
             match solutions.as_slice() {
-                [] => Diagnostic::_err_todo_real_error_later(notation_binding.span(), "no matching notation bindings"),
+                [] => {
+                    let mut diags = Vec::new();
+                    for (binding, err) in parse_errors {
+                        let diag = Diagnostic::err_frag_parse_failure(fragment_node.span(), err)
+                            .with_info(
+                                &format!("assuming the intended notation was `{}`", binding.print()), 
+                                vec![DiagnosticSpan::new_info("", notation_binding.span())]
+                            );
+                        diags.push(diag);
+                    }
+                    Err(diags)
+                }
                 [(binding, frag)] => {
                     let entry = ScopeEntry::new(*frag, DefinitionSource::DefinitionCmd(cmd));
                     Ok(scope.child_with(*binding, entry))
                 },
-                [..] => Diagnostic::_err_todo_real_error_later(notation_binding.span(), "multiple matching notation bindings"),
+                [..] => Diagnostic::err_multiple_notations(notation_binding.span(), solutions.iter().map(|s| s.0).collect()),
             }
         }
     }

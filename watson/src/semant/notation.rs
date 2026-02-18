@@ -208,7 +208,7 @@ impl<'ctx> NotationBinding<'ctx> {
                     names += 1;
                 }
                 NotationPatternPart::Cat(part_cat) => {
-                    out.push_str(&format!("{}", part_cat.cat().name()));
+                    out.push_str(&format!("<{}>", part_cat.cat().name()));
                 }
                 NotationPatternPart::Binding(binding) => {
                     out.push_str(&format!("?{}", binding.name()));

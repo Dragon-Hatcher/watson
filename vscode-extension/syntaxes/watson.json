@@ -60,11 +60,17 @@
     "by-theorem": {
       "patterns": [
         {
-          "match": "\\b(by|recall)\\s+([\\w_'][\\w_'\\d\\.]*)",
-          "captures": {
-            "1": { "name": "keyword.control.watson" },
-            "2": { "name": "entity.name.function.watson" }
-          }
+          "begin": "\\b(by|recall)\\s+",
+          "beginCaptures": {
+            "1": { "name": "keyword.control.watson" }
+          },
+          "end": "(?=[^\\w_'\\d\\.,\\s])",
+          "patterns": [
+            {
+              "match": "[\\w_'][\\w_'\\d\\.]*",
+              "name": "entity.name.function.watson"
+            }
+          ]
         }
       ]
     },

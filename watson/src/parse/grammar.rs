@@ -153,7 +153,13 @@ theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sen
 templates ::= (template_none)
             | (template_many) template templates
 
-template ::= (template) "[" template_bindings ":" name "]"
+template ::= (template) "[" template_bindings ":" template_cat "]"
+
+template_cat ::= (template_cat_no_holes) name
+               | (template_cat_holes)    name "(" cat_list ")"
+
+cat_list ::= (cat_list_one)  name
+           | (cat_list_many) name "," cat_list
 
 template_bindings ::= (template_bindings_none)
                     | (template_bindings_many) notation_binding template_bindings
@@ -213,6 +219,8 @@ builtin_cats! {
         notation_binding,
         templates,
         template,
+        template_cat,
+        cat_list,
         template_bindings,
         hypotheses,
         hypothesis,
@@ -291,6 +299,10 @@ builtin_rules! {
         template_none,
         template_many,
         template,
+        template_cat_no_holes,
+        template_cat_holes,
+        cat_list_one,
+        cat_list_many,
         template_bindings_none,
         template_bindings_many,
         hypotheses_none,
@@ -744,9 +756,31 @@ pub fn add_builtin_rules<'ctx>(
                 lit(*strings::LEFT_BRACKET),
                 cat(cats.template_bindings),
                 lit(*strings::COLON),
-                cat(cats.name),
+                cat(cats.template_cat),
                 lit(*strings::RIGHT_BRACKET),
             ],
+        ),
+        template_cat_no_holes: rule!(
+            "template_cat_no_holes",
+            cats.template_cat,
+            vec![cat(cats.name),],
+        ),
+        template_cat_holes: rule!(
+            "template_cat_holes",
+            cats.template_cat,
+            vec![
+                cat(cats.name),
+                lit(*strings::LEFT_PAREN),
+                cat(cats.cat_list),
+                lit(*strings::RIGHT_PAREN)
+            ],
+        ),
+
+        cat_list_one: rule!("cat_list_one", cats.cat_list, vec![cat(cats.name)]),
+        cat_list_many: rule!(
+            "cat_list_many",
+            cats.cat_list,
+            vec![cat(cats.name), lit(*strings::COMMA), cat(cats.cat_list)]
         ),
 
         template_bindings_none: rule!("template_bindings_none", cats.template_bindings, vec![]),

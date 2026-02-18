@@ -1283,26 +1283,87 @@ fn elaborate_template<'ctx>(
     // template ::= (template) "[" template_bindings ":" name "]"
 
     match_rule! { (ctx, template) =>
-        template ::= [l_brack, names, colon, cat_name_node, r_brack] => {
+        template ::= [l_brack, names, colon, cat_node, r_brack] => {
             debug_assert!(l_brack.is_lit(*strings::LEFT_BRACKET));
             debug_assert!(colon.is_lit(*strings::COLON));
             debug_assert!(r_brack.is_lit(*strings::RIGHT_BRACKET));
 
-            let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
-            let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
-                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
-            };
+            let (cat, holes) = elaborate_template_cat(cat_node.as_node().unwrap(), ctx)?;
+            // let cat_name = elaborate_name(cat_name_node.as_node().unwrap(), ctx)?;
+            // let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
+            //     return Diagnostic::err_unknown_formal_syntax_cat(cat_name, cat_name_node.span());
+            // };
 
-            let bindings = elaborate_template_bindings(names.as_node().unwrap(), cat, ctx)?;
+            let bindings = elaborate_template_bindings(names.as_node().unwrap(), cat, &holes, ctx)?;
 
             Ok(bindings)
         }
     }
 }
 
+fn elaborate_template_cat<'ctx>(
+    cat: ParseTreeId<'ctx>,
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, (FormalSyntaxCatId<'ctx>, Vec<NotationSignatureHole<'ctx>>)> {
+    match_rule! { (ctx, cat) =>
+        template_cat_no_holes ::= [name_node] => {
+            let cat_name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
+            let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
+                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, name_node.span());
+            };
+            Ok((cat, Vec::new()))
+        },
+        template_cat_holes ::= [name_node, l_paren, cat_list, r_paren] => {
+            debug_assert!(l_paren.is_lit(*strings::LEFT_PAREN));
+            debug_assert!(r_paren.is_lit(*strings::RIGHT_PAREN));
+
+            let cat_name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
+            let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
+                return Diagnostic::err_unknown_formal_syntax_cat(cat_name, name_node.span());
+            };
+
+            let hole_cats = elaborate_cat_list(cat_list.as_node().unwrap(), ctx)?;
+            let holes = hole_cats.iter().map(|&cat| NotationSignatureHole::new(cat, Vec::new())).collect();
+            Ok((cat, holes))
+        }
+    }
+}
+
+fn elaborate_cat_list<'ctx>(
+    mut list: ParseTreeId<'ctx>,
+    ctx: &Ctx<'ctx>,
+) -> WResult<'ctx, Vec<FormalSyntaxCatId<'ctx>>> {
+    let mut result = Vec::new();
+
+    loop {
+        match_rule! { (ctx, list) =>
+            cat_list_one ::= [name_node] => {
+                let cat_name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
+                let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
+                    return Diagnostic::err_unknown_formal_syntax_cat(cat_name, name_node.span());
+                };
+                result.push(cat);
+                break;
+            },
+            cat_list_many ::= [name_node, comma, rest] => {
+                debug_assert!(comma.is_lit(*strings::COMMA));
+                let cat_name = elaborate_name(name_node.as_node().unwrap(), ctx)?;
+                let Some(cat) = ctx.arenas.formal_cats.get(cat_name) else {
+                    return Diagnostic::err_unknown_formal_syntax_cat(cat_name, name_node.span());
+                };
+                result.push(cat);
+                list = rest.as_node().unwrap();
+            }
+        }
+    }
+
+    Ok(result)
+}
+
 fn elaborate_template_bindings<'ctx>(
     mut bindings: ParseTreeId<'ctx>,
     cat: FormalSyntaxCatId<'ctx>,
+    holes: &[NotationSignatureHole<'ctx>],
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, Vec<Template<'ctx>>> {
     // template_bindings ::= (template_bindings_none)
@@ -1318,7 +1379,7 @@ fn elaborate_template_bindings<'ctx>(
             template_bindings_many ::= [binding, rest] => {
                 let binding = binding.as_node().unwrap();
 
-                let mut possibilities = elaborate_notation_binding(binding, Some(cat), None, ctx)?;
+                let mut possibilities = elaborate_notation_binding(binding, Some(cat), Some(holes), ctx)?;
 
                 if possibilities.is_empty() {
                     return Diagnostic::err_no_matching_notation_binding(cat.name(), binding.span());

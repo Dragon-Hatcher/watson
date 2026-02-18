@@ -963,15 +963,15 @@ fn elaborate_definition<'ctx>(
                     },
                 };
 
-                let this_prec = possibility.binding.pattern().prec();
+                // prefer bindings with more names as they can't be disambiguated as easily.
                 let this_name_count = possibility.binding.name_instantiations().len();
-                if best_priority.is_none_or(|best_priority| (this_prec, this_name_count) > best_priority)  {
-                    best_priority = Some((this_prec, this_name_count));
+                if best_priority.is_none_or(|best_priority| this_name_count > best_priority)  {
+                    best_priority = Some(this_name_count);
                     solutions.clear();
                     parse_errors.clear();
                 }
 
-                if Some((this_prec, this_name_count)) != best_priority {
+                if Some(this_name_count) != best_priority {
                     continue;
                 }
 

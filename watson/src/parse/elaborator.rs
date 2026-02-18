@@ -979,7 +979,7 @@ fn elaborate_definition<'ctx>(
                     for (binding, err) in parse_errors {
                         let diag = Diagnostic::err_frag_parse_failure(fragment_node.span(), err)
                             .with_info(
-                                &format!("assuming the intended notation was `{}`", binding.print()), 
+                                &format!("assuming the intended notation was `{}`", binding.print()),
                                 vec![DiagnosticSpan::new_info("", notation_binding.span())]
                             );
                         diags.push(diag);
@@ -1121,28 +1121,49 @@ fn parse_hypotheses_and_conclusion<'ctx>(
     scope: &Scope<'ctx>,
     ctx: &Ctx<'ctx>,
 ) -> WResult<'ctx, (Vec<PresFact<'ctx>>, PresFrag<'ctx>)> {
+    let mut errs = Vec::new();
+
     let mut hypotheses = Vec::new();
     for un_hypothesis in un_hypotheses {
         let assumption = match un_hypothesis.assumption {
             Some(assumption) => match parse_fragment(assumption, scope, ctx)? {
                 Ok(assumption) => Some(assumption),
-                Err(err) => todo!("Error: failed to parse conclusion {err:?}"),
+                Err(err) => {
+                    errs.push(Diagnostic::err_frag_parse_failure(assumption.0.span(), err));
+                    continue;
+                }
             },
             None => None,
         };
         let conclusion = match parse_fragment(un_hypothesis.conclusion, scope, ctx)? {
             Ok(conclusion) => conclusion,
-            Err(err) => todo!("Error: failed to parse conclusion {err:?}"),
+            Err(err) => {
+                errs.push(Diagnostic::err_frag_parse_failure(
+                    un_hypothesis.conclusion.0.span(),
+                    err,
+                ));
+                continue;
+            }
         };
         hypotheses.push(PresFact::new(assumption, conclusion));
     }
 
     let conclusion = match parse_fragment(un_conclusion, scope, ctx)? {
-        Ok(conclusion) => conclusion,
-        Err(err) => todo!("Error: failed to parse conclusion {err:?}"),
+        Ok(conclusion) => Some(conclusion),
+        Err(err) => {
+            errs.push(Diagnostic::err_frag_parse_failure(
+                un_conclusion.0.span(),
+                err,
+            ));
+            None
+        }
     };
 
-    Ok((hypotheses, conclusion))
+    if errs.is_empty() {
+        Ok((hypotheses, conclusion.unwrap()))
+    } else {
+        Err(errs)
+    }
 }
 
 fn elaborate_axiom<'ctx>(

@@ -456,7 +456,7 @@ impl<'ctx> Diagnostic<'ctx> {
                 );
                 for notation in &tried {
                     diag = diag.with_info(
-                        &format!("tried `{notation}` but it is not declared in this scope"),
+                        &format!("tried `{notation}` but it is not bound in this scope"),
                         vec![],
                     );
                 }

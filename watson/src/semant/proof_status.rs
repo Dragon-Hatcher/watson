@@ -87,6 +87,15 @@ impl<'ctx> ProofStatus<'ctx> {
         }
     }
 
+    pub fn new_error() -> Self {
+        Self {
+            is_axiom: false,
+            correct: false,
+            todo_used: false,
+            theorems_used: FxHashSet::default(),
+        }
+    }
+
     pub fn from_cert(cert: ProofCertificate<'ctx>) -> Self {
         Self {
             is_axiom: false,

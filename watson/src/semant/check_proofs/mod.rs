@@ -52,7 +52,7 @@ pub fn check_proofs<'ctx>(
                     Err(diags) => {
                         // Error checking theorem. Add the diagnostics and continue.
                         ctx.diags.add_diags(diags);
-                        continue;
+                        ProofStatus::new_error()
                     }
                 }
             }

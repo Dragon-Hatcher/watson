@@ -1,7 +1,9 @@
 use std::time::Duration;
 
 use mlua::{FromLua, MetaMethod, UserData, Variadic};
-use vampire_prover::{Formula, Function, Options, Predicate, Problem, ProofRes, Term};
+use vampire_prover::{
+    Formula, Function, Options, Predicate, Problem, Proof, ProofRes, ProofStep, Term,
+};
 
 #[derive(Debug, Clone, FromLua)]
 pub struct LuaVFunction {
@@ -187,13 +189,14 @@ impl UserData for LuaVProblem {
         });
 
         methods.add_method_mut("solve", |_, this, _: ()| {
-            let result = this.problem.solve();
+            let (result, proof) = this.problem.solve_and_prove();
+            let proof = proof.map(|proof| LuaVProof { proof });
             let result_str = match result {
                 ProofRes::Proved => "proved",
                 ProofRes::Unprovable => "unprovable",
                 ProofRes::Unknown(_) => "unknown",
             };
-            Ok(result_str.to_string())
+            Ok((proof, result_str))
         });
 
         methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
@@ -210,5 +213,51 @@ impl UserData for LuaVProblemMeta {
             let problem = Problem::new(options.options);
             Ok(LuaVProblem { problem })
         });
+    }
+}
+
+#[derive(Debug, Clone, FromLua)]
+pub struct LuaVProof {
+    proof: Proof,
+}
+
+impl UserData for LuaVProof {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("stepCount", |_, this| Ok(this.proof.steps().len()));
+    }
+
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method("getStep", |_, this, idx: usize| {
+            let step = this.proof.steps()[idx].clone();
+            Ok(LuaVProofStep { step })
+        });
+
+        methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
+            Ok(this.proof.to_string())
+        });
+    }
+}
+
+#[derive(Debug, Clone, FromLua)]
+pub struct LuaVProofStep {
+    step: ProofStep,
+}
+
+impl UserData for LuaVProofStep {
+    fn add_fields<F: mlua::UserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("discoveryOrder", |_, this| Ok(this.step.discovery_order()));
+
+        fields.add_field_method_get("conclusion", |_, this| {
+            Ok(LuaVFormula {
+                formula: this.step.conclusion(),
+            })
+        });
+
+        fields.add_field_method_get("rule", |_, this| {
+            let rule = this.step.rule();
+            Ok(format!("{rule:?}"))
+        });
+
+        fields.add_field_method_get("premises", |_, this| Ok(this.step.premises().to_vec()));
     }
 }

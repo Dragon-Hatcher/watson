@@ -556,7 +556,7 @@ declare VOptions: VOptionsMeta
 declare class VProblem
     function addAxiom(self, axiom: VFormula)
     function setConjecture(self, conj: VFormula)
-    function solve(self): string
+    function solve(self): (VProof?, "proved" | "unprovable" | "unknown")
 end
 
 declare class VProblemMeta
@@ -564,3 +564,15 @@ declare class VProblemMeta
 end
 
 declare VProblem: VProblemMeta 
+
+declare class VProof
+    stepCount: number
+    function getStep(self, idx: number): VProofStep
+end
+
+declare class VProofStep
+    discoveryOrder: number
+    conclusion: VFormula
+    rule: string
+    premises: {number}
+end

@@ -26,6 +26,12 @@ impl UserData for LuaSpan {
             Ok(LuaDiagnosticSpan::new(d_span))
         });
 
+        methods.add_method("labelWarning", |_, this, msg: String| {
+            let msg = Ustr::from(&msg);
+            let d_span = DiagnosticSpan::new_warning(msg.as_str(), this.out());
+            Ok(LuaDiagnosticSpan::new(d_span))
+        });
+
         methods.add_method("labelInfo", |_, this, msg: String| {
             let msg = Ustr::from(&msg);
             let d_span = DiagnosticSpan::new_info(msg.as_str(), this.out());

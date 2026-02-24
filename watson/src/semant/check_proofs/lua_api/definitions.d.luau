@@ -11,6 +11,11 @@ declare class Span
     --- @return The new DiagnosticSpan
     function label(self, msg: string): DiagnosticSpan
 
+    --- Create a warning DiagnosticSpan with the given message.
+    --- @param msg The message to attach to the span
+    --- @return The new DiagnosticSpan
+    function labelWarning(self, msg: string): DiagnosticSpan
+
     --- Create an info DiagnosticSpan with the given message.
     --- @param msg The message to attach to the span
     --- @return The new DiagnosticSpan
@@ -485,6 +490,12 @@ declare class DiagnosticMeta
     --- @param spans List of source locations to highlight
     --- @return A new diagnostic
     function new(self, msg: string, ...: DiagnosticSpan): Diagnostic
+
+    --- Creates a new warning diagnostic with the given title.
+    --- @param msg The main warning message
+    --- @param spans List of source locations to highlight
+    --- @return A new diagnostic
+    function newWarning(self, msg: string, ...: DiagnosticSpan): Diagnostic
 end
 
 declare Diagnostic: DiagnosticMeta

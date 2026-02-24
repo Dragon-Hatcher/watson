@@ -92,5 +92,13 @@ impl UserData for LuaDiagnosticMeta {
                 Ok(LuaDiagnostic::new(diag))
             },
         );
+
+        methods.add_method(
+            "newWarning",
+            |_, _, (msg, spans): (String, Variadic<LuaDiagnosticSpan>)| {
+                let diag = Diagnostic::new_warning(&msg, spans.iter().map(|s| s.out()).collect());
+                Ok(LuaDiagnostic::new(diag))
+            },
+        );
     }
 }

@@ -83,6 +83,7 @@ impl DiagnosticPart {
     pub fn to_message<'a>(&self, sources: &'a SourceCache) -> Message<'a> {
         let level = match self.level {
             DiagnosticLevel::Error => Level::Error,
+            DiagnosticLevel::Warning => Level::Warning,
             DiagnosticLevel::Info => Level::Info,
         };
         level
@@ -102,6 +103,14 @@ impl DiagnosticSpan {
     pub fn new_error(msg: &str, span: Span) -> Self {
         Self {
             level: DiagnosticLevel::Error,
+            span,
+            msg: Ustr::from(msg).as_str(),
+        }
+    }
+
+    pub fn new_warning(msg: &str, span: Span) -> Self {
+        Self {
+            level: DiagnosticLevel::Warning,
             span,
             msg: Ustr::from(msg).as_str(),
         }
@@ -131,6 +140,7 @@ impl DiagnosticSpan {
 #[derive(Debug, Clone, Copy)]
 pub enum DiagnosticLevel {
     Error,
+    Warning,
     Info,
 }
 
@@ -138,6 +148,7 @@ impl DiagnosticLevel {
     pub fn to_level(&self) -> Level {
         match self {
             DiagnosticLevel::Error => Level::Error,
+            DiagnosticLevel::Warning => Level::Warning,
             DiagnosticLevel::Info => Level::Info,
         }
     }
@@ -148,6 +159,15 @@ impl<'ctx> Diagnostic<'ctx> {
         let title = Ustr::from(title).as_str();
         Self {
             main: DiagnosticPart::new(DiagnosticLevel::Error, title, spans),
+            parts: Vec::new(),
+            proof: None,
+        }
+    }
+
+    pub fn new_warning(title: &str, spans: Vec<DiagnosticSpan>) -> Self {
+        let title = Ustr::from(title).as_str();
+        Self {
+            main: DiagnosticPart::new(DiagnosticLevel::Warning, title, spans),
             parts: Vec::new(),
             proof: None,
         }

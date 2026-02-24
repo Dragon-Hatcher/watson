@@ -17,6 +17,10 @@ impl UserData for LuaVFunction {
             let result_term = this.function.with(&terms);
             Ok(LuaVTerm { term: result_term })
         });
+
+        methods.add_meta_method(MetaMethod::Eq, |_, this, other: LuaVFunction| {
+            Ok(this.function == other.function)
+        });
     }
 }
 
@@ -45,6 +49,10 @@ impl UserData for LuaVPredicate {
                 formula: result_formula,
             })
         });
+
+        methods.add_meta_method(MetaMethod::Eq, |_, this, other: LuaVPredicate| {
+            Ok(this.predicate == other.predicate)
+        });
     }
 }
 
@@ -64,7 +72,17 @@ pub struct LuaVTerm {
     term: Term,
 }
 
-impl UserData for LuaVTerm {}
+impl UserData for LuaVTerm {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_meta_method(MetaMethod::Eq, |_, this, other: LuaVTerm| {
+            Ok(this.term == other.term)
+        });
+
+        methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
+            Ok(this.term.to_string())
+        });
+    }
+}
 
 pub struct LuaVTermMeta;
 
@@ -82,7 +100,17 @@ pub struct LuaVFormula {
     formula: Formula,
 }
 
-impl UserData for LuaVFormula {}
+impl UserData for LuaVFormula {
+    fn add_methods<M: mlua::UserDataMethods<Self>>(methods: &mut M) {
+        methods.add_meta_method(MetaMethod::Eq, |_, this, other: LuaVFormula| {
+            Ok(this.formula == other.formula)
+        });
+
+        methods.add_meta_method(MetaMethod::ToString, |_, this, _: ()| {
+            Ok(this.formula.to_string())
+        });
+    }
+}
 
 pub struct LuaVFormulaMeta;
 

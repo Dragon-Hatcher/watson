@@ -1250,18 +1250,18 @@ dependencies = [
 
 [[package]]
 name = "vampire-prover"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a94cd8b7a1b4abd048e4eb0fe919c35095b3b523efd7037e82826dd8ce386ecb"
+checksum = "a4da8d433d6a112162f99478f0608f1b6b178d4151f9bcac8ba1cdcf03c591d8"
 dependencies = [
  "vampire-sys",
 ]
 
 [[package]]
 name = "vampire-sys"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b50cee9f80e9e37f5a867ba58e438f04a5bba8aa5e28c79e6324f9fc5820d53"
+checksum = "dc83b85e0e4422394145955b7041aab0ff75c2fa15a9db26247c54638aad11cf"
 dependencies = [
  "cmake",
 ]

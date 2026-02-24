@@ -30,9 +30,11 @@ pub fn check_proofs<'ctx>(
 ) -> ProofStatuses<'ctx> {
     let mut statuses = ProofStatuses::new();
 
-    // reset Vampire. safety: we aren't holding any vampire handles at the 
+    // reset Vampire. safety: we aren't holding any vampire handles at the
     // moment, because we haven't run any lua code.
-    unsafe { vampire_sys::vampire_reset(); }
+    unsafe {
+        vampire_sys::vampire_reset();
+    }
 
     let info = match setup_lua(ctx, scope, attributes) {
         Ok(info) => info,

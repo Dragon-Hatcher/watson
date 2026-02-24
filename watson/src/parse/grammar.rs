@@ -148,7 +148,11 @@ definition_command ::= (definition) kw"definition" notation_binding ":=" any_fra
 // notation_binding is created from each notation command
 
 axiom_command ::= (axiom) kw"axiom" name templates ":" hypotheses "|-" sentence kw"end"
-theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactic kw"qed"
+theorem_command ::= (theorem) theorem_kw name templates ":" hypotheses "|-" sentence kw"proof" tactic kw"qed"
+
+theorem_kw ::= (theorem_kw_theorem)   kw"theorem"
+             | (theorem_kw_lemma)     kw"lemma"
+             | (theorem_kw_corollary) kw"corollary"
 
 templates ::= (template_none)
             | (template_many) template templates
@@ -200,6 +204,7 @@ builtin_cats! {
         definition_command,
         axiom_command,
         theorem_command,
+        theorem_kw,
         grammar_category_command,
         tactic_command,
         attribute_command,
@@ -248,6 +253,9 @@ builtin_rules! {
         definition_command,
         axiom_command,
         theorem_command,
+        theorem_kw_theorem,
+        theorem_kw_lemma,
+        theorem_kw_corollary,
         grammar_category_command,
         tactic_command,
         attribute_command,
@@ -550,7 +558,7 @@ pub fn add_builtin_rules<'ctx>(
             "theorem",
             cats.theorem_command,
             vec![
-                kw(*strings::THEOREM),
+                cat(cats.theorem_kw),
                 cat(cats.name),
                 cat(cats.templates),
                 lit(*strings::COLON),
@@ -561,6 +569,22 @@ pub fn add_builtin_rules<'ctx>(
                 cat(tactic_parse_cat),
                 kw(*strings::QED),
             ],
+        ),
+
+        theorem_kw_theorem: rule!(
+            "theorem_kw_theorem",
+            cats.theorem_kw,
+            vec![kw(*strings::THEOREM)]
+        ),
+        theorem_kw_lemma: rule!(
+            "theorem_kw_lemma",
+            cats.theorem_kw,
+            vec![kw(*strings::LEMMA)]
+        ),
+        theorem_kw_corollary: rule!(
+            "theorem_kw_corollary",
+            cats.theorem_kw,
+            vec![kw(*strings::COROLLARY)]
         ),
 
         prec_assoc_none: rule!("prec_assoc_none", cats.prec_assoc, vec![]),

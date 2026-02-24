@@ -1213,8 +1213,7 @@ fn elaborate_theorem<'ctx>(
     // theorem_command ::= (theorem) kw"theorem" name templates ":" hypotheses "|-" sentence kw"proof" tactic kw"qed"
 
     match_rule! { (ctx, theorem) =>
-        theorem ::= [theorem_kw, name_node, templates, colon, hypotheses, turnstile, conclusion, proof_kw, tactic, qed_kw] => {
-            debug_assert!(theorem_kw.is_kw(*strings::THEOREM));
+        theorem ::= [_theorem_kw, name_node, templates, colon, hypotheses, turnstile, conclusion, proof_kw, tactic, qed_kw] => {
             debug_assert!(colon.is_lit(*strings::COLON));
             debug_assert!(turnstile.is_lit(*strings::TURNSTILE));
             debug_assert!(proof_kw.is_kw(*strings::PROOF));

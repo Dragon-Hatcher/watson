@@ -17,6 +17,8 @@ str_const! {
     DEFINITION = "definition";
     AXIOM = "axiom";
     THEOREM = "theorem";
+    LEMMA = "lemma";
+    COROLLARY = "corollary";
     GRAMMAR_CATEGORY = "grammar_category";
     TACTIC = "tactic";
     NAME = "name";

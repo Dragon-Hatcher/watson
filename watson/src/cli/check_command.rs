@@ -14,7 +14,7 @@ use crossterm::{
     terminal::{BeginSynchronizedUpdate, Clear, ClearType, EndSynchronizedUpdate},
 };
 use notify::Watcher;
-use std::{io, path::PathBuf, sync::mpsc, thread};
+use std::{io, path::PathBuf, sync::mpsc, thread, time::Instant};
 use ustr::Ustr;
 
 /// Check proofs in a Watson project.
@@ -75,9 +75,11 @@ pub fn run_check(cmd: CheckCommand) {
                 MoveTo(0, 0)
             );
 
+            let start = Instant::now();
             let (mut ctx, parse_report, report) = check(config.clone(), &arenas);
+            let elapsed = start.elapsed();
 
-            display_report(&report, ctx.diags.has_errors(), Some(i));
+            display_report(&report, ctx.diags.has_errors(), Some(i), Some(elapsed));
             if ctx.diags.has_errors() {
                 ctx.diags.print_errors(&ctx);
             } else if cmd.book {
@@ -106,7 +108,7 @@ pub fn run_check(cmd: CheckCommand) {
         let arenas = Arenas::new();
         let (mut ctx, parse_report, report) = check(config.clone(), &arenas);
 
-        display_report(&report, ctx.diags.has_errors(), None);
+        display_report(&report, ctx.diags.has_errors(), None, None);
 
         if ctx.diags.has_errors() {
             ctx.diags.print_errors(&ctx);

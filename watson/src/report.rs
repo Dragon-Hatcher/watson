@@ -2,21 +2,31 @@ use crate::semant::proof_status::ProofStatuses;
 use crate::semant::theorems::TheoremId;
 use crate::util::ansi::{ANSI_BOLD, ANSI_GRAY, ANSI_GREEN, ANSI_RED, ANSI_RESET, ANSI_YELLOW};
 use crate::util::plural;
+use std::time::Duration;
 
 pub struct ProofReport<'ctx> {
     pub statuses: ProofStatuses<'ctx>,
     pub circularities: Vec<Vec<TheoremId<'ctx>>>,
 }
 
-pub fn display_report(report: &ProofReport, errors: bool, iteration: Option<usize>) -> bool {
+pub fn display_report(
+    report: &ProofReport,
+    errors: bool,
+    iteration: Option<usize>,
+    elapsed: Option<Duration>,
+) -> bool {
     let ProofReport {
         statuses,
         circularities,
     } = report;
 
-    let iter_info = match iteration {
-        Some(iter) => format!("{ANSI_GRAY}iteration {iter}{ANSI_RESET}"),
-        None => String::new(),
+    let iter_info = match (iteration, elapsed) {
+        (Some(iter), Some(dur)) => {
+            let ms = dur.as_millis();
+            format!("{ANSI_GRAY}iteration {iter} ({ms}ms){ANSI_RESET}")
+        }
+        (Some(iter), None) => format!("{ANSI_GRAY}iteration {iter}{ANSI_RESET}"),
+        _ => String::new(),
     };
 
     println!(

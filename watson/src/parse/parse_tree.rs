@@ -164,7 +164,7 @@ impl ParseAtom {
         self.span
     }
 
-    pub fn _kind(&self) -> ParseAtomKind {
+    pub fn kind(&self) -> ParseAtomKind {
         self.kind
     }
 }

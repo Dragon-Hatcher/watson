@@ -77,16 +77,19 @@ impl UserData for LuaProofState {
             },
         );
 
-        methods.add_method("applyTodo", |lua, this, justifying: LuaPresFrag| {
-            let justifying = justifying.out();
-            let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
+        methods.add_method(
+            "applyTodo",
+            |lua, this, (justifying, reason): (LuaPresFrag, Option<String>)| {
+                let justifying = justifying.out();
+                let ctx = lua.app_data_ref::<LuaCtx>().unwrap().out();
 
-            let new_state = this
-                .out_ref()
-                .apply_todo(justifying.frag(), ctx)
-                .expect("TODO");
-            Ok(LuaProofState::new(new_state))
-        });
+                let new_state = this
+                    .out_ref()
+                    .apply_todo(justifying.frag(), reason, ctx)
+                    .expect("TODO");
+                Ok(LuaProofState::new(new_state))
+            },
+        );
 
         methods.add_method("applyError", |lua, this, justifying: LuaPresFrag| {
             let justifying = justifying.out();

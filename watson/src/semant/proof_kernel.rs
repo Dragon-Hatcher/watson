@@ -34,8 +34,12 @@ impl<'ctx> ProofCertificate<'ctx> {
         &self.proof.theorems_used
     }
 
-    pub fn uses_todo(&self) -> bool {
-        self.proof.uses_todo
+    pub fn _uses_todo(&self) -> bool {
+        !self.proof.todo_reasons.is_empty()
+    }
+
+    pub fn todo_reasons(&self) -> &im::HashSet<Option<String>> {
+        &self.proof.todo_reasons
     }
 
     pub fn uses_error(&self) -> bool {
@@ -54,7 +58,7 @@ pub struct ProofState<'ctx> {
     /// Stack of assumptions and the set of known facts before the assumption.
     assumptions: im::Vector<(im::HashSet<SafeFact<'ctx>>, SafeFrag<'ctx>)>,
 
-    uses_todo: bool,
+    todo_reasons: im::HashSet<Option<String>>,
     uses_error: bool,
 }
 
@@ -141,7 +145,7 @@ impl<'ctx> ProofState<'ctx> {
             knowns,
             theorem,
             theorems_used: im::HashSet::new(),
-            uses_todo: false,
+            todo_reasons: im::HashSet::new(),
             uses_error: false,
         })
     }
@@ -214,13 +218,14 @@ impl<'ctx> ProofState<'ctx> {
     pub fn apply_todo(
         &self,
         justifying: FragmentId<'ctx>,
+        reason: Option<String>,
         ctx: &Ctx<'ctx>,
     ) -> Result<Self, ProofError> {
         let mut new = self.clone();
         let new_fact = Fact::new(None, justifying);
         let new_fact = SafeFact::new(new_fact, ctx)?;
         new.knowns.insert(new_fact);
-        new.uses_todo = true;
+        new.todo_reasons.insert(reason);
         Ok(new)
     }
 

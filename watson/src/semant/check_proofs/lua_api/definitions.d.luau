@@ -406,8 +406,9 @@ declare class ProofState
     --- Add a frag to the list of known facts while marking the proof as TODO.
     --- Used for incomplete proofs during development.
     --- @param justifying The fragment representing the fact being proved
+    --- @param reason An optional string describing why this is a todo
     --- @return A new proof state with the fact
-    function applyTodo(self, justifying: Frag): ProofState
+    function applyTodo(self, justifying: Frag, reason: string?): ProofState
 
     --- Add a frag to the list of known facts while marking the proof as errored.
     --- Used when tactics fail to allow latter tactics to continue,

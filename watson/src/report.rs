@@ -51,6 +51,17 @@ pub fn display_report(
             statuses.todo_cnt(),
             plural(statuses.todo_cnt())
         );
+        let mut reasons: Vec<_> = statuses.todo_by_reason().iter().collect();
+        reasons.sort_by(|(_, a), (_, b)| a.cmp(b).reverse());
+        for (reason, count) in reasons {
+            let label = reason.as_deref().unwrap_or("unimplemented");
+            println!(
+                "     - {ANSI_BOLD}{}{ANSI_RESET} theorem{}: {ANSI_YELLOW}{}{ANSI_RESET}",
+                count,
+                plural(*count),
+                label
+            );
+        }
     }
     if statuses.error_cnt() > 0 {
         println!(

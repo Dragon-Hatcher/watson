@@ -1259,9 +1259,9 @@ dependencies = [
 
 [[package]]
 name = "vampire-sys"
-version = "0.5.0"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc83b85e0e4422394145955b7041aab0ff75c2fa15a9db26247c54638aad11cf"
+checksum = "e4dc75571b6017e456bea15573c284faf5be99ba86126a8f4b821dfa42992ee0"
 dependencies = [
  "cmake",
 ]

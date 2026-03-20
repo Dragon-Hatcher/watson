@@ -282,11 +282,13 @@ impl<'ctx> Diagnostic<'ctx> {
         Err(vec![diag])
     }
 
-    pub fn err_non_existent_file<T>(path: &Path, decl: Span) -> WResult<'ctx, T> {
+    pub fn err_non_existent_file<T>(standalone: &Path, dir: &Path, decl: Span) -> WResult<'ctx, T> {
         let diag = Diagnostic::new(
-            &format!("source file `{}` does not exist", path.display()),
+            &format!("source does not exist"),
             vec![DiagnosticSpan::new_error("", decl)],
-        );
+        )
+        .with_info(&format!("checked `{}`", standalone.display()), Vec::new())
+        .with_info(&format!("checked `{}`", dir.display()), Vec::new());
 
         Err(vec![diag])
     }

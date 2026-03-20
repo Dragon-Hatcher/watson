@@ -99,11 +99,18 @@ fn compute_line_starts(text: &str) -> Vec<usize> {
     line_starts
 }
 
-pub fn source_id_to_path(source: SourceId, root_dir: &Path) -> PathBuf {
+pub fn source_id_to_path(source: SourceId, root_dir: &Path) -> (PathBuf, PathBuf) {
     let mut path = root_dir.to_path_buf();
     for part in source.name().as_str().split('.') {
         path.push(part);
     }
-    path.set_extension(*strings::FILE_EXTENSION);
-    path
+    
+    let mut standalone = path.clone();
+    standalone.set_extension(*strings::FILE_EXTENSION);
+
+    let mut dir = path;
+    dir.push(*strings::DIR_MOD_NAME);
+    dir.set_extension(*strings::FILE_EXTENSION);
+    
+    (standalone, dir)
 }

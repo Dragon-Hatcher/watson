@@ -64,5 +64,6 @@ str_const! {
 }
 
 str_const! {
+    DIR_MOD_NAME = "main";
     FILE_EXTENSION = "wats";
 }

@@ -4,6 +4,7 @@ export const SHORTHAND_DICT = [
   ["\\or", "∨"],
   ["\\iff", "↔"],
   ["\\to", "→"],
+  ["\\from", "←"],
   ["\\not", "¬"],
   ["\\neq", "≠"],
   ["\\nin", "∉"],
@@ -24,6 +25,7 @@ export const SHORTHAND_DICT = [
   ["\\ssub", "⊂"],
   ["\\pow", "𝒫"],
   ["\\empty", "∅"],
+  ["\\times", "×"],
 
   // -=- Greek letters -=-
 

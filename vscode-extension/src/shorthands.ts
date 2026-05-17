@@ -26,6 +26,8 @@ export const SHORTHAND_DICT = [
   ["\\pow", "𝒫"],
   ["\\empty", "∅"],
   ["\\times", "×"],
+  ["\\langle", "⟨"],
+  ["\\rangle", "⟩"],
 
   // -=- Greek letters -=-
 

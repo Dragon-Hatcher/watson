@@ -28,9 +28,12 @@ export const SHORTHAND_DICT = [
   ["\\times", "×"],
   ["\\langle", "⟨"],
   ["\\rangle", "⟩"],
-  ["\\inj", "↣"],
-  ["\\surj", "↠"],
-
+  // -=- Functions -=-
+  ["\\mapsto", "↦"],
+  ["\\restriction", "↾"],
+  ["\\injection", "↣"],
+  ["\\surjection", "↠"],
+  ["\\composition", "∘"],
   // -=- Greek letters -=-
 
   // Lowercase
@@ -100,7 +103,7 @@ export const SHORTHAND_DICT = [
   ["\\_7", "₇"],
   ["\\_8", "₈"],
   ["\\_9", "₉"],
-
+  ["\\_-", "₋"],
   ["\\^a", "ᵃ"],
   ["\\^b", "ᵇ"],
   ["\\^c", "ᶜ"],
@@ -155,6 +158,7 @@ export const SHORTHAND_DICT = [
   ["\\^7", "⁷"],
   ["\\^8", "⁸"],
   ["\\^9", "⁹"],
+  ["\\^-", "⁻"],
   ["\\^)", "⁾"],
   ["\\^(", "⁽"],
   ["\\^=", "⁼"],

@@ -78,6 +78,20 @@ class Rewriter {
       return;
     }
 
+    // Grouped sub/superscripts: \_{...} or \^{...} converts each character
+    // inside the braces and joins them together (e.g. \_{ijk} -> ᵢⱼₖ).
+    let group = newText.match(/^\\([_^])\{([^}]*)(\}?)$/);
+    if (group) {
+      let [, kind, inner, close] = group;
+      if (close === "}") {
+        this.replaceRange(this.activeRange!, this.convertGroup(kind, inner));
+      } else {
+        // Still typing inside the braces; keep the active range alive.
+        this.bestSolution = null;
+      }
+      return;
+    }
+
     let possibles = SHORTHAND_DICT.filter((d) => d[0].startsWith(newText));
 
     if (possibles.length == 1 && possibles[0][0] == newText) {
@@ -88,6 +102,25 @@ class Rewriter {
     } else {
       this.bestSolution = [newText, this.activeRange!];
     }
+  }
+
+  // Converts each character in `inner` to its sub- ("_") or super- ("^")
+  // script form using the existing shorthand entries. Characters without a
+  // mapping (e.g. there is no subscript "y") are kept as-is.
+  convertGroup(kind: string, inner: string): string {
+    let result = "";
+    for (let c of inner) {
+      let entry = SHORTHAND_DICT.find((d) => d[0] === "\\" + kind + c);
+      result += entry ? entry[1] : c;
+    }
+    return result;
+  }
+
+  replaceRange(range: vscode.Range, replacement: string) {
+    let edit = new vscode.WorkspaceEdit();
+    edit.replace(this.activeEditor!.document.uri, range, replacement);
+    vscode.workspace.applyEdit(edit);
+    this.setActive(null);
   }
 
   isInMathMode(position: vscode.Position): boolean {

@@ -78,17 +78,13 @@ class Rewriter {
       return;
     }
 
-    // Grouped sub/superscripts: \_{...} or \^{...} converts each character
-    // inside the braces and joins them together (e.g. \_{ijk} -> ᵢⱼₖ).
-    let group = newText.match(/^\\([_^])\{([^}]*)(\}?)$/);
-    if (group) {
-      let [, kind, inner, close] = group;
-      if (close === "}") {
-        this.replaceRange(this.activeRange!, this.convertGroup(kind, inner));
-      } else {
-        // Still typing inside the braces; keep the active range alive.
-        this.bestSolution = null;
-      }
+    // Grouped sub/superscripts: \_{...} or \^{...}. While the group is being
+    // typed we only keep the active range alive. The conversion itself happens
+    // in onMove, because VSCode auto-closes "{" into "{}" with the cursor in
+    // the middle, so the closing brace is present from the start and only the
+    // cursor position tells us when the user is actually done.
+    if (/^\\[_^]\{[^}]*\}?$/.test(newText)) {
+      this.bestSolution = null;
       return;
     }
 
@@ -188,6 +184,26 @@ class Rewriter {
     this.switchToActiveEditor();
     if (!this.activeEditor) return;
     if (this.activeEditor != e.textEditor) return;
+
+    // Finish a \_{...} / \^{...} group once the cursor moves onto or past the
+    // closing brace (by typing or overtyping "}"). VSCode auto-closes "{" to
+    // "{}", so the brace exists from the start and only the cursor position
+    // tells us the group is complete.
+    let text = this.activeEditor.document.getText(this.activeRange);
+    let group = text.match(/^\\([_^])\{([^}]*)\}$/);
+    if (group) {
+      let cursor = e.selections[0].active;
+      if (cursor.isAfterOrEqual(this.activeRange.end)) {
+        this.replaceRange(
+          this.activeRange,
+          this.convertGroup(group[1], group[2])
+        );
+      } else if (!this.activeRange.contains(cursor)) {
+        // Cursor left the braces without closing the group; abandon it.
+        this.setActive(null);
+      }
+      return;
+    }
 
     if (e.selections.some((s) => !this.activeRange?.contains(s.anchor))) {
       this.commitSolution();
